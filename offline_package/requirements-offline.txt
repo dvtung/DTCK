@@ -1,0 +1,4 @@
+# requirements-offline.txt
+# WHEELSET: regenerate with:
+#   pip download -r ../requirements.txt -d ./wheels
+# Placeholder until the first offline sync is produced.

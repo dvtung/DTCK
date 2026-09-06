@@ -1,0 +1,13 @@
+# Baseline multi-factor scoring weights (spec §12)
+# IMPORTANT: baseline only — must be validated/re-learned via backtesting.
+# Version is referenced by SCORING_VERSION env var (default baseline_1.0).
+
+version: baseline_1.0
+
+weights:
+  fundamental: 0.30
+  technical:   0.20
+  momentum:    0.15
+  valuation:   0.15
+  quality:     0.10
+  risk:        0.10

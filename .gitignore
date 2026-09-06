@@ -1,0 +1,44 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# --- Secrets / env ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+
+# --- IDE / OS ---
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# --- Data / artifacts (never commit real data) ---
+data/
+*.parquet
+*.feather
+*.h5
+*.hdf5
+*.sqlite
+*.db
+backtest_artifacts/
+
+# --- Notebooks outputs ---
+.ipynb_checkpoints/
+
+# --- Docker ---
+*.log
