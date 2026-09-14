@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tham khảo module — DTCK</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+<div class="logo">📈</div>
+<div><h1>DTCK — Nền tảng Quyết định Đầu tư AI</h1><p>Trí tuệ thị trường chứng khoán Việt Nam · tài liệu tĩnh</p></div>
+<nav><a href="index.html">Trang chủ</a><a href="structure.html">Cấu trúc</a><a href="status.html">Tiến độ</a><a href="modules.html" class="active">Module</a><a href="database.html">Cơ sở dữ liệu</a><a href="pipeline.html">Luồng dữ liệu</a></nav>
+</header>
+<div class="wrap">
+<div class="toc"><b>Mục lục:</b>
+<a href="#data">src/data</a> · <a href="#tech">kỹ thuật</a> · <a href="#fund">cơ bản</a> · <a href="#val">định giá</a> · <a href="#mom">động lượng</a> · <a href="#risk">rủi ro</a> · <a href="#scoring">chấm điểm</a> · <a href="#models">models</a> · <a href="#seeds">seed &amp; worker</a>
+</div>
+<h2 class="sec" id="data">src/data — luồng nạp dữ liệu (T004 + T005)</h2>
+<p><b>Thiết kế:</b> bản ghi độc lập nhà cung cấp chảy qua thu thập → kiểm tra → chuẩn hóa → lưu trữ → chấm điểm. Mọi giai đoạn đều là hàm thuần; đổi nhà cung cấp chỉ là thay đổi cấu hình trong <code>sources.yaml</code>.</p>
+<div class="sig"><b>class EODBar / IndexBar / NewsItem</b> — dataclass trong <code>records.py</code>. Một ngày giao dịch OHLCV (+ symbol/date); một điểm in chỉ số; một bài báo (title, body, url, published_at, source).</div>
+<div class="sig"><b>class DataProvider</b> — ABC trong <code>providers/base.py</code>: <code>fetch_eod(symbols, start, end)</code>, <code>fetch_index(...)</code>, <code>fetch_news(since)</code>. Lớp con: <b>FixtureProvider</b> (dòng ngoại tuyến tất định qua <code>seed_value()</code>) và <b>HttpJsonProvider</b> (mẫu URL + trích xuất đường dẫn chấm).</div>
+<div class="sig"><b>registry.py</b> — <code>load_registry()</code>, <code>provider_specs()</code>, <code>get_spec(id)</code>, <code>create_provider(source)</code>, <code>enabled_by_role(role)</code>, <code>fallback_chain(role)</code>. Đọc <code>configs/sources.yaml</code>.</div>
+<div class="sig"><b>collectors.py</b> — <code>collect_eod(provider, symbols, start, end) -&gt; list[EODBar]</code> · <code>collect_index(...)</code> · <code>collect_news(provider, since)</code>. Wrapper mỏng với kiểm tra <code>supports()</code>.</div>
+<div class="sig"><b>validators.py</b> — <code>validate_eod(bars, *, start, end) -&gt; list[ValidationIssue]</code> · <code>validate_index(...)</code> · <code>validate_news(...)</code>. Kiểm tra: giá âm/bằng 0, high&lt;low, thiếu ngày trong tuần, khóa trùng, timestamp tương lai. <code>classify_issue()</code> ánh xạ vấn đề tới chiều chất lượng.</div>
+<div class="sig"><b>normalizers.py</b> — <code>normalize_eod / normalize_index / normalize_news</code> → dict sẵn sàng cho CSDL. <code>resolve_stock_ids(conn, symbols)</code> ánh xạ ticker thành id; <code>_as_decimal / _as_date</code> ép kiểu.</div>
+<div class="sig"><b>pipelines.py</b> — <code>ingest_eod(engine, provider, symbols, ...) -&gt; IngestResult</code> · <code>ingest_index(...)</code> · <code>ingest_news(...)</code>. Điều phối toàn luồng; upsert dòng; chấm điểm chất lượng; đặt <code>quality_passed</code>.</div>
+<div class="sig"><b>quality.py</b> — <code>compute_quality(...) -&gt; QualityScore</code>, <code>overall_from(dims)</code> (trung bình có trọng số tái chuẩn hóa), <code>freshness_score(latest, as_of)</code> (Decimal), <code>persist_quality(conn, score)</code>. Sáu chiều theo §39.</div>
+<pre>from src.data.pipelines import ingest_eod
+from src.data.providers import create_provider
+result = ingest_eod(engine, create_provider("fixture"), ["FPT", "VCB"],
+                    start=date(2026, 9, 1), end=date(2026, 9, 5))
+print(result.summary())  # rows=.., issues=.., quality=.. passed=True/False</pre>
+<h2 class="sec" id="tech">src/market/technical — các chỉ báo (T006)</h2>
+<p><b>Thiết kế:</b> Python thuần túy, tất định. Đầu vào <code>list[float]</code> → đầu ra <code>list[float | None]</code> (<code>None</code> = giai đoạn khởi động). RSI dùng làm mượt Wilder; EMA gieo mầm bằng SMA; Bollinger dùng độ lệch chuẩn tổng thể.</p>
+<div class="sig"><b>sma(close, period)</b> — trung bình trượt đơn giản trên cửa sổ liền trước.</div>
+<div class="sig"><b>ema(close, period)</b> — trung bình trượt hàm mũ, gieo mầm bằng SMA của cửa sổ đầu, hệ số 2/(period+1).</div>
+<div class="sig"><b>rsi(close, period=14)</b> — RSI Wilder; bằng 100 khi lỗ trung bình = 0, bằng 0 khi lãi trung bình = 0.</div>
+<div class="sig"><b>macd(close, fast=12, slow=26, signal=9)</b> — trả về các tuple <code>(đường, tín hiệu, histogram)</code>.</div>
+<div class="sig"><b>bollinger_bands(close, period=20, num_std=2)</b> — trả về <code>(trên, giữa, dưới)</code>; giữa = SMA, biên = ±num_std × độ lệch chuẩn tổng thể.</div>
+<div class="sig"><b>atr(high, low, close, period=14)</b> — biên độ thật trung bình với làm mượt Wilder.</div>
+<div class="sig"><b>obv(close, volume)</b> — khối lượng cân bằng; cộng khối lượng khi giá tăng, trừ khi giá giảm.</div>
+<div class="sig"><b>volume_sma(volume, period=20)</b> — trung bình trượt của khối lượng giao dịch.</div>
+<div class="sig"><b>relative_strength(close, benchmark)</b> — tỉ số từng phần tử close[i]/benchmark[i] để so sánh ngành/thị trường.</div>
+<h2 class="sec" id="fund">src/market/fundamental — các hệ số (T007)</h2>
+<p><b>Thiết kế:</b> tỉ số vô hướng từ các trường báo cáo tài chính; mọi hàm trả về <code>None</code> khi mẫu số bằng 0 thay vì báo lỗi hay bịa giá trị.</p>
+<div class="sig"><b>revenue_growth(revenue) / eps_growth(eps)</b> — chuỗi tăng trưởng cùng kỳ năm trước; <code>None</code> ở vị trí đầu và khi gốc = 0.</div>
+<div class="sig"><b>roe(net_income, equity)</b> · <b>roa(net_income, assets)</b> · <b>gross_margin / operating_margin / net_margin</b> — các tỉ số sinh lời.</div>
+<div class="sig"><b>debt_to_equity(debt, equity)</b> · <b>interest_coverage(op_income, interest)</b> — đòn bẩy; coverage trả về <code>inf</code> khi không nợ mà có lãi dương.</div>
+<div class="sig"><b>free_cash_flow(ocf, capex)</b> · <b>fcf_margin(fcf, revenue)</b> · <b>earnings_quality(net_income, ocf)</b> — sức khỏe dòng tiền; quality &gt; 1 nghĩa là lợi nhuận có tiền thật hậu thuẫn.</div>
+<h2 class="sec" id="val">src/market/valuation — các tỉ số (T007)</h2>
+<p><b>Thiết kế:</b> do Engine quant tính toán, không bao giờ nạp từ ngoài (§4.2 tất định trước hết). Nhà cung cấp chỉ để đối chiếu. Trả về <code>None</code> khi mẫu số không dương.</p>
+<div class="sig"><b>pe(price, eps)</b> · <b>forward_pe(price, fwd_eps)</b> · <b>pb(price, bvps)</b> · <b>ev_ebitda(ev, ebitda)</b> · <b>ev_sales(ev, revenue)</b> · <b>dividend_yield(dps, price)</b> · <b>peg(pe, growth_pct)</b> · <b>enterprise_value(mcap, debt, cash)</b>.</div>
+<div class="sig"><b>percentile_rank(value, dist)</b> — % phân phối nằm hẳn dưới value (0–100). <b>industry_percentile</b> / <b>historical_percentile</b> bọc nó để so sánh với nhóm ngành và với chính lịch sử.</div>
+<h2 class="sec" id="mom">src/market/momentum — xu hướng (T007)</h2>
+<div class="sig"><b>return_n(close, n)</b> — chuỗi lợi suất n ngày; <code>None</code> ở n vị trí đầu. <b>returns_multi(close, periods)</b> tính nhiều kỳ hạn cùng lúc.</div>
+<div class="sig"><b>volume_expansion(volume, period=20)</b> — volume[i]/SMA(volume); &gt;1 nghĩa là tham gia trên trung bình.</div>
+<div class="sig"><b>relative_momentum(close, bench, n)</b> — lợi suất_n(mã) / lợi suất_n(benchmark); <code>None</code> khi lợi suất benchmark = 0.</div>
+<h2 class="sec" id="risk">src/market/risk — rủi ro (T007)</h2>
+<div class="sig"><b>volatility(close, period=20)</b> — độ lệch chuẩn trượt của lợi suất log, năm hóa × √252.</div>
+<div class="sig"><b>beta(stock_rets, mkt_rets, period=60)</b> — cov/var trượt; <code>None</code> khi phương sai thị trường = 0.</div>
+<div class="sig"><b>max_drawdown(close)</b> — mức sụt giảm sâu nhất từ đỉnh (phân số âm).</div>
+<div class="sig"><b>liquidity(adv, float_shares)</b> · <b>gap_risk(close, open, period=20)</b> (tỉ lệ gap qua đêm &gt;1%) · <b>debt_risk(de)</b> (các bậc 0.0 / 0.33 / 0.67 / 1.0).</div>
+<h2 class="sec" id="scoring">src/quant/factors — chấm điểm (T007)</h2>
+<p><b>Thiết kế:</b> giá trị hệ số thô trở thành hạng bách phân 0–100 trong toàn vũ trụ, rồi pha trộn với trọng số baseline §12. Hệ số thiếu được loại ra kèm tái chuẩn hóa — không bao giờ bịa.</p>
+<div class="sig"><b>WEIGHTS</b> — cơ bản 0.30 · kỹ thuật 0.20 · động lượng 0.15 · định giá 0.15 · chất lượng 0.10 · rủi ro 0.10. Giả định baseline, cần kiểm chứng qua backtest.</div>
+<div class="sig"><b>compute_factor_scores(stock, universe)</b> — hạng bách phân từng hệ số cho một mã. <b>compute_overall_score(scores, weights?)</b> — trung bình có trọng số tái chuẩn hóa. <b>rank_stocks(id→score)</b> — xếp giảm dần, mã không điểm xếp cuối.</div>
+<pre>scores = compute_factor_scores({"fundamental": 5.0}, {"fundamental": [1,2,3,4,6]})
+# -&gt; {"fundamental": 80.0, "technical": None, ...}
+overall = compute_overall_score(scores)  # pha trộn tái chuẩn hóa
+ranking = rank_stocks({"FPT": overall, "VCB": 62.5})</pre>
+<h2 class="sec" id="models">src/common/models — ORM (T003)</h2>
+<p>13 file, 38 lớp. <code>Base</code> (DeclarativeBase) + <code>TimestampMixin</code> (created_at/updated_at) + <code>AuditMixin</code> (+ created_by/updated_by). Các lớp chính: <code>Stock</code>, <code>Price</code>, <code>IndexPrice</code>, <code>ForeignFlow</code>, <code>FinancialStatement</code> (lưỡng thời), <code>FactorScore</code>, <code>Signal</code>, <code>ValuationDaily</code> (tính toán), <code>Backtest/BacktestTrade/BacktestMetric</code>, <code>Evidence/Document</code>, <code>AgentRun</code>, <code>DataQualityScore</code>, <code>AuditLog</code>, <code>User/ApiKey</code>.</p>
+<h2 class="sec" id="seeds">Seed, worker &amp; cách triển khai</h2>
+<p><b>Seed</b> (<code>database/seeds/</code>): <code>_core.py</code> trợ giúp session; <code>seed_exchanges.py</code> (HOSE/HNX/UPCOM); <code>seed_sectors.py</code> (10 ngành + 15 nhóm ngành); <code>seed_vn30.py</code> (30 mã thành phần). Tất cả lặp lại an toàn — chạy lại thoải mái. <b>Worker</b> (<code>apps/worker/cli.py</code>): <code>main()</code> phân tích đối số, <code>run_ingest()</code> thực thi một lượt pipeline và trả về mã khác 0 khi cổng chất lượng rớt.</p>
+<pre># thêm một chỉ báo kỹ thuật mới (theo mẫu T006)
+def my_indicator(close: list[float], period: int) -&gt; list[float | None]:
+    """Mô tả một dòng. Trả về None trong giai đoạn khởi động."""
+    ...
+# rồi: thêm kiểm thử giá trị kỳ vọng trong tests/unit/test_technical_indicators.py,
+# chạy: ruff check . &amp;&amp; mypy &lt;file&gt; &amp;&amp; pytest -q</pre>
+<!--MORE3-->
+</div>
+<div class="footer">Tài liệu DTCK · 2026-09-14 · <a href="index.html">Trang chủ</a></div>
+</body>
+</html>

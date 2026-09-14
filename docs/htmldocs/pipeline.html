@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Luồng dữ liệu — DTCK</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+<div class="logo">📈</div>
+<div><h1>DTCK — Nền tảng Quyết định Đầu tư AI</h1><p>Trí tuệ thị trường chứng khoán Việt Nam · tài liệu tĩnh</p></div>
+<nav><a href="index.html">Trang chủ</a><a href="structure.html">Cấu trúc</a><a href="status.html">Tiến độ</a><a href="modules.html">Module</a><a href="database.html">Cơ sở dữ liệu</a><a href="pipeline.html" class="active">Luồng dữ liệu</a></nav>
+</header>
+<div class="wrap">
+<h2 class="sec">Luồng tổng thể</h2>
+<div class="flow"><span class="step">Nhà cung cấp</span><span class="arrow">→</span><span class="step">collect_*</span><span class="arrow">→</span><span class="step">validate_*</span><span class="arrow">→</span><span class="step">normalize_*</span><span class="arrow">→</span><span class="step">upsert</span><span class="arrow">→</span><span class="step">cổng chất lượng</span></div>
+<p>Điểm vào: <code>ingest_eod / ingest_index / ingest_news</code> trong <code>src/data/pipelines.py</code>. Mỗi hàm trả về <code>IngestResult</code> gồm số dòng, các vấn đề kiểm tra và phán quyết chất lượng. Lô dữ liệu dưới ngưỡng bị gắn cờ <code>below_threshold</code> và không bao giờ dùng cho bước sau.</p>
+<h2 class="sec">Giai đoạn 1 — Nhà cung cấp</h2>
+<p><code>DataProvider</code> ABC (<code>fetch_eod / fetch_index / fetch_news</code>). Các triển khai: <code>FixtureProvider</code> (ngoại tuyến, dòng seed tất định) và <code>HttpJsonProvider</code> (JSON qua HTTP có thể cấu hình với ánh xạ đường dẫn chấm). <code>create_provider(source)</code> phân giải id trong registry; <code>configs/sources.yaml</code> chứa 15 nhà cung cấp (10 đang bật) với lựa chọn theo nghiệp vụ + chuỗi dự phòng.</p>
+<pre>python -m apps.worker.cli ingest --dataset prices --source fixture \
+  --start 2026-09-01 --end 2026-09-05 --symbols FPT,VCB</pre>
+<h2 class="sec">Giai đoạn 2 — Thu thập</h2>
+<p><code>collect_eod(provider, symbols, start, end)</code>, <code>collect_index(...)</code>, <code>collect_news(provider, since)</code> — các wrapper mỏng kiểm tra <code>supports()</code> và trả về bản ghi độc lập nhà cung cấp (<code>EODBar / IndexBar / NewsItem</code>).</p>
+<h2 class="sec">Giai đoạn 3 — Kiểm tra</h2>
+<p><code>validate_eod / validate_index / validate_news</code> phát sinh các bản ghi <code>ValidationIssue</code>: kiểm tra miền giá trị (giá âm, high &lt; low), tính nhất quán (thứ tự OHLC), độ phủ cửa sổ (thiếu ngày giao dịch), tính duy nhất (khóa trùng). <code>classify_issue()</code> ánh xạ mỗi vấn đề tới một chiều chất lượng.</p>
+<h2 class="sec">Giai đoạn 4 — Chuẩn hóa</h2>
+<p><code>normalize_eod / normalize_index / normalize_news</code> ánh xạ bản ghi thành dict sẵn sàng cho CSDL: phân giải symbol → <code>stock_id</code>, ép kiểu Decimal, tem xuất xứ (id nhà cung cấp, fetched_at). Symbol lạ trở thành <code>None</code> (bỏ qua, không bao giờ bịa).</p>
+<h2 class="sec">Giai đoạn 5 — Cổng chất lượng (§39)</h2>
+<p>Sáu chiều — đầy đủ, hợp lệ, nhất quán, duy nhất, tươi mới, chính xác — kết hợp bằng trung bình có trọng số kèm tái chuẩn hóa trên các chiều khả dụng. <code>freshness_score</code> dùng số học Decimal. Kết quả được lưu vào <code>data_quality_scores</code>.</p>
+</div>
+<div class="footer">Tài liệu DTCK · 2026-09-14 · <a href="index.html">Trang chủ</a></div>
+</body>
+</html>

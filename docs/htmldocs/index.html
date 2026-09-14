@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DTCK — Nền tảng Quyết định Đầu tư AI | Tài liệu</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="logo">📈</div>
+  <div><h1>DTCK — Nền tảng Quyết định Đầu tư AI</h1><p>Trí tuệ thị trường chứng khoán Việt Nam · tài liệu tĩnh</p></div>
+  <nav>
+    <a href="index.html" class="active">Trang chủ</a>
+    <a href="structure.html">Cấu trúc</a>
+    <a href="status.html">Tiến độ</a>
+    <a href="modules.html">Module</a>
+    <a href="database.html">Cơ sở dữ liệu</a>
+    <a href="pipeline.html">Luồng dữ liệu</a>
+  </nav>
+</header>
+<div class="wrap">
+  <div class="hero">
+    <h2>Quyết định đầu tư dùng AI cho thị trường Việt Nam</h2>
+    <p>DTCK kết hợp tài chính định lượng tất định, bằng chứng có thể truy xuất, tác tử AI tự hành và mô hình ML đã hiệu chuẩn — mọi khuyến nghị đều có thể giải thích, đã kiểm thử ngược (backtest) và có thể kiểm toán.</p>
+    <div class="badges">
+      <span class="badge">Python 3.12 · FastAPI · Streamlit</span>
+      <span class="badge">TimescaleDB · Qdrant · Redis</span>
+      <span class="badge">Tác tử LangGraph · XGBoost / LightGBM</span>
+      <span class="badge">140 kiểm thử đơn vị đạt</span>
+    </div>
+  </div>
+  <div class="grid">
+    <div class="card"><h3>🏗️ Cấu trúc dự án</h3><p>Bố cục kho mã, các app, package, file cấu hình và cách các thành phần khớp với nhau.</p><a class="btn" href="structure.html">Khám phá cấu trúc →</a></div>
+    <div class="card"><h3>📊 Tiến độ phát triển</h3><p>Tiến độ theo từng giai đoạn: đã xong gì, tiếp theo là gì, các điểm nghẽn đã biết.</p><a class="btn" href="status.html">Xem tiến độ →</a></div>
+    <div class="card"><h3>🧩 Tham khảo module</h3><p>Mọi module đã triển khai: lớp, hàm, chữ ký và ví dụ sử dụng.</p><a class="btn" href="modules.html">Duyệt module →</a></div>
+    <div class="card"><h3>🗄️ Lược đồ cơ sở dữ liệu</h3><p>38 bảng thuộc 13 nhóm nghiệp vụ, 12 hypertable TimescaleDB, seed và migration.</p><a class="btn" href="database.html">Xem lược đồ →</a></div>
+    <div class="card"><h3>🔄 Luồng dữ liệu</h3><p>Cách dữ liệu thị trường luân chuyển: nhà cung cấp → thu thập → kiểm tra → chuẩn hóa → cổng chất lượng.</p><a class="btn" href="pipeline.html">Theo dõi luồng →</a></div>
+    <div class="card"><h3>📚 Đặc tả đầy đủ</h3><p>Bắt đầu từ nguồn chân lý duy nhất: <code>docs/SYSTEM_SPECIFICATION.md</code> và các tài liệu kèm theo.</p><a class="btn" href="status.html#docs">Danh sách tài liệu →</a></div>
+  </div>
+  <h2 class="sec">Vì sao chọn DTCK?</h2>
+  <table>
+    <tr><th>Nguyên tắc</th><th>Ý nghĩa trong thực tế</th></tr>
+    <tr><td><b>Tất định trước hết</b></td><td>Các hệ số quant và tỷ số định giá là Python thuần túy, tái lập được — không có hộp đen ở phần lõi.</td></tr>
+    <tr><td><b>Bằng chứng trước khẳng định</b></td><td>Mọi tín hiệu đều liên kết tới tin tức, báo cáo hoặc dữ liệu thị trường lưu trong lớp bằng chứng.</td></tr>
+    <tr><td><b>Không nhìn trước tương lai</b></td><td>Báo cáo tài chính lưỡng thời (bitemporal) và backtest cuốn chiếu (walk-forward) ngăn thiên lệch sống sót.</td></tr>
+    <tr><td><b>Chỉ dùng tác tử sau baseline</b></td><td>Tác tử AI chỉ được bật khi Dữ liệu + Quant + Backtest đã đạt baseline kiểm chứng được.</td></tr>
+  </table>
+  <h2 class="sec">Tổng quan nhanh</h2>
+  <table>
+    <tr><th>Chỉ số</th><th>Giá trị</th></tr>
+    <tr><td>Mô hình SQLAlchemy / bảng CSDL</td><td>38 bảng · 13 file nghiệp vụ trong <code>src/common/models/</code></td></tr>
+    <tr><td>Hypertable TimescaleDB</td><td>12 bảng chuỗi thời gian (prices, index_prices, factors, …)</td></tr>
+    <tr><td>Dữ liệu seed</td><td>3 sở giao dịch · 10 ngành · 15 nhóm ngành · 30 mã VN30</td></tr>
+    <tr><td>Hàm quant</td><td>9 kỹ thuật + 12 cơ bản + 11 định giá + 4 động lượng + 6 rủi ro + 4 chấm điểm</td></tr>
+    <tr><td>Kiểm thử đơn vị</td><td>140 bài đạt (pipeline 38 · quality 26 · technical 40 · quant 18 · models/sources/smoke)</td></tr>
+    <tr><td>Tài liệu</td><td>13 đặc tả markdown trong <code>docs/</code></td></tr>
+  </table>
+</div>
+<div class="footer">Tài liệu DTCK · tạo ngày 2026-09-14 · nhánh <code>feat/data-source-design</code> · xem <code>docs/</code> để đọc đặc tả đầy đủ</div>
+</body>
+</html>

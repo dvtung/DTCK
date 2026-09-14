@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lược đồ cơ sở dữ liệu — DTCK</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+<div class="logo">📈</div>
+<div><h1>DTCK — Nền tảng Quyết định Đầu tư AI</h1><p>Trí tuệ thị trường chứng khoán Việt Nam · tài liệu tĩnh</p></div>
+<nav><a href="index.html">Trang chủ</a><a href="structure.html">Cấu trúc</a><a href="status.html">Tiến độ</a><a href="modules.html">Module</a><a href="database.html" class="active">Cơ sở dữ liệu</a><a href="pipeline.html">Luồng dữ liệu</a></nav>
+</header>
+<div class="wrap">
+<h2 class="sec">Tổng quan lược đồ</h2>
+<p>Nguồn chân lý duy nhất: <code>src/common/models/</code> (13 file, 38 lớp). Migration <code>0001_initial_schema</code> tạo toàn bộ bảng và chuyển 12 bảng chuỗi thời gian thành hypertable TimescaleDB. Seed: 3 sở giao dịch, 10 ngành, 15 nhóm ngành, 30 mã VN30.</p>
+<h2 class="sec">Các bảng theo nhóm nghiệp vụ</h2>
+<table>
+<tr><th>Nhóm nghiệp vụ (file models)</th><th>Các bảng</th></tr>
+<tr><td><code>reference.py</code></td><td><code>exchanges</code>, <code>sectors</code>, <code>industries</code>, <code>stocks</code></td></tr>
+<tr><td><code>market.py</code></td><td><code>prices</code> ★, <code>adjusted_prices</code> ★, <code>index_prices</code> ★, <code>foreign_flows</code> ★, <code>prop_trading_flows</code> ★</td></tr>
+<tr><td><code>fundamental.py</code></td><td><code>financial_statements</code> (bitemporal), <code>financial_ratios</code> ★, <code>corporate_events</code></td></tr>
+<tr><td><code>events.py</code></td><td><code>corporate_events</code>, <code>news</code> ★, <code>news_symbols</code></td></tr>
+<tr><td><code>macro.py</code></td><td><code>macro_indicators</code> ★, <code>market_regimes</code></td></tr>
+<tr><td><code>quant.py</code></td><td><code>factor_scores</code> ★, <code>signals</code>, <code>valuation_daily</code> ★</td></tr>
+<tr><td><code>ml.py</code></td><td><code>features</code> ★, <code>predictions</code>, <code>prediction_evaluations</code>, <code>model_registry</code></td></tr>
+<tr><td><code>backtest.py</code></td><td><code>backtests</code>, <code>backtest_trades</code> ★, <code>backtest_metrics</code></td></tr>
+<tr><td><code>evidence.py</code></td><td><code>documents</code>, <code>evidence</code></td></tr>
+<tr><td><code>agents.py</code></td><td><code>agent_registry</code>, <code>agent_runs</code>, <code>agent_tool_calls</code></td></tr>
+<tr><td><code>portfolio.py</code></td><td><code>portfolios</code>, <code>portfolio_positions</code>, <code>portfolio_snapshots</code> ★</td></tr>
+<tr><td><code>governance.py</code></td><td><code>audit_logs</code>, <code>data_quality_scores</code> ★</td></tr>
+<tr><td><code>auth.py</code></td><td><code>users</code>, <code>api_keys</code></td></tr>
+</table>
+<p>★ = hypertable TimescaleDB (tổng 12). Quy tắc thiết kế: <code>predictions</code> giữ nguyên bảng thường (quy tắc unique-index của Timescale); khóa chính của <code>signals</code> là composite <code>(id, trade_date)</code>; <code>valuation_daily</code> được <b>tính toán</b>, không bao giờ nạp từ ngoài.</p>
+<h2 class="sec">Báo cáo tài chính lưỡng thời (bitemporal)</h2>
+<p><code>financial_statements</code> mang <code>valid_from / valid_to</code> song song với <code>period_end</code>. Điều chỉnh hồi tố được xử lý bằng snapshot-diff: đóng dòng cũ, mở dòng mới — truy vấn as-of luôn an toàn, không nhìn trước tương lai.</p>
+<h2 class="sec">Migration &amp; seed — cách chạy</h2>
+<pre># nâng lên head (tạo 38 bảng + 12 hypertable)
+alembic upgrade head
+# kiểm tra / rollback
+alembic current        # -&gt; 0001_initial_schema (head)
+alembic downgrade base &amp;&amp; alembic upgrade head
+# seed lặp lại an toàn
+python -m database.seeds.run_all   # 3 sở, các ngành, 30 mã VN30</pre>
+</div>
+<div class="footer">Tài liệu DTCK · 2026-09-14 · <a href="index.html">Trang chủ</a></div>
+</body>
+</html>

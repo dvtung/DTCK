@@ -2,6 +2,14 @@
 
 **Last updated:** 2026-09-14
 
+## 2026-09-14 — Standing rule: htmldocs updated with every source change
+
+- New standing rule (recorded in `tasks.md` + `decisions.md`): every future task
+  that changes source code, schema, configs, or behavior MUST also update
+  `docs/htmldocs/` (Vietnamese) in the same task — status page, module
+  reference, and any other affected page — and re-validate the HTML before
+  marking the task complete. Prevents docs drift as the project evolves.
+
 ## 2026-09-14 — T007 Quant Engine: factors/valuation/momentum/risk + scoring (Phase 2)
 
 - Added `src/market/fundamental/factors.py` — revenue/EPS growth, ROE, ROA, gross/operating/net margins, D/E, interest coverage, FCF, FCF margin, earnings quality (`None` on zero denominators)

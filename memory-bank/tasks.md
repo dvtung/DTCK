@@ -4,6 +4,11 @@
 
 Legend: `[ ]` To Do · `[~]` In Progress · `[x]` Completed · `[!]` Blocked
 
+> **Standing rule (all tasks):** every task that changes source code, schema,
+> configs, or behavior MUST also update `docs/htmldocs/` (Vietnamese) in the
+> same task — status page, module reference, and any other affected page —
+> and re-validate the HTML before marking the task complete.
+
 ---
 
 ## Current
@@ -21,6 +26,7 @@ Legend: `[ ]` To Do · `[~]` In Progress · `[x]` Completed · `[!]` Blocked
 ## Backlog (ordered per spec §57)
 
 - [x] **T007 — Quant Engine: fundamental factors, valuation, momentum, risk + factor scores** — `src/market/fundamental/factors.py` (growth/profitability/leverage/cashflow/quality), `src/market/valuation/valuation.py` (P-E/P-B/EV/PEG/yield + percentile ranks), `src/market/momentum/momentum.py` (n-day returns/volume expansion/relative momentum), `src/market/risk/risk.py` (volatility/beta/drawdown/liquidity/gap/debt-risk), `src/quant/factors/scoring.py` (§12 baseline weights + percentile-rank aggregation + ranking). Pure-Python deterministic. `tests/unit/test_quant_factors.py` + `test_quant_scoring.py` (18 tests). Verified: ruff clean, mypy clean, 140 total tests pass. *(2026-09-14)*
+- [x] **D1 — Static HTML docs site** — `docs/htmldocs/` (index/structure/status/modules/database/pipeline + style.css). Project intro, repo layout, dev status per spec §58, full module reference with signatures + usage examples. All pages HTML-validated, nav links verified. *(2026-09-14)*
 - [ ] T008 — Scoring engine (baseline weights, §12) + ranking + explainability payloads — **next**
 - [ ] T009 — Backtesting engine (walk-forward, costs, bias controls) + metrics
 - [ ] T010 — FastAPI `apps/api` exposing `/api/v1/*` per docs/API_SPECIFICATION.md (MVP-1 read paths)
