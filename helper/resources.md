@@ -2,7 +2,7 @@
 
 ## AI Investment Research & Decision Intelligence Platform
 
-**Last updated:** 2026-09-06
+**Last updated:** 2026-09-13
 
 ## Technology stack (§34)
 
@@ -28,14 +28,22 @@
 | `LLM_PROVIDER` / `LLM_API_KEY` / `LLM_MODEL` | LLM abstraction (ADR-005) |
 | `EMBEDDING_PROVIDER` / `EMBEDDING_MODEL` | embedding service (Phase 4) |
 | `LOG_LEVEL` | logging severity |
+| `MARKET_DATA_PROVIDER` / `MARKET_DATA_API_KEY` | market-data provider selector (T002) |
+| `FUNDAMENTAL_DATA_PROVIDER` | fundamental provider selector (T002) |
+| `NEWS_PROVIDER` / `NEWS_API_KEY` | news provider selector / optional paid key (T002) |
+| `FINIPRO_ACCESS_TOKEN` | SSI FiniPro primary provider credential (T002) |
+| `VIETSTOCK_API_KEY` | Vietstock VIP data (optional, disabled) |
+| `TRADINGECONOMICS_API_KEY` | macro aggregation (optional, disabled) |
 
-## Third-party integrations
+## Third-party integrations (T002 — see `configs/sources.yaml`, design in `docs/DATA_SOURCES.md`)
 
-| Name | Purpose | Status |
+| Name (id) | Purpose | Status |
 |---|---|---|
-| TBD — Vietnam market data provider (OHLCV/foreign flow) | Phase 1 collector | **Not selected yet (KI-001)** |
-| TBD — financial statements provider | Phase 1 | Not selected |
-| TBD — news provider | Phase 4 | Not selected |
+| `ssix_finipro` (SSI FiniPro) | Primary market + fundamental + events + news | **Selected** (T002); endpoints `TO VERIFY` in T004 |
+| `vndirect`, `tcbs`, `dsc` | Market/fundamental fallbacks (anonymous, unofficial) | Selected as fallbacks |
+| `sbv`, `gso`, `imf_worldbank` | Macro (official public) | Selected |
+| `cafef`, `vnexpress`, `vietstock_news` | Vietnamese news (RSS) | Selected |
+| `hose`, `hnx`, `vietstock`, `tradingeconomics`, `newsdata` | Official/licensed/paid extras | **Disabled** until licensing/cost decision |
 
 > All credentials masked; never commit real keys. Egress whitelist required for external APIs.
 
@@ -48,3 +56,7 @@
 ## Dependency update protocol
 
 When `pyproject.toml`/`requirements*.txt` change → refresh `offline_package/` wheels and update this file (rule §2.4).
+
+> Note: `PyYAML` was installed into the local venv to verify `tests/unit/test_sources_registry.py`
+> (T002) but is **not** yet a project dependency — `pyproject.toml` unchanged. If you approve
+> adding `pyyaml` to `[project.optional-dependencies] dev`, registry tests also run in Docker/CI.

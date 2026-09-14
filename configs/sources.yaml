@@ -1,0 +1,216 @@
+# Data provider registry (T002 — docs/DATA_SOURCES.md is the prose design).
+# Machine-readable contract consumed by collectors (T004).
+#
+# Selection rule: for each (domain, datatype) pick the highest-priority `enabled`
+# provider; on validation failure or data-quality gate (§39) fall back to the next.
+# Secrets are NEVER here — providers reference env var NAMES via credential_env
+# (spec §32, docs/SECURITY.md §2).
+
+version: t002_baseline
+
+defaults:
+  timeout_seconds: 30
+  max_retries: 3
+  retry_backoff_seconds: 5
+
+providers:
+  # --- Market + fundamental (primary) -------------------------------------
+  - id: ssix_finipro
+    description: SSI FiniPro — registered per-user access
+    roles: [market, fundamental, corporate_events, news]
+    auth: bearer
+    credential_env: FINIPRO_ACCESS_TOKEN
+    free: true
+    licensed: true
+    enabled: true
+    priority: 100
+    endpoints_status: TO_VERIFY   # confirm in T004 before first run
+
+  # --- Market + fundamental fallbacks (anonymous/unofficial) --------------
+  - id: vndirect
+    description: VNDirect fininfo public API (unofficial)
+    roles: [market, fundamental]
+    auth: none
+    credential_env: ""
+    free: true
+    licensed: false
+    enabled: true
+    priority: 80
+    endpoints_status: TO_VERIFY
+    # Candidate EOD endpoint — MUST be snapshot-tested in T004 before live use
+    # (KI-006). Field names below are the expected mapping, not yet confirmed.
+    endpoints:
+      eod:
+        url: "https://finfo-api.vndirect.com.vn/v4/stocks/daily_prices"
+        params:
+          q: "code:{symbol}~date:{start}~{end}"
+          size: "100"
+          page: "1"
+        list_path: "data"
+        date_format: "%Y-%m-%d"
+        exchange: HOSE
+        fields:
+          symbol: code
+          trade_date: tradingDate
+          open: openPrice
+          high: highPrice
+          low: lowPrice
+          close: closePrice
+          volume: nmVolume
+          trading_value: nmValue
+
+  - id: tcbs
+    description: TCBS public API (unofficial)
+    roles: [market, fundamental]
+    auth: none
+    credential_env: ""
+    free: true
+    licensed: false
+    enabled: true
+    priority: 70
+    endpoints_status: TO_VERIFY
+
+  - id: dsc
+    description: DSC GraphData public GraphQL (unofficial)
+    roles: [market, fundamental]
+    auth: none
+    credential_env: ""
+    free: true
+    licensed: false
+    enabled: true
+    priority: 60
+    endpoints_status: TO_VERIFY
+
+  # --- Official exchanges (licensing required — disabled for now) ---------
+  - id: hose
+    description: HOSE official listed-company data
+    roles: [market, corporate_events]
+    auth: none
+    credential_env: ""
+    free: false
+    licensed: true
+    enabled: false
+    priority: 50
+
+  - id: hnx
+    description: HNX official listed-company data
+    roles: [market, corporate_events]
+    auth: none
+    credential_env: ""
+    free: false
+    licensed: true
+    enabled: false
+    priority: 50
+
+  # --- Fundamental (optional paid) -----------------------------------------
+  - id: vietstock
+    description: Vietstock VIP financial data (paid)
+    roles: [fundamental]
+    auth: bearer
+    credential_env: VIETSTOCK_API_KEY
+    free: false
+    licensed: true
+    enabled: false
+    priority: 40
+
+  # --- Macro (official public) ----------------------------------------------
+  - id: sbv
+    description: State Bank of Vietnam — rates, credit growth, M2, FX reference
+    roles: [macro]
+    auth: none
+    credential_env: ""
+    free: true
+    licensed: true
+    enabled: true
+    priority: 90
+    endpoints_status: TO_VERIFY
+
+  - id: gso
+    description: General Statistics Office — GDP, CPI, industrial production
+    roles: [macro]
+    auth: none
+    credential_env: ""
+    free: true
+    licensed: true
+    enabled: true
+    priority: 90
+    endpoints_status: TO_VERIFY
+
+  - id: imf_worldbank
+    description: IMF/World Bank public APIs — benchmarks, inflation, FX history
+    roles: [macro]
+    auth: none
+    credential_env: ""
+    free: true
+    licensed: true
+    enabled: true
+    priority: 70
+
+  - id: tradingeconomics
+    description: TradingEconomics aggregation (paid)
+    roles: [macro]
+    auth: query
+    credential_env: TRADINGECONOMICS_API_KEY
+    free: false
+    licensed: true
+    enabled: false
+    priority: 50
+
+  # --- News (Vietnamese) ------------------------------------------------------
+  - id: cafef
+    description: CafeF financial news (RSS/HTML)
+    roles: [news]
+    auth: none
+    credential_env: ""
+    free: true
+    licensed: false
+    enabled: true
+    priority: 90
+    endpoints_status: TO_VERIFY
+
+  - id: vnexpress
+    description: VnExpress finance news (RSS)
+    roles: [news]
+    auth: none
+    credential_env: ""
+    free: true
+    licensed: false
+    enabled: true
+    priority: 80
+
+  - id: vietstock_news
+    description: Vietstock market news (RSS)
+    roles: [news]
+    auth: none
+    credential_env: ""
+    free: true
+    licensed: false
+    enabled: true
+    priority: 70
+
+  - id: newsdata
+    description: NewsData.io symbol-tagged news (paid, optional)
+    roles: [news]
+    auth: query
+    credential_env: NEWS_API_KEY
+    free: false
+    licensed: true
+    enabled: false
+    priority: 50
+
+# Which provider wins per domain (informational mirror of the priority rules;
+# collectors compute this from `providers` so the two must stay consistent).
+selection:
+  market: ssix_finipro
+  fundamental: ssix_finipro
+  valuation: computed          # Quant Engine computes; no external source of truth
+  macro: sbv
+  corporate_events: ssix_finipro
+  news: cafef
+
+fallback_chains:
+  market: [vndirect, tcbs, dsc]
+  fundamental: [vndirect, vietstock]
+  macro: [imf_worldbank, gso, tradingeconomics]
+  corporate_events: [hose, cafef]
+  news: [vnexpress, vietstock_news, newsdata]

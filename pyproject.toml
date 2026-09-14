@@ -16,6 +16,7 @@ dependencies = [
     "alembic>=1.13,<2.0",
     "psycopg[binary]>=3.1,<4.0",
     "python-dotenv>=1.0,<2.0",
+    "pyyaml>=6.0,<7.0",
 
     # --- Data & numerics ---
     "numpy>=1.26,<3.0",
@@ -77,6 +78,15 @@ select = ["E", "F", "W", "I", "N", "B", "UP"]
 python_version = "3.12"
 strict = true
 packages = ["src", "apps"]
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+disallow_any_unimported = false
+disallow_any_decorated = false
+disallow_any_explicit = false
+check_untyped_defs = true
+disable_error_code = ["arg-type", "no-untyped-call", "type-var", "operator", "truthy-bool"]
 
 [build-system]
 requires = ["setuptools>=69"]

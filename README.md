@@ -50,6 +50,7 @@ docker/        Dockerfiles + compose
 | `docs/RAG_ARCHITECTURE.md` | Qdrant ingestion + hybrid retrieval + evidence |
 | `docs/AGENT_ARCHITECTURE.md` | LangGraph agents, tools, structured output |
 | `docs/API_SPECIFICATION.md` | REST API groups `/api/v1/*` |
+| `docs/DATA_SOURCES.md` | Data-source design & credentials plan (T002) |
 | `docs/DEPLOYMENT.md` | Setup & deployment |
 | `docs/SECURITY.md` | Secrets, auth, audit, RBAC |
 | `memory-bank/` | Project memory (§37): context, state, decisions, issues, tasks, changelog |

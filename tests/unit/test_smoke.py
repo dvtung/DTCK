@@ -32,6 +32,9 @@ def test_worker_cli_ingest_argument() -> None:
 
 
 def test_seeds_run_all() -> None:
-    from database.seeds.run_all import run_all
+    # Seeds require a live DB (T003+). Verify the wiring imports cleanly here;
+    # DB-backed seed behaviour is exercised by the integration tests.
+    from database.seeds import seed_exchanges, seed_sectors, seed_vn30  # noqa: F401
 
-    run_all()  # must not raise while scaffold is empty
+    assert seed_exchanges.EXCHANGES  # non-empty
+    assert seed_vn30.VN30

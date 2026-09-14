@@ -48,6 +48,10 @@ class Settings(BaseSettings):
     # Scoring baseline (§12)
     scoring_version: str = "baseline_1.0"
 
+    # Data quality gate (§39, T005) — datasets below this overall score are not
+    # used downstream (features/signals/backtests).
+    data_quality_threshold: float = 80.0
+
     # CORS
     cors_origins: list[str] = ["http://localhost:8501"]
 

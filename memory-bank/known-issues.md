@@ -4,10 +4,12 @@
 
 | ID | Area | Issue | Status | Notes |
 |---|---|---|---|---|
-| KI-001 | Data | No data source selected/ credentialed yet for VN EOD OHLCV, financials, news | OPEN | Blocks Phase 1 collectors; candidate sources to evaluate in T002 |
-| KI-002 | Infra | Local Python is 3.14.4 — dependency pins (SQLAlchemy/Timescale, LangGraph, etc.) must be verified against it; Docker images use pinned versions instead | OPEN | Validate before `pip install` of heavy ML stack |
-| KI-003 | Docs | `docs/DATABASE_SCHEMA.md` has open design questions (bitemporal restatement policy detail, object-storage path format, per-hypertable retention) | OPEN | See DATABASE_SCHEMA.md §19 |
-| KI-004 | Infra | Docker services not yet actually started/verified end-to-end (config only passed `docker compose config`) | OPEN | T002+ startup smoke test |
+| KI-001 | Data | No data source selected for VN EOD OHLCV, financials, news | **RESOLVED (design)** | T002 selected providers (`docs/DATA_SOURCES.md`, `configs/sources.yaml`); FiniPro = primary, VNDirect/TCBS/DSC fallbacks, SBV/GSO/IMF-WB macro, CafeF/VnExpress/Vietstock news |
+| KI-006 | Data | Provider endpoint URLs / response schemas / rate limits unverified (network egress unavailable during T002) | OPEN | Must be confirmed in T004 before first collector run; see `docs/DATA_SOURCES.md` §8 |
+| KI-007 | Data | No provider credentials obtained yet (`FINIPRO_ACCESS_TOKEN` etc. empty) | OPEN | Blocks live collection in T004; anonymous fallbacks still testable |
+| KI-002 | Infra | Local Python is 3.14.4 — dependency pins (SQLAlchemy/Timescale, LangGraph, etc.) must be verified against it; Docker images use pinned versions instead | PARTIALLY VERIFIED | DB deps (SQLAlchemy 2.0.52, Alembic 1.20, psycopg 3.3) validated locally on 3.14; heavy ML/LLM stack still unverified |
+| KI-003 | Docs | `docs/DATABASE_SCHEMA.md` §19 open items: bitemporal restatement policy detail, object-storage path format, per-hypertable retention/compression | OPEN | Design implemented; the §19 items do not block schema/migrations |
+| KI-004 | Infra | Docker services actually started/verified end-to-end | RESOLVED | `docker compose` stack up & healthy; DB migration + seeds verified against running TimescaleDB (2026-09-13) |
 | KI-005 | Repo | Root spec files were copied (`docs/`) — originals still at repo root; keep in sync until removal decision | OPEN | Decide whether to keep single canonical copy at root or in docs/ |
 
 ---

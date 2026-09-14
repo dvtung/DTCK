@@ -1,7 +1,7 @@
-"""Alembic environment — Phase-0 scaffold.
+"""Alembic environment — T003 (STEP 2: DATABASE DESIGN).
 
-Target metadata binding (tables from src) is wired in Phase 1 (T003) once the
-SQLAlchemy models for the DATABASE_SCHEMA have been written.
+Target metadata is bound to the SQLAlchemy models in ``src.common.models``,
+which are the single source of truth for the schema.
 """
 
 from __future__ import annotations
@@ -15,9 +15,10 @@ from sqlalchemy import create_engine
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
-# Import models' metadata here once models exist (Phase 1):
-# from src.<domain>.models import Base  # noqa: F401
-target_metadata = None  # set to Base.metadata in T003
+# Import models so every table registers on Base.metadata.
+from src.common.models import Base  # noqa: E402
+
+target_metadata = Base.metadata
 
 config = context.config
 

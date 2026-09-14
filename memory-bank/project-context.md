@@ -78,6 +78,7 @@ See `docs/ARCHITECTURE.md` for the full picture.
 | RAG | `docs/RAG_ARCHITECTURE.md` |
 | Agents | `docs/AGENT_ARCHITECTURE.md` |
 | API | `docs/API_SPECIFICATION.md` |
+| Data sources | `docs/DATA_SOURCES.md` (T002 design + credentials plan) |
 | Deployment | `docs/DEPLOYMENT.md` |
 | Security | `docs/SECURITY.md` |
 | Memory bank index | `memory-bank/README.md` (see below) |
