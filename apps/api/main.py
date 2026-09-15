@@ -1,7 +1,7 @@
 """DTCK API application entry point.
 
 FastAPI app exposing the /api/v1 groups (see docs/API_SPECIFICATION.md).
-Phase-0 scaffold: health + readiness only; route groups land with their phases.
+Route groups registered in include_router below.
 """
 
 from __future__ import annotations
@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from apps.api.config import settings
+from apps.api.routers import backtests, fundamentals, market, news, stocks, technical, valuation
 
 app = FastAPI(
     title="DTCK AI Investment Platform",
@@ -31,6 +32,10 @@ if settings.cors_origins:
         allow_headers=["*"],
     )
 
+for _router in (market.router, stocks.router, fundamentals.router, technical.router,
+                valuation.router, news.router, backtests.router):
+    app.include_router(_router)
+
 
 @app.get("/healthz", tags=["system"])
 def healthz() -> dict[str, str]:
@@ -39,9 +44,8 @@ def healthz() -> dict[str, str]:
 
 
 @app.get("/readyz", tags=["system"])
-def readyz() -> dict[str, str]:
+def readyz() -> dict[str, str | dict[str, str]]:
     """Readiness probe — extend with DB/Qdrant connectivity checks."""
-
     return {"status": "ready", "dependencies": {"database": "pending", "qdrant": "pending"}}
 
 

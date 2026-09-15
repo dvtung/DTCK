@@ -51,8 +51,27 @@ docker compose ps
 
 Access:
 - API: http://localhost:8000/docs
+- API health: http://localhost:8000/healthz
 - Dashboard: http://localhost:8501
 - Qdrant dashboard: http://localhost:6333/dashboard
+
+### Local development (no Docker)
+
+For T010 read endpoints and T008/T009 engines, a full Docker stack is **not** required:
+
+```bash
+# activate the local venv (.venv)
+source .venv/bin/activate
+
+# API (in-memory deterministic service — KI-008, no DB needed)
+uvicorn apps.api.main:app --reload       # http://localhost:8000/docs
+
+# run all unit tests
+pytest -q
+
+# run just the API tests (uses TestClient, no server needed)
+pytest tests/unit/test_api.py -q
+```
 
 ---
 

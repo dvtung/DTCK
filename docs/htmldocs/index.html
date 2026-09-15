@@ -15,6 +15,7 @@
     <a href="structure.html">Cấu trúc</a>
     <a href="status.html">Tiến độ</a>
     <a href="modules.html">Module</a>
+    <a href="api.html">API</a>
     <a href="database.html">Cơ sở dữ liệu</a>
     <a href="pipeline.html">Luồng dữ liệu</a>
   </nav>
@@ -27,7 +28,7 @@
       <span class="badge">Python 3.12 · FastAPI · Streamlit</span>
       <span class="badge">TimescaleDB · Qdrant · Redis</span>
       <span class="badge">Tác tử LangGraph · XGBoost / LightGBM</span>
-      <span class="badge">140 kiểm thử đơn vị đạt</span>
+      <span class="badge">209 kiểm thử đơn vị đạt</span>
     </div>
   </div>
   <div class="grid">
@@ -53,10 +54,14 @@
     <tr><td>Hypertable TimescaleDB</td><td>12 bảng chuỗi thời gian (prices, index_prices, factors, …)</td></tr>
     <tr><td>Dữ liệu seed</td><td>3 sở giao dịch · 10 ngành · 15 nhóm ngành · 30 mã VN30</td></tr>
     <tr><td>Hàm quant</td><td>9 kỹ thuật + 12 cơ bản + 11 định giá + 4 động lượng + 6 rủi ro + 4 chấm điểm</td></tr>
-    <tr><td>Kiểm thử đơn vị</td><td>140 bài đạt (pipeline 38 · quality 26 · technical 40 · quant 18 · models/sources/smoke)</td></tr>
+    <tr><td>Engine chấm điểm (T008)</td><td>Phân rã đóng góp từng hệ số + nhãn tín hiệu + độ tin cậy; payload giải thích cho mọi mã</td></tr>
+    <tr><td>Engine kiểm thử ngược (T009)</td><td>Cuốn chiếu (walk-forward), chi phí giao dịch/trượt giá, 11 chỉ số đo hiệu quả</td></tr>
+    <tr><td>API REST (T010)</td><td>7 nhóm <code>/api/v1/*</code> · 23 đường dẫn / 24 thao tác · 21 schema Pydantic</td></tr>
+    <tr><td>Bảng điều khiển (T011)</td><td>Tổng quan, bộ lọc, xếp hạng, chi tiết mã, backtests, sức khỏe API · <code>apps/dashboard/</code> + 34 kiểm thử</td></tr>
+    <tr><td>Kiểm thử đơn vị</td><td>209 bài đạt (pipeline 38 · technical 40 · quality 26 · api 14 · dashboard 34 · scoring 11 · backtest 10 · quant 18 · models 7 · sources 7 · smoke 4)</td></tr>
     <tr><td>Tài liệu</td><td>13 đặc tả markdown trong <code>docs/</code></td></tr>
   </table>
 </div>
-<div class="footer">Tài liệu DTCK · tạo ngày 2026-09-14 · nhánh <code>feat/data-source-design</code> · xem <code>docs/</code> để đọc đặc tả đầy đủ</div>
+<div class="footer">Tài liệu DTCK · tạo ngày 2026-09-15 · nhánh <code>feat/data-source-design</code> · xem <code>docs/</code> để đọc đặc tả đầy đủ</div>
 </body>
 </html>

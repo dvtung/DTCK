@@ -19,8 +19,14 @@ from __future__ import annotations
 import argparse
 import logging
 from datetime import UTC, date, datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import create_engine
+
+if TYPE_CHECKING:
+    from sqlalchemy.engine import Engine
+
+    from src.data.providers.base import DataProvider
 
 logger = logging.getLogger("dtck.worker.cli")
 
@@ -29,7 +35,7 @@ def _parse_date(value: str | None, *, default: date) -> date:
     return date.fromisoformat(value) if value else default
 
 
-def _build_provider(source: str, args: argparse.Namespace):
+def _build_provider(source: str, args: argparse.Namespace) -> DataProvider:
     """Build the provider named by ``source`` ('fixture' = offline rows)."""
     from src.data.providers import create_provider
 
@@ -40,7 +46,7 @@ def _build_provider(source: str, args: argparse.Namespace):
     return create_provider(source)
 
 
-def _engine():
+def _engine() -> Engine:
     from apps.api.config import settings
 
     return create_engine(settings.database_url, pool_pre_ping=True)
@@ -121,7 +127,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.since
         else datetime.combine(args.start, datetime.min.time(), tzinfo=UTC)
     )
-    return args.func(args)
+    return int(args.func(args))
 
 
 if __name__ == "__main__":

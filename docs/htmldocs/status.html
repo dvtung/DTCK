@@ -10,21 +10,23 @@
 <header class="topbar">
 <div class="logo">📈</div>
 <div><h1>DTCK — Nền tảng Quyết định Đầu tư AI</h1><p>Trí tuệ thị trường chứng khoán Việt Nam · tài liệu tĩnh</p></div>
-<nav><a href="index.html">Trang chủ</a><a href="structure.html">Cấu trúc</a><a href="status.html" class="active">Tiến độ</a><a href="modules.html">Module</a><a href="database.html">Cơ sở dữ liệu</a><a href="pipeline.html">Luồng dữ liệu</a></nav>
+<nav><a href="index.html">Trang chủ</a><a href="structure.html">Cấu trúc</a><a href="status.html" class="active">Tiến độ</a><a href="modules.html">Module</a><a href="api.html">API</a><a href="database.html">Cơ sở dữ liệu</a><a href="pipeline.html">Luồng dữ liệu</a></nav>
 </header>
 <div class="wrap">
-<h2 class="sec">Tiến độ theo đặc tả §58 (2026-09-14)</h2>
+<h2 class="sec">Tiến độ theo đặc tả §58 (2026-09-15)</h2>
 <table>
 <tr><th>Hạng mục</th><th>Tiến độ</th><th>Trạng thái</th></tr>
 <tr><td>Lập đặc tả</td><td><div class="bar"><div style="width:100%"></div></div>100%</td><td><span class="pill done">Xong</span></td></tr>
 <tr><td>Kiến trúc</td><td><div class="bar"><div style="width:100%"></div></div>100%</td><td><span class="pill done">Xong</span></td></tr>
 <tr><td>Cơ sở dữ liệu</td><td><div class="bar"><div style="width:100%"></div></div>100%</td><td><span class="pill done">T003 xong</span></td></tr>
 <tr><td>Luồng dữ liệu</td><td><div class="bar"><div style="width:100%"></div></div>100%</td><td><span class="pill done">T004+T005 xong</span></td></tr>
-<tr><td>Engine quant</td><td><div class="bar"><div style="width:90%"></div></div>90%</td><td><span class="pill prog">T006+T007 xong · tiếp theo T008</span></td></tr>
-<tr><td>Kiểm thử ngược (backtest)</td><td><div class="bar"><div style="width:0%"></div></div>0%</td><td><span class="pill todo">T009</span></td></tr>
+<tr><td>Engine quant</td><td><div class="bar"><div style="width:100%"></div></div>100%</td><td><span class="pill done">T006+T007+T008 xong</span></td></tr>
+<tr><td>Kiểm thử ngược (backtest)</td><td><div class="bar"><div style="width:90%"></div></div>90%</td><td><span class="pill prog">T009 xong · chờ dữ liệu thật (KI-009)</span></td></tr>
+<tr><td>API REST</td><td><div class="bar"><div style="width:85%"></div></div>85%</td><td><span class="pill prog">T010 xong · chờ nối CSDL (KI-008)</span></td></tr>
 <tr><td>RAG / Bằng chứng</td><td><div class="bar"><div style="width:0%"></div></div>0%</td><td><span class="pill todo">T012</span></td></tr>
 <tr><td>Tác tử AI</td><td><div class="bar"><div style="width:0%"></div></div>0% — bị chặn tới khi có baseline</td><td><span class="pill todo">T013 bị chặn</span></td></tr>
 <tr><td>Học máy (ML)</td><td><div class="bar"><div style="width:0%"></div></div>0% — bị chặn tới khi có baseline</td><td><span class="pill todo">T014 bị chặn</span></td></tr>
+<tr><td>Bảng điều khiển</td><td><div class="bar"><div style="width:85%"></div></div>85%</td><td><span class="pill prog">T011 xong · hiển thị dữ liệu tổng hợp (KI-010)</span></td></tr>
 <tr><td>Vận hành thật</td><td><div class="bar"><div style="width:0%"></div></div>0%</td><td><span class="pill todo">T015</span></td></tr>
 </table>
 <h2 class="sec">Các công việc đã hoàn thành</h2>
@@ -36,16 +38,16 @@
 <tr><td>T004</td><td>Luồng dữ liệu</td><td>src/data/ + FixtureProvider + CLI worker + 38 kiểm thử</td></tr>
 <tr><td>T005</td><td>Khung chất lượng §39</td><td>Chấm điểm 6 chiều + cổng chất lượng + 26 kiểm thử</td></tr>
 <tr><td>T006</td><td>Các chỉ báo kỹ thuật</td><td>9 chỉ báo + 40 kiểm thử giá trị kỳ vọng</td></tr>
-<tr><td>T007</td><td>Hệ số + chấm điểm</td><td>5 module, 46 hàm + 18 kiểm thử · tổng 140 bài đạt</td></tr>
+<tr><td>T007</td><td>Hệ số + chấm điểm</td><td>5 module, 46 hàm + 18 kiểm thử</td></tr>
+<tr><td>T008</td><td>Engine chấm điểm + giải thích</td><td><code>src/quant/scoring/engine.py</code>: phân rã đóng góp, nhãn tín hiệu, độ tin cậy, xếp hạng + 11 kiểm thử</td></tr>
+<tr><td>T009</td><td>Engine kiểm thử ngược</td><td><code>src/backtesting/</code>: cuốn chiếu, chi phí, kiểm soát thiên lệch, 11 chỉ số đo + 10 kiểm thử</td></tr>
+<tr><td>T010</td><td>API REST FastAPI</td><td><code>apps/api/</code>: 7 router, 23 đường dẫn, 21 schema, lọc/phân trang, phong bì lỗi + 14 kiểm thử</td></tr>
+<tr><td>T011</td><td>Bảng điều khiển Streamlit</td><td><code>apps/dashboard/</code>: tổng quan, bộ lọc, xếp hạng, chi tiết mã, backtests, sức khỏe API + 34 kiểm thử</td></tr>
 </table>
 <h2 class="sec">Lộ trình (thứ tự theo đặc tả §57)</h2>
 <table>
 <tr><th>Tiếp theo</th><th>Phạm vi</th></tr>
-<tr><td><b>T008</b> — chấm điểm + giải thích</td><td>Vì sao một mã xếp hạng như vậy: đóng góp từng hệ số, lý do</td></tr>
-<tr><td>T009 — engine kiểm thử ngược</td><td>Cuốn chiếu, chi phí, kiểm soát thiên lệch, chỉ số đo</td></tr>
-<tr><td>T010 — FastAPI apps/api</td><td>Đường đọc /api/v1/* theo API_SPECIFICATION.md</td></tr>
-<tr><td>T011 — bảng điều khiển Streamlit</td><td>Tổng quan thị trường, bộ lọc, xếp hạng, chi tiết mã</td></tr>
-<tr><td>T012 — tin tức + RAG + bằng chứng</td><td>Truy xuất Qdrant, engine bằng chứng (MVP-2)</td></tr>
+<tr><td><b>T012</b> — tin tức + RAG + bằng chứng</td><td>Truy xuất Qdrant, engine bằng chứng (MVP-2) — <b>kế tiếp</b></td></tr>
 <tr><td>T013 — tác tử (bị chặn)</td><td>Chỉ sau khi Dữ liệu + Quant + Backtest đạt baseline</td></tr>
 <tr><td>T014 — ML (bị chặn)</td><td>XGBoost/LightGBM + hiệu chuẩn + registry mô hình</td></tr>
 <tr><td>T015 — vận hành thật</td><td>Xác thực, giám sát, cảnh báo, CI/CD</td></tr>
@@ -55,6 +57,9 @@
 <tr><th>Mã</th><th>Vấn đề</th><th>Ảnh hưởng</th></tr>
 <tr><td>KI-006</td><td>Endpoint nhà cung cấp chưa kiểm chứng (không có mạng ngoài lúc thiết kế)</td><td>Chặn thu thập thật; fixture phủ kiểm thử</td></tr>
 <tr><td>KI-007</td><td>Chưa có chứng thực (FINIPRO_ACCESS_TOKEN trống)</td><td>Các phương án dự phòng ẩn danh vẫn kiểm thử được</td></tr>
+<tr><td>KI-008</td><td>API phục vụ dữ liệu tổng hợp trong bộ nhớ (chưa nối TimescaleDB)</td><td>Router hợp đồng đã chốt; thay service bằng repository khi CSDL sẵn sàng</td></tr>
+<tr><td>KI-009</td><td>Backtest chỉ kiểm chứng trên chuỗi giá tổng hợp (chưa có lịch sử thật)</td><td>Kết quả chiến lược chưa có ý nghĩa cho tới khi nạp dữ liệu thật</td></tr>
+<tr><td>KI-010</td><td>Bảng điều khiển hiển thị dữ liệu tổng hợp trong bộ nhớ (KI-008) cho tới khi CSDL + dữ liệu thật được nối</td><td>Ồn định giao diện; client HTTP sẽ tự dùng API thật khi router phục vụ payload CSDL mà không đổi mã dashboard</td></tr>
 </table>
 <h2 class="sec" id="docs">Các tài liệu đặc tả</h2>
 <table>
@@ -68,8 +73,7 @@
 <tr><td><code>BACKTESTING.md · ML_ARCHITECTURE.md · RAG_ARCHITECTURE.md · AGENT_ARCHITECTURE.md</code></td><td>Thiết kế cho các giai đoạn sắp tới</td></tr>
 <tr><td><code>AI_INVESTMENT_CONCEPT.md · SECURITY.md · DEPLOYMENT.md</code></td><td>Khái niệm, xác thực/kiểm toán, sổ tay vận hành</td></tr>
 </table>
-<!--PART2-->
 </div>
-<div class="footer">Tài liệu DTCK · 2026-09-14 · <a href="index.html">Trang chủ</a></div>
+<div class="footer">Tài liệu DTCK · 2026-09-15 · <a href="index.html">Trang chủ</a></div>
 </body>
 </html>

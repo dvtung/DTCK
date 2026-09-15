@@ -15,6 +15,7 @@
     <a href="structure.html" class="active">Cấu trúc</a>
     <a href="status.html">Tiến độ</a>
     <a href="modules.html">Module</a>
+    <a href="api.html">API</a>
     <a href="database.html">Cơ sở dữ liệu</a>
     <a href="pipeline.html">Luồng dữ liệu</a>
   </nav>
@@ -23,7 +24,7 @@
 <h2 class="sec">Bố cục kho mã</h2>
 <pre>DTCK/
 ├── apps/                  # điểm chạy chương trình
-│   ├── api/               # dịch vụ FastAPI (REST /api/v1/*, T010)
+│   ├── api/               # ★ dịch vụ FastAPI (REST /api/v1/*, T010)
 │   ├── dashboard/         # giao diện Streamlit (T011)
 │   └── worker/            # tác vụ nền + CLI (ingest/backfill/recompute)
 ├── src/                   # các package Python có thể import
@@ -31,7 +32,9 @@
 │   ├── data/              # ★ nạp dữ liệu: provider/thu thập/kiểm tra/chuẩn hóa/chất lượng
 │   ├── market/            # ★ quant: kỹ thuật/cơ bản/định giá/động lượng/rủi ro
 │   ├── quant/             # ★ chấm điểm hệ số + tín hiệu (trọng số baseline §12)
-│   ├── backtesting/       # engine kiểm thử cuốn chiếu (T009, đã dựng khung)
+│   │   ├── factors/       # ★ toán chấm điểm thô (T007)
+│   │   └── scoring/       # ★ engine xếp hạng + payload giải thích (T008)
+│   ├── backtesting/       # ★ engine kiểm thử cuốn chiếu (T009)
 │   ├── rag/               # nạp tin tức + truy xuất (T012, đã dựng khung)
 │   ├── agents/            # tác tử LangGraph (T013, bị chặn tới khi có baseline)
 │   ├── ml/                # kho đặc trưng + mô hình (T014, bị chặn tới khi có baseline)
@@ -43,19 +46,20 @@
 ├── configs/sources.yaml   # ★ registry nhà cung cấp đọc được bằng máy (T002)
 ├── docs/                  # 13 đặc tả markdown (nguồn chân lý)
 ├── docs/htmldocs/         # ★ chính trang web tĩnh này
-├── tests/unit/            # 140 kiểm thử đơn vị
+├── tests/unit/            # 175 kiểm thử đơn vị
 ├── memory-bank/           # tasks / current-state / decisions / changelog
 ├── docker/ docker-compose.yml
 └── pyproject.toml requirements.txt .env.example</pre>
-<p>★ = đã triển khai và đã kiểm thử. Các package <code>src/</code> còn lại mới chỉ dựng khung (file <code>__init__.py</code> rỗng) và sẽ mở khóa ở T008–T015.</p>
+<p>★ = đã triển khai và đã kiểm thử. Các package <code>src/</code> còn lại mới chỉ dựng khung (file <code>__init__.py</code> rỗng) và sẽ mở khóa ở T011–T015.</p>
 <h2 class="sec">Chức năng theo tầng</h2>
 <table>
 <tr><th>Tầng</th><th>Thư mục</th><th>Trách nhiệm</th><th>Trạng thái</th></tr>
-<tr><td>Trình bày</td><td><code>apps/api</code>, <code>apps/dashboard</code></td><td>Endpoint REST, biểu đồ, bộ lọc, trang chi tiết mã</td><td><span class="pill todo">T010 / T011</span></td></tr>
+<tr><td>Trình bày</td><td><code>apps/api</code>, <code>apps/dashboard</code></td><td>Endpoint REST, biểu đồ, bộ lọc, trang chi tiết mã</td><td><span class="pill prog">T010 xong · T011 còn lại</span></td></tr>
 <tr><td>Nạp dữ liệu</td><td><code>src/data</code>, <code>apps/worker</code></td><td>Lấy về → kiểm tra → chuẩn hóa → cổng chất lượng → lưu trữ</td><td><span class="pill done">T004 + T005 xong</span></td></tr>
-<tr><td>Quant</td><td><code>src/market/*</code>, <code>src/quant</code></td><td>Chỉ báo tất định, hệ số, định giá, điểm số</td><td><span class="pill done">T006 + T007 xong</span></td></tr>
+<tr><td>Quant</td><td><code>src/market/*</code>, <code>src/quant</code></td><td>Chỉ báo tất định, hệ số, định giá, điểm số, xếp hạng kèm giải thích</td><td><span class="pill done">T006 → T008 xong</span></td></tr>
 <tr><td>Lưu trữ</td><td><code>src/common/models</code>, <code>database/</code></td><td>Lược đồ 38 bảng, hypertable, seed</td><td><span class="pill done">T003 xong</span></td></tr>
-<tr><td>Trí tuệ</td><td><code>src/backtesting</code>, <code>src/rag</code>, <code>src/agents</code>, <code>src/ml</code></td><td>Backtest, RAG bằng chứng, tác tử, dự báo ML</td><td><span class="pill todo">T009–T014</span></td></tr>
+<tr><td>Kiểm chứng</td><td><code>src/backtesting</code></td><td>Cuốn chiếu, chi phí, kiểm soát thiên lệch, chỉ số đo hiệu quả</td><td><span class="pill done">T009 xong</span></td></tr>
+<tr><td>Trí tuệ</td><td><code>src/rag</code>, <code>src/agents</code>, <code>src/ml</code></td><td>RAG bằng chứng, tác tử, dự báo ML</td><td><span class="pill todo">T012–T014</span></td></tr>
 <tr><td>Nền tảng</td><td><code>docker/</code>, <code>configs/</code>, <code>helper/</code></td><td>Dịch vụ Compose, registry nhà cung cấp, sổ tay vận hành</td><td><span class="pill prog">Một phần</span></td></tr>
 </table>
 <h2 class="sec">Luồng xử lý của một yêu cầu (kiến trúc mục tiêu)</h2>
@@ -71,6 +75,6 @@
 <tr><td><code>docker-compose.yml</code></td><td>db (TimescaleDB) · qdrant · redis · api · worker · dashboard</td></tr>
 </table>
 </div>
-<div class="footer">Tài liệu DTCK · tạo ngày 2026-09-14 · <a href="index.html">Trang chủ</a></div>
+<div class="footer">Tài liệu DTCK · tạo ngày 2026-09-15 · <a href="index.html">Trang chủ</a></div>
 </body>
 </html>

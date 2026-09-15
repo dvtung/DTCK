@@ -1,6 +1,6 @@
 # Memory Bank — Decisions
 
-**Last updated:** 2026-09-06
+**Last updated:** 2026-09-15
 
 A living log of project decisions (why we chose what). Formal ADRs live in `architecture-decisions.md`; this file tracks decisions at any level.
 
@@ -29,3 +29,7 @@ A living log of project decisions (why we chose what). Formal ADRs live in `arch
 | 2026-09-14 | Test file mypy | `[tool.mypy.overrides]` for `tests.*` disables `no-untyped-def`, `arg-type`, `no-untyped-call`, `operator`, `truthy-bool`, `type-var` | Test helpers with `**over` dict unpacking and list-index None checks are correct but can't be statically verified; tests are the spec |
 | 2026-09-14 | Quant factors | Pure-Python deterministic; `None` on zero denominators/div-by-zero; volatility = annualized log-return std (sqrt(252)); beta = rolling cov/var; percentile rank = strictly-less-than (0-100); scoring uses §12 baseline weights with renormalization | Same testability/auditability rationale as T006; `None`-propagation prevents silent garbage; baseline weights are assumptions to validate via backtests (§12 warning) |
 | 2026-09-14 | Static docs site | `docs/htmldocs/` (Vietnamese) is a **living doc**: every task that changes source/schema/configs/behavior MUST update the affected htmldoc pages in the same task and re-validate HTML | Prevents docs drift; keeps the static site trustworthy as the project evolves |
+| 2026-09-15 | Scoring engine | `src/quant/scoring/engine.py` wraps §12 factor scoring (T007) and adds the explainability layer (T008): per-factor contribution payloads via dataclasses (`FactorContribution`, `ScoreDecomposition`, `StockRanking`), signal labeling (POSITIVE/NEUTRAL/NEGATIVE) and confidence scoring | Answers "why is X ranked here?" — required by §44 (explainability); separates pure scoring math from the explainability wrapper; missing/zero factors dropped and renormalized, not faked |
+| 2026-09-15 | Backtesting | `src/backtesting/` (T009): next-bar-open execution (signal at close of day t → fill at open of day t+1) by construction eliminates look-ahead bias; transaction costs (commission + slippage + tax) deducted directly from cash; `walkforward.py` enforces non-overlapping train/test splits | Bias control is structural, not a post-filter; pure-Python deterministic for testability; 11 metrics validated against hand-computed expectations |
+| 2026-09-15 | API layer | `apps/api/` (T010): thin FastAPI routers → `MarketService` → Pydantic schemas. Service is an in-memory deterministic store so the entire API is unit-testable without TimescaleDB; the service can be swapped for a SQLAlchemy repository without touching any router contract | Allows MVP-1 read paths to ship & be tested before the persistence layer is wired; keeps router contracts stable as the data layer comes online |
+| 2026-09-15 | Test file mypy | `[tool.mypy.overrides]` block updated to cover `test_api.py` and `test_backtesting.py` | Test helpers using `**kw` dict unpacking and list-index None checks can't be statically verified; tests are the spec |

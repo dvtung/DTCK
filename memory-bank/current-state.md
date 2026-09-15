@@ -1,6 +1,6 @@
 # Memory Bank — Current State
 
-**Last updated:** 2026-09-06
+**Last updated:** 2026-09-15
 
 ---
 
@@ -11,8 +11,10 @@ Specification:  ████████████████████ 100
 Architecture:   ████████████████████ 100%   (docs/ARCHITECTURE.md drafted)
 Database:       ████████████████████ 100%   (schema + Alembic migration 0001 + seeds DONE)
 Data Pipeline:  ████████████████████ 100%   (T004+T005: collectors/validators/normalizers/pipeline + quality framework DONE)
-Quant Engine:   ██████████████████░░   90%   (T006 indicators + T007 factors/valuation/momentum/risk/scoring DONE; T008 payloads pending)
-Backtesting:    ░░░░░░░░░░░░░░░░░░░░   0%
+Quant Engine:   ████████████████████ 100%   (T006 indicators + T007 factors/valuation/momentum/risk + T008 scoring engine DONE)
+Backtesting:    ██████████████████░░  90%   (T009 engine+metrics+walk-forward DONE; real-market validation pending KI-006/007)
+API:            █████████████████░░░  85%   (T010: 7 router groups / 23 paths / 24 ops DONE on synthetic service; DB wiring pending KI-008)
+Dashboard:      █████████████████░░░  85%   (T011 Streamlit DONE on synthetic fallback; DB/real-data wiring pending KI-010)
 RAG:            ░░░░░░░░░░░░░░░░░░░░   0%
 AI Agent:       ░░░░░░░░░░░░░░░░░░░░   0%
 ML:             ░░░░░░░░░░░░░░░░░░░░   0%
@@ -32,7 +34,11 @@ Production:     ░░░░░░░░░░░░░░░░░░░░   0
 - **Seeds** (`database/seeds/`) — exchanges (HOSE/HNX/UPCOM), 10 sectors + 15 industries, 30-row VN30 universe. Idempotent; wired into `database/seeds/run_all.py`.
 - **Data pipeline** (`src/data/`) — collectors, validators, normalizers, pipelines, providers (base + fixture + HTTP-JSON + registry), quality scoring (§39). FixtureProvider enables full offline pipeline testing. Worker CLI (`apps/worker/cli.py`) wired for ingest commands.
 - **Data quality framework** (`src/data/quality.py`) — 6-dimension scoring (completeness, validity, consistency, uniqueness, freshness, accuracy) with weighted mean, renormalization, and threshold gate (§39).
-- Tests: 140 total pass (82 pipeline/quality + 40 technical + 18 T007 factors/scoring); ruff + mypy clean.
+- **Scoring engine** (`src/quant/scoring/engine.py`, T008) — `decompose_score()` per-factor contributions with renormalized weights, `score_universe()` → ranked `StockRanking` list, `build_signal_label()` (POSITIVE/NEUTRAL/NEGATIVE), `build_confidence()`; explainability payloads for every ranking.
+- **Backtesting engine** (`src/backtesting/`, T009) — `models.py` (PriceBar/BacktestData/ExecutionCosts/Trade/EquityPoint/BacktestConfig/BacktestResult), `metrics.py` (total return, CAGR, volatility, Sharpe, Sortino, max drawdown, Calmar, win rate, profit factor, turnover, transaction-cost total), `engine.py` (`run_backtest`, `select_window`, rebalance/close-leg logic), `walkforward.py` (`walk_forward_windows`, `rolling_windows`). Deterministic, cost-aware, no look-ahead.
+- **REST API** (`apps/api/`, T010) — FastAPI app with 7 router groups (`market`, `stocks`, `fundamentals`, `technical`, `valuation`, `news`, `backtests`) = 23 paths / 24 operations per `docs/API_SPECIFICATION.md`; shared pagination + `not_found` error envelope; 21 Pydantic schemas; `/healthz` + `/readyz`; `MarketDep` dependency injection.
+- **Streamlit dashboard** (`apps/dashboard/`, T011) — `client.py` (`MarketClient`: HTTP-first over `/api/v1/*`, in-process `MarketService` fallback offline), `components.py` (pure-Python signal/format/ranking/decomposition transforms), `app.py` (6 pages: market overview, screener, rankings, stock detail, backtests, system health; plotly candlestick/scatter/contribution charts).
+- Tests: 209 total pass; ruff + mypy (strict over `src/` + `apps/`) clean.
 - **Fundamental factors** (`src/market/fundamental/factors.py`) — revenue/EPS growth, ROE, ROA, margins, D/E, interest coverage, FCF, FCF margin, earnings quality. All return `None` on zero denominators.
 - **Valuation** (`src/market/valuation/valuation.py`) — P/E, forward P/E, P/B, EV/EBITDA, EV/Sales, dividend yield, PEG, enterprise value + percentile ranks (industry/historical).
 - **Momentum** (`src/market/momentum/momentum.py`) — n-day returns, multi-period, volume expansion, relative momentum vs benchmark.
@@ -45,10 +51,10 @@ Production:     ░░░░░░░░░░░░░░░░░░░░   0
 
 ## 3. Active Task
 
-**ID:** `T007 — Quant Engine: fundamental/valuation/momentum/risk + scoring`
-**State:** COMPLETED (2026-09-14)
+**ID:** `T011 — Streamlit dashboard (market overview, screener, ranking, stock detail, backtests, system health)`
+**State:** COMPLETED (2026-09-15)
 
-**Prior tasks:** `T001 — Phase 0 scaffold` (2026-09-06) · `T003 — migrations+seeds` (2026-09-13) · `T002 — data-source design` (2026-09-13) · `T004+T005 — pipeline+quality` (2026-09-14) · `T006 — technical indicators` (2026-09-14)
+**Prior tasks:** `T001 — Phase 0 scaffold` (2026-09-06) · `T003 — migrations+seeds` (2026-09-13) · `T002 — data-source design` (2026-09-13) · `T004+T005 — pipeline+quality` (2026-09-14) · `T006 — technical indicators` (2026-09-14) · `T007 — factors/scoring` (2026-09-14) · `T008+T009+T010 — scoring engine, backtesting engine, FastAPI read API` (2026-09-15)
 
 ---
 
@@ -70,11 +76,13 @@ Production:     ░░░░░░░░░░░░░░░░░░░░   0
 3. DATA SOURCE DESIGN     → DONE (docs/DATA_SOURCES.md + configs/sources.yaml, 2026-09-13)
 4. DATA INGESTION         → DONE (T004: collectors/validators/normalizers/pipeline, 2026-09-14)
 5. DATA QUALITY           → DONE (T005: 6-dimension scoring + gate, 2026-09-14)
-6. QUANT ENGINE           → T006 DONE (technical indicators, 2026-09-14) · T007 next (fundamental/valuation/momentum/risk)
-6. BACKTEST ENGINE
-7. RAG
-8. AI AGENT               ← NOT before Data+Quant+Backtest baseline (§57)
-9. ML PREDICTION
-10. PORTFOLIO INTELLIGENCE
-11. PRODUCTION
+6. QUANT ENGINE           → DONE (T006 indicators · T007 factors · T008 scoring engine)
+7. BACKTEST ENGINE        → DONE (T009 engine + metrics + walk-forward, 2026-09-15)
+8. API LAYER              → DONE (T010 FastAPI /api/v1/*, 2026-09-15)
+9. DASHBOARD              → DONE (T011 Streamlit overview/screener/rankings/detail/backtests/health, 2026-09-15)
+10. RAG                   → T012
+11. AI AGENT              ← NOT before Data+Quant+Backtest baseline (§57) → T013
+12. ML PREDICTION         → T014
+13. PORTFOLIO INTELLIGENCE
+14. PRODUCTION            → T015
 ```

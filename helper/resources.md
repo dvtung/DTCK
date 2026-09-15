@@ -2,7 +2,7 @@
 
 ## AI Investment Research & Decision Intelligence Platform
 
-**Last updated:** 2026-09-13
+**Last updated:** 2026-09-15
 
 ## Technology stack (§34)
 
@@ -51,7 +51,19 @@
 
 - `python -m database.seeds.run_all` — seed reference data
 - `python -m apps.worker.cli ingest --source=... --date=...` — run a collector
+- `uvicorn apps.api.main:app --reload` — **chạy API REST phát triển** (cổng 8000)
+- `python -m apps.api.main` — chạy API bằng `python -m`
+- `curl localhost:8000/docs` — tài liệu tương tác (Swagger UI)
 - `docker compose exec api alembic upgrade head` — migrate
+- `docker compose exec api pytest` — chạy test trong container
+
+## API (T010)
+
+- **Framework:** FastAPI 0.115 · endpoint `/api/v1/*`, tiền tố `docs/api/`.
+- **Router:** 7 nhóm (market, stocks, fundamentals, technical, valuation, news, backtests) = 23 đường dẫn · 24 thao tác.
+- **Service:** `MarketService` trong bộ nhớ, tất định (7 mã cơ sở, 60 ngày làm việc) — **chưa nối TimescaleDB** (KI-008). Để chuyển: thay `get_market_service()` trong `apps/api/dependencies.py` bằng repository SQLAlchemy.
+- **Schemas:** 21 lớp Pydantic trong `apps/api/schemas.py`, gồm `Page[T]` generic + `ErrorResponse`.
+- **Kiểm thử:** `pytest tests/unit/test_api.py` — 14 bài (health/readyz, 7 nhóm, phân trang, 404).
 
 ## Dependency update protocol
 

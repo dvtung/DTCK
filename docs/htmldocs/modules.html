@@ -10,11 +10,11 @@
 <header class="topbar">
 <div class="logo">📈</div>
 <div><h1>DTCK — Nền tảng Quyết định Đầu tư AI</h1><p>Trí tuệ thị trường chứng khoán Việt Nam · tài liệu tĩnh</p></div>
-<nav><a href="index.html">Trang chủ</a><a href="structure.html">Cấu trúc</a><a href="status.html">Tiến độ</a><a href="modules.html" class="active">Module</a><a href="database.html">Cơ sở dữ liệu</a><a href="pipeline.html">Luồng dữ liệu</a></nav>
+<nav><a href="index.html">Trang chủ</a><a href="structure.html">Cấu trúc</a><a href="status.html">Tiến độ</a><a href="modules.html" class="active">Module</a><a href="api.html">API</a><a href="database.html">Cơ sở dữ liệu</a><a href="pipeline.html">Luồng dữ liệu</a></nav>
 </header>
 <div class="wrap">
 <div class="toc"><b>Mục lục:</b>
-<a href="#data">src/data</a> · <a href="#tech">kỹ thuật</a> · <a href="#fund">cơ bản</a> · <a href="#val">định giá</a> · <a href="#mom">động lượng</a> · <a href="#risk">rủi ro</a> · <a href="#scoring">chấm điểm</a> · <a href="#models">models</a> · <a href="#seeds">seed &amp; worker</a>
+<a href="#data">src/data</a> · <a href="#tech">kỹ thuật</a> · <a href="#fund">cơ bản</a> · <a href="#val">định giá</a> · <a href="#mom">động lượng</a> · <a href="#risk">rủi ro</a> · <a href="#scoring">chấm điểm</a> · <a href="#engine">engine xếp hạng</a> · <a href="#backtest">kiểm thử ngược</a> · <a href="#api">API</a> · <a href="#dashboard">dashboard</a> · <a href="#models">models</a> · <a href="#seeds">seed &amp; worker</a>
 </div>
 <h2 class="sec" id="data">src/data — luồng nạp dữ liệu (T004 + T005)</h2>
 <p><b>Thiết kế:</b> bản ghi độc lập nhà cung cấp chảy qua thu thập → kiểm tra → chuẩn hóa → lưu trữ → chấm điểm. Mọi giai đoạn đều là hàm thuần; đổi nhà cung cấp chỉ là thay đổi cấu hình trong <code>sources.yaml</code>.</p>
@@ -69,6 +69,69 @@ print(result.summary())  # rows=.., issues=.., quality=.. passed=True/False</pre
 # -&gt; {"fundamental": 80.0, "technical": None, ...}
 overall = compute_overall_score(scores)  # pha trộn tái chuẩn hóa
 ranking = rank_stocks({"FPT": overall, "VCB": 62.5})</pre>
+<h2 class="sec" id="engine">src/quant/scoring — engine xếp hạng + giải thích (T008)</h2>
+<p><b>Thiết kế:</b> lớp này bọc phần toán điểm thô của T007 và trả lời câu hỏi <b>vì sao</b> một mã xếp ở vị trí đó. Mỗi mã nhận một payload giải thích đầy đủ: đóng góp từng hệ số kèm tỷ lệ phần trăm, nhãn quyết định và độ tin cậy. Thuần túy, tất định — hệ số thiếu bị loại và điểm tổng được tái chuẩn hóa.</p>
+<div class="sig"><b>class FactorContribution</b> — <code>factor</code>, <code>raw_score</code>, <code>weight</code>, <code>weighted_score</code>, <code>share</code> (phần trăm đóng góp trong điểm tổng). Trả lời: từng hệ số đóng góp bao nhiêu.</div>
+<div class="sig"><b>class ScoreDecomposition</b> — <code>overall_score</code>, <code>contributions</code>, <code>missing_factors</code> (hệ số bị loại vì thiếu dữ liệu), <code>weights_used</code> (trọng số sau tái chuẩn hóa).</div>
+<div class="sig"><b>class StockRanking</b> — <code>stock_id</code>, <code>overall_score</code>, <code>decomposition</code>, <code>signal</code>, <code>confidence</code>, <code>factor_scores</code>. Một dòng hoàn chỉnh cho bảng xếp hạng.</div>
+<div class="sig"><b>decompose_score(factor_scores, weights=None) -&gt; ScoreDecomposition</b> — phân rã điểm của một mã. <b>score_universe(universe_scores, weights=None) -&gt; list[StockRanking]</b> — chấm điểm và xếp hạng toàn vũ trụ; mã không có hệ số nào bị đẩy xuống cuối.</div>
+<div class="sig"><b>build_signal_label(score)</b> — ánh xạ điểm tổng sang <code>POSITIVE</code> / <code>NEUTRAL</code> / <code>NEGATIVE</code> (§44). <b>build_confidence(overall, n_factors)</b> — độ tin cậy giảm khi thiếu hệ số.</div>
+<pre>from src.quant.scoring.engine import score_universe
+
+rankings = score_universe({
+    "FPT": {"fundamental": 80.0, "technical": 60.0, "valuation": 20.0},
+    "VCB": {"fundamental": 55.0, "technical": 70.0, "valuation": 65.0},
+})
+top = rankings[0]
+print(top.stock_id, top.overall_score, top.signal, top.confidence)
+for c in top.decomposition.contributions:
+    print(f"  {c.factor}: {c.raw_score} x {c.weight} = {c.weighted_score} ({c.share:.1%})")
+print("thieu:", top.decomposition.missing_factors)</pre>
+<h2 class="sec" id="backtest">src/backtesting — engine kiểm thử ngược (T009)</h2>
+<p><b>Thiết kế:</b> tín hiệu ở giá đóng cửa ngày <i>t</i> → khớp lệnh ở giá mở cửa ngày <i>t+1</i> (next-bar-open). Cách này loại bỏ thiên lệch nhìn trước tương lai <b>theo cấu trúc</b>, không dựa vào quy ước. Chi phí giao dịch (hoa hồng + trượt giá + thuế) trừ trực tiếp vào tiền mặt ở mỗi lần khớp lệnh.</p>
+<div class="sig"><b>class PriceBar / BacktestData</b> — một dòng giá đã căn theo ngày; <code>BacktestData</code> gói toàn bộ chuỗi cùng danh sách mã.</div>
+<div class="sig"><b>class ExecutionCosts</b> — <code>commission_bps</code>, <code>slippage_bps</code>, <code>tax_bps</code>. <b>class Trade</b> — <code>symbol</code>, <code>side</code>, <code>trade_date</code>, <code>price</code>, <code>quantity</code>, <code>cost</code>, <code>pnl</code>.</div>
+<div class="sig"><b>class EquityPoint</b> — <code>trade_date</code>, <code>equity</code>, <code>cash</code>, <code>positions_value</code>. Đường cong vốn dùng để tính chỉ số đo.</div>
+<div class="sig"><b>class BacktestConfig</b> — vốn ban đầu, chi phí, cửa sổ ngày, <code>run_type</code>. <b>class BacktestResult</b> — đường cong vốn + danh sách giao dịch + bộ chỉ số + cờ kiểm soát thiên lệch.</div>
+<div class="sig"><b>select_window(data, start_date, end_date) -&gt; BacktestData</b> — cắt dữ liệu theo cửa sổ ngày.</div>
+<div class="sig"><b>run_backtest(data, strategy, config) -&gt; BacktestResult</b> — hàm mô phỏng chính. <code>strategy</code> là hàm <code>(data, i, state) -&gt; {mã: trọng số 0..1}</code> và <b>chỉ được đọc dữ liệu tới hết ngày <i>i</i></b>. Phần chưa phân bổ nằm ở tiền mặt; bán khống ngoài phạm vi MVP.</div>
+<div class="sig"><b>walk_forward_windows(n, train_len, test_len, step?)</b> — sinh các cặp (huấn luyện, kiểm tra) không chồng lấn. <b>rolling_windows(n, window_len, step)</b> — cửa sổ trượt thuần. <b>class WalkForwardWindow</b> — <code>train_start/train_end/test_start/test_end</code>, <code>train_len/test_len</code>.</div>
+<div class="sig"><b>metrics.py — 12 chỉ số đo:</b> <code>total_return</code>, <code>cagr</code>, <code>annualized_volatility</code>, <code>sharpe_ratio</code>, <code>sortino_ratio</code>, <code>max_drawdown</code>, <code>calmar_ratio</code>, <code>win_rate</code>, <code>profit_factor</code>, <code>turnover</code>, <code>transaction_cost_total</code>, và <code>compute_metrics</code> gộp tất cả.</div>
+<pre>from src.backtesting import run_backtest
+from src.backtesting.models import BacktestConfig, ExecutionCosts
+
+def chien_luoc(data, i, state):
+    # chỉ đọc dữ liệu tới hết ngày i (không nhìn tương lai)
+    return {"FPT": 0.5}          # 50% vốn, 50% còn lại là tiền mặt
+
+result = run_backtest(data, chien_luoc, BacktestConfig(
+    initial_capital=1_000_000_000.0,
+    costs=ExecutionCosts(commission_bps=15, slippage_bps=10, tax_bps=10),
+))
+print(result.metrics["cagr"], result.metrics["sharpe_ratio"], result.metrics["max_drawdown"])</pre>
+<h2 class="sec" id="api">apps/api — dịch vụ REST FastAPI (T010)</h2>
+<p><b>Thiết kế:</b> router mỏng → service chứa nghiệp vụ → schema Pydantic làm hợp đồng. Hiện service dùng kho dữ liệu <b>trong bộ nhớ</b> (tất định, không cần CSDL) nên API kiểm thử được độc lập với hạ tầng; khi lớp lưu trữ hoạt động chỉ cần thay service bằng repository SQLAlchemy — <b>hợp đồng router không đổi</b>.</p>
+<div class="sig"><b>7 nhóm router</b> — <code>/api/v1/market</code> (indices, regime, breadth) · <code>/stocks</code> (danh sách, chi tiết, giá, xếp hạng) · <code>/fundamentals</code> (statements, ratios, quality) · <code>/technical</code> (indicators, features) · <code>/valuation</code> (summary, history) · <code>/news</code> · <code>/backtests</code>. Tổng <b>23 đường dẫn / 24 thao tác</b>.</div>
+<div class="sig"><b>class MarketService</b> — <code>apps/api/services/market_data.py</code>. Sinh dữ liệu tổng hợp tất định cho 7 mã cơ sở (FPT, VCB, VNM, VIC, HPG, BID, TCB) trên 60 ngày làm việc, tính chỉ báo bằng chính engine quant. Phương thức: <code>list_stocks</code>, <code>get_stock</code>, <code>get_prices</code>, <code>list_rankings</code>, <code>get_indicators</code>, <code>get_valuation_summary</code>, <code>get_quality</code>, <code>list_news</code>, <code>list_backtests</code>, <code>get_backtest_metrics</code>…</div>
+<div class="sig"><b>schemas.py</b> — 21 lớp Pydantic, gồm <code>Page[T]</code> generic cho phân trang, <code>ErrorResponse</code> phong bì lỗi, và schema đầu ra cho từng nhóm nghiệp vụ.</div>
+<div class="sig"><b>MarketDep</b> — phụ thuộc FastAPI (<code>apps/api/dependencies.py</code>) cấp một <code>MarketService</code> dùng chung. Trợ giúp chung trong <code>routers/common.py</code>: <code>page_of()</code>, <code>paginate_params()</code>, <code>not_found()</code>.</div>
+<pre># chạy máy chủ (phát triển)
+uvicorn apps.api.main:app --reload
+
+# gọi thử
+curl 'localhost:8000/healthz'
+curl 'localhost:8000/api/v1/market/indices'
+curl 'localhost:8000/api/v1/stocks?limit=10&amp;offset=0'
+curl 'localhost:8000/api/v1/valuation/FPT/summary'
+curl -i 'localhost:8000/api/v1/stocks/KHONGCO'   # -&gt; 404 + phong bì lỗi</pre>
+<p><b>Quy ước:</b> danh sách trả về <code>{"items": [...], "total": n, "limit": l, "offset": o}</code>; mã không tồn tại trả <code>404</code> với phong bì <code>{"error": {"code": "NOT_FOUND", ...}}</code>. Tài liệu tương tác tự sinh tại <code>/docs</code>.</p>
+<h2 class="sec" id="dashboard">apps/dashboard — bảng điều khiển Streamlit (T011)</h2>
+<p><b>Thiết kế:</b> <code>client.py</code> ưu tiên HTTP tới <code>/api/v1/*</code>, tự rơi về <code>MarketService</code> trong tiến trình khi API tắt (máy ngoại tuyến / kiểm thử). <code>components.py</code> không phụ thuộc Streamlit: mọi hàm nhận dict API thô và trả cấu trúc hiển thị, nên kiểm thử được không cần màn hình. <code>app.py</code> chỉ vẽ giao diện: tổng quan thị trường, bộ lọc, xếp hạng, chi tiết mã, backtests, sức khỏe hệ thống.</p>
+<div class="sig"><b>client.py — class MarketClient</b> — <code>get_indices / get_regime / get_breadth</code> · <code>list_stocks / get_stock / get_ranked / get_prices / get_ranking</code> · <code>get_indicators</code> (kỹ thuật) · <code>get_valuation</code> (định giá) · <code>get_quality</code> (chất lượng) · <code>get_news / get_backtests / get_backtest / get_backtest_metrics / get_backtest_trades / get_health</code>. Biến môi trường <code>API_HOST</code> đổi máy chủ mặc định.</div>
+<div class="sig"><b>components.py</b> — <code>signal_label / signal_color</code> (nhãn + màu tín hiệu) · <code>format_price / format_percent / format_date</code> · <code>ranking_rows / contribution_rows / price_dataframe / indicator_dict / quality_bar_labels / metric_rows / news_rows</code> (phẳng hóa phản hồi API thành hàng bảng).</div>
+<div class="sig"><b>app.py</b> — 6 trang qua thanh bên: tổng quan (chỉ số + regime + độ rộng) · bộ lọc (<code>st.data_editor</code>) · xếp hạng (bảng + phân rã đóng góp) · chi tiết mã (nến giá, scatter kỹ thuật/cơ bản, thanh chất lượng) · backtests (chỉ số + giao dịch) · sức khỏe (<code>/healthz</code> + <code>/readyz</code>).</div>
+<pre>streamlit run apps/dashboard/app.py
+# hoặc qua Docker Compose: docker compose up dashboard  (cổng 8501)</pre>
 <h2 class="sec" id="models">src/common/models — ORM (T003)</h2>
 <p>13 file, 38 lớp. <code>Base</code> (DeclarativeBase) + <code>TimestampMixin</code> (created_at/updated_at) + <code>AuditMixin</code> (+ created_by/updated_by). Các lớp chính: <code>Stock</code>, <code>Price</code>, <code>IndexPrice</code>, <code>ForeignFlow</code>, <code>FinancialStatement</code> (lưỡng thời), <code>FactorScore</code>, <code>Signal</code>, <code>ValuationDaily</code> (tính toán), <code>Backtest/BacktestTrade/BacktestMetric</code>, <code>Evidence/Document</code>, <code>AgentRun</code>, <code>DataQualityScore</code>, <code>AuditLog</code>, <code>User/ApiKey</code>.</p>
 <h2 class="sec" id="seeds">Seed, worker &amp; cách triển khai</h2>
@@ -79,8 +142,7 @@ def my_indicator(close: list[float], period: int) -&gt; list[float | None]:
     ...
 # rồi: thêm kiểm thử giá trị kỳ vọng trong tests/unit/test_technical_indicators.py,
 # chạy: ruff check . &amp;&amp; mypy &lt;file&gt; &amp;&amp; pytest -q</pre>
-<!--MORE3-->
 </div>
-<div class="footer">Tài liệu DTCK · 2026-09-14 · <a href="index.html">Trang chủ</a></div>
+<div class="footer">Tài liệu DTCK · 2026-09-15 · <a href="index.html">Trang chủ</a></div>
 </body>
 </html>

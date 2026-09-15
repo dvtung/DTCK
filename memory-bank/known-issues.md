@@ -1,6 +1,6 @@
 # Memory Bank — Known Issues
 
-**Last updated:** 2026-09-06
+**Last updated:** 2026-09-15
 
 | ID | Area | Issue | Status | Notes |
 |---|---|---|---|---|
@@ -11,6 +11,9 @@
 | KI-003 | Docs | `docs/DATABASE_SCHEMA.md` §19 open items: bitemporal restatement policy detail, object-storage path format, per-hypertable retention/compression | OPEN | Design implemented; the §19 items do not block schema/migrations |
 | KI-004 | Infra | Docker services actually started/verified end-to-end | RESOLVED | `docker compose` stack up & healthy; DB migration + seeds verified against running TimescaleDB (2026-09-13) |
 | KI-005 | Repo | Root spec files were copied (`docs/`) — originals still at repo root; keep in sync until removal decision | OPEN | Decide whether to keep single canonical copy at root or in docs/ |
+| KI-008 | API | `apps/api` serves an **in-memory synthetic** `MarketService` (7 base symbols, 60 business days); no TimescaleDB wiring yet | OPEN (by design) | Router contracts are final; swap service for a SQLAlchemy repository without touching routers. Blocks nothing until the persistence layer goes live |
+| KI-009 | Backtest | T009 engine validated on **synthetic/fixture price series only** — no real VN market history loaded | OPEN | Depends on KI-006/KI-007 (live collection). Metrics math is unit-tested against hand-computed values; strategy results are not yet meaningful |
+| KI-010 | Dashboard | T011 dashboard renders **synthetic in-memory data** (in-process `MarketService` fallback) until TimescaleDB + real data are wired | OPEN (by design) | Same KI-008 root cause; HTTP client will hit the live API with zero dashboard changes once routers serve DB-backed payloads |
 
 ---
 

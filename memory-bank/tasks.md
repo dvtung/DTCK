@@ -1,6 +1,6 @@
 # Memory Bank — Tasks
 
-**Last updated:** 2026-09-13
+**Last updated:** 2026-09-15
 
 Legend: `[ ]` To Do · `[~]` In Progress · `[x]` Completed · `[!]` Blocked
 
@@ -21,16 +21,16 @@ Legend: `[ ]` To Do · `[~]` In Progress · `[x]` Completed · `[!]` Blocked
 
 ## Backlog (ordered per spec §57)
 
+
 - [x] **T006 — Quant Engine: technical indicators (+ expected-value unit tests)** — `src/market/technical/indicators.py` (SMA, EMA, RSI, MACD, Bollinger Bands, ATR, OBV, volume SMA, relative strength). Pure-Python deterministic implementations. `tests/unit/test_technical_indicators.py` (40 tests). Verified: ruff clean, mypy clean, 122 total tests pass. *(2026-09-14)*
-
-## Backlog (ordered per spec §57)
-
 - [x] **T007 — Quant Engine: fundamental factors, valuation, momentum, risk + factor scores** — `src/market/fundamental/factors.py` (growth/profitability/leverage/cashflow/quality), `src/market/valuation/valuation.py` (P-E/P-B/EV/PEG/yield + percentile ranks), `src/market/momentum/momentum.py` (n-day returns/volume expansion/relative momentum), `src/market/risk/risk.py` (volatility/beta/drawdown/liquidity/gap/debt-risk), `src/quant/factors/scoring.py` (§12 baseline weights + percentile-rank aggregation + ranking). Pure-Python deterministic. `tests/unit/test_quant_factors.py` + `test_quant_scoring.py` (18 tests). Verified: ruff clean, mypy clean, 140 total tests pass. *(2026-09-14)*
 - [x] **D1 — Static HTML docs site** — `docs/htmldocs/` (index/structure/status/modules/database/pipeline + style.css). Project intro, repo layout, dev status per spec §58, full module reference with signatures + usage examples. All pages HTML-validated, nav links verified. *(2026-09-14)*
-- [ ] T008 — Scoring engine (baseline weights, §12) + ranking + explainability payloads — **next**
-- [ ] T009 — Backtesting engine (walk-forward, costs, bias controls) + metrics
-- [ ] T010 — FastAPI `apps/api` exposing `/api/v1/*` per docs/API_SPECIFICATION.md (MVP-1 read paths)
-- [ ] T011 — Streamlit dashboard (market overview, screener, ranking, stock detail)
+- [x] **T008 — Scoring engine (baseline weights §12) + ranking + explainability payloads** — `src/quant/scoring/engine.py` (`FactorContribution`, `ScoreDecomposition`, `StockRanking`, `decompose_score`, `score_universe`, `build_signal_label`, `build_confidence`). Per-factor contributions with renormalized weights, ranked universe, POSITIVE/NEUTRAL/NEGATIVE labels + confidence. `tests/unit/test_scoring_engine.py` (11 tests). *(2026-09-15)*
+- [x] **T009 — Backtesting engine (walk-forward, costs, bias controls) + metrics** — `src/backtesting/` — `models.py` (PriceBar/BacktestData/ExecutionCosts/Trade/EquityPoint/BacktestConfig/BacktestResult), `metrics.py` (11 chỉ số: total return, CAGR, annualized volatility, Sharpe, Sortino, max drawdown, Calmar, win rate, profit factor, turnover, transaction-cost total + aggregate `compute_metrics`), `engine.py` (`run_backtest`/`select_window`/rebalance/close-leg), `walkforward.py` (`walk_forward_windows`/`rolling_windows`). `tests/unit/test_backtesting.py` (10 tests). *(2026-09-15)*
+- [x] **T010 — FastAPI `apps/api` exposing `/api/v1/*`** — `main.py` (health/readyz) + 7 routers (`market`, `stocks`, `fundamentals`, `technical`, `valuation`, `news`, `backtests`) = 23 paths / 24 operations per `docs/API_SPECIFICATION.md`; `schemas.py` (21 Pydantic models incl. generic `Page[T]`), `dependencies.py` (`MarketDep`), `services/market_data.py` (deterministic in-memory service — KI-008), `routers/common.py` (pagination + `not_found` envelope). `tests/unit/test_api.py` (14 tests). *(2026-09-15)*
+
+- [x] **T011 — Streamlit dashboard (T011)** — `apps/dashboard/` — `client.py` (HTTP-first `MarketClient` + in-process `MarketService` fallback), `components.py` (framework-agnostic formatting/transforms), `app.py` (6 pages: overview/screener/rankings/detail/backtests/health via Streamlit + plotly). `tests/unit/test_dashboard.py` (34 tests). Verified: ruff clean, mypy clean, 209 total tests pass. *(2026-09-15)*
+
 - [ ] T012 — News ingestion + RAG (Qdrant) + evidence engine (Phase 4 → MVP-2)
 - [ ] T013 — LangGraph agents + orchestrator + audit (Phase 5)
 - [ ] T014 — ML feature dataset + XGBoost/LightGBM + calibration + registry (Phase 6)

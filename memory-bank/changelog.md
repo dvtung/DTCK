@@ -1,8 +1,46 @@
 # Memory Bank — Changelog
 
-**Last updated:** 2026-09-14
+**Last updated:** 2026-09-15
 
-## 2026-09-14 — Standing rule: htmldocs updated with every source change
+## 2026-09-15 — T011: Streamlit dashboard
+
+- Added `apps/dashboard/` (T011):
+  - `client.py` — `MarketClient`: HTTP-first over `/api/v1/*`, in-process `MarketService` fallback offline; methods for indices/regime/breadth, stocks/ranked/prices/ranking, indicators, valuation, quality, news, backtests/backtest/metrics/trades, health; `API_HOST` env overrides default
+  - `components.py` — framework-agnostic formatting/transforms: `signal_label/signal_color`, `format_price/format_percent/format_date`, `ranking_rows/contribution_rows/price_dataframe/indicator_dict/quality_bar_labels/metric_rows/news_rows`
+  - `app.py` — 6 Streamlit pages: market overview, screener, rankings, stock detail, backtests, system health (plotly candlestick/scatter/contribution charts)
+  - Added `tests/unit/test_dashboard.py` (34 tests); added `plotly` to `pyproject.toml` deps + mypy overrides for UI libs
+  - Added KI-010 (dashboard serves synthetic in-memory data until TimescaleDB + real data wired)
+  - Updated `docs/htmldocs/`: dashboard row DONE in `status.html` + completed-tasks table + KI table, dashboard row in `index.html` platform section, T011 dashboard section + TOC anchor in `modules.html`
+- Verified: **209 total tests pass** · `ruff check .` clean · `mypy src/ apps/` → "Success: no issues found in 93 source files"
+
+## 2026-09-15 — T008/T009/T010: explainability, backtesting, API layer
+
+- Added `src/quant/scoring/engine.py` (T008):
+  - `decompose_score(factor_scores, weights=None)` — per-factor contributions with renormalized weights (missing/zero handled)
+  - `score_universe(universe_scores, weights=None)` → ranked `StockRanking` list
+  - `build_signal_label(score)` → POSITIVE/NEUTRAL/NEGATIVE (§44)
+  - `build_confidence(overall, n_factors)` — confidence decays as factors drop out
+  - Dataclasses: `FactorContribution`, `ScoreDecomposition`, `StockRanking`
+  - Added `tests/unit/test_scoring_engine.py` (11 tests)
+- Added `src/backtesting/` (T009):
+  - `models.py` — `PriceBar`, `BacktestData`, `ExecutionCosts`, `Trade`, `EquityPoint`, `BacktestConfig`, `BacktestResult`
+  - `metrics.py` — 11 metrics: `total_return`, `cagr`, `annualized_volatility`, `sharpe_ratio`, `sortino_ratio`, `max_drawdown`, `calmar_ratio`, `win_rate`, `profit_factor`, `turnover`, `transaction_cost_total`, + `compute_metrics`
+  - `engine.py` — `run_backtest` (next-bar-open fills, cost-aware), `select_window`
+  - `walkforward.py` — `walk_forward_windows`, `rolling_windows`, `WalkForwardWindow`
+  - Added `tests/unit/test_backtesting.py` (10 tests)
+- Added `apps/api/` (T010):
+  - `main.py` — FastAPI app, `/healthz`, `/readyz`
+  - 7 routers: `market`, `stocks`, `fundamentals`, `technical`, `valuation`, `news`, `backtests` = 23 paths / 24 operations
+  - `schemas.py` (21 Pydantic models incl. generic `Page[T]`, `ErrorResponse`)
+  - `dependencies.py` (`MarketDep`), `services/market_data.py` (in-memory deterministic service — KI-008)
+  - `routers/common.py` — `paginate_params`, `page_of`, `not_found` envelope
+  - Added `tests/unit/test_api.py` (14 tests)
+  - Documented new T008/T009/T010 module sections in `docs/htmldocs/modules.html`
+  - Created `docs/htmldocs/api.html` — reference page for the REST API
+  - Updated `docs/htmldocs/status.html` and `structure.html`
+- Verified: **175 total tests pass** · `ruff check .` clean · `mypy src/ apps/` → "Success: no issues found in 91 source files"
+- Added `KI-008` (API uses in-memory synthetic service, not wired to TimescaleDB yet) and `KI-009` (backtest validated on synthetic data only) to `known-issues.md`
+
 
 - New standing rule (recorded in `tasks.md` + `decisions.md`): every future task
   that changes source code, schema, configs, or behavior MUST also update
