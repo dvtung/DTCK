@@ -10,7 +10,16 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from apps.api.config import settings
-from apps.api.routers import backtests, fundamentals, market, news, stocks, technical, valuation
+from apps.api.routers import (
+    backtests,
+    fundamentals,
+    market,
+    news,
+    rag,
+    stocks,
+    technical,
+    valuation,
+)
 
 app = FastAPI(
     title="DTCK AI Investment Platform",
@@ -33,7 +42,7 @@ if settings.cors_origins:
     )
 
 for _router in (market.router, stocks.router, fundamentals.router, technical.router,
-                valuation.router, news.router, backtests.router):
+                valuation.router, news.router, backtests.router, rag.router):
     app.include_router(_router)
 
 
@@ -45,8 +54,17 @@ def healthz() -> dict[str, str]:
 
 @app.get("/readyz", tags=["system"])
 def readyz() -> dict[str, str | dict[str, str]]:
-    """Readiness probe — extend with DB/Qdrant connectivity checks."""
-    return {"status": "ready", "dependencies": {"database": "pending", "qdrant": "pending"}}
+    """Readiness probe — DB pending (KI-008), Qdrant best-effort (KI-011)."""
+    qdrant = "pending"
+    try:
+        from apps.api.services.rag_service import get_rag_service
+
+        svc = get_rag_service()
+        qdrant = "up" if svc.qdrant_available else "offline-index-ready"
+    except Exception:  # noqa: BLE001
+        qdrant = "offline-index-ready"
+    return {"status": "ready",
+            "dependencies": {"database": "pending", "qdrant": qdrant}}
 
 
 def run() -> None:

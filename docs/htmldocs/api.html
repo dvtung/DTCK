@@ -14,7 +14,7 @@
 </header>
 <div class="wrap">
 <h2 class="sec">Tổng quan</h2>
-<p>Dịch vụ REST trong <code>apps/api/</code> triển khai các <b>đường đọc MVP-1</b> của <code>docs/API_SPECIFICATION.md</code>: 7 nhóm, <b>23 đường dẫn / 24 thao tác</b>. Tiền tố phiên bản <code>/api/v1</code>. Tài liệu tương tác tự sinh tại <code>/docs</code> (Swagger UI) và <code>/redoc</code>.</p>
+<p>Dịch vụ REST trong <code>apps/api/</code> triển khai các <b>đường đọc MVP-1</b> của <code>docs/API_SPECIFICATION.md</code>: 8 nhóm (7 + RAG), <b>26 đường dẫn / 27 thao tác</b>. Tiền tố phiên bản <code>/api/v1</code>. Tài liệu tương tác tự sinh tại <code>/docs</code> (Swagger UI) và <code>/redoc</code>.</p>
 <div class="sig"><b>Kiến trúc 3 lớp:</b> router (khai báo hợp đồng HTTP) → service (<code>MarketService</code> giữ nghiệp vụ + dữ liệu) → schema (Pydantic, hợp đồng vào/ra). Router không chứa logic; service hiện là kho <b>trong bộ nhớ, tất định</b> nên API chạy và kiểm thử được mà không cần TimescaleDB (xem KI-008).</div>
 <div class="sig"><b>Đổi sang CSDL thật:</b> thay <code>MarketService</code> bằng repository SQLAlchemy trong <code>apps/api/dependencies.py</code>. Toàn bộ router và test hiện có giữ nguyên — hợp đồng không đổi.</div>
 <h2 class="sec">Chạy máy chủ</h2>
@@ -28,7 +28,7 @@ curl localhost:8000/healthz</pre>
 <table>
 <tr><th>Phương thức</th><th>Đường dẫn</th><th>Mô tả</th></tr>
 <tr><td>GET</td><td><code>/healthz</code></td><td>Sống: <code>{"status":"ok","service":"api","version":"0.1.0"}</code></td></tr>
-<tr><td>GET</td><td><code>/readyz</code></td><td>Sẵn sàng: kèm trạng thái phụ thuộc (database/qdrant — hiện <code>pending</code>)</td></tr>
+<tr><td>GET</td><td><code>/readyz</code></td><td>Sẵn sàng: kèm trạng thái phụ thuộc (database <code>pending</code> · qdrant <code>up</code> / <code>offline-index-ready</code>)</td></tr>
 <tr><td>GET</td><td><code>/docs</code> · <code>/redoc</code> · <code>/openapi.json</code></td><td>Tài liệu tương tác và lược đồ OpenAPI</td></tr>
 </table>
 <h2 class="sec">Nhóm <code>/api/v1/market</code></h2>
@@ -55,6 +55,8 @@ curl localhost:8000/healthz</pre>
 <tr><td><code>/api/v1/valuation</code></td><td><code>{symbol}/summary</code> (P-E/P-B/EV/PEG) · <code>{symbol}/history</code></td></tr>
 <tr><td><code>/api/v1/news</code></td><td><code>""</code> — danh sách tin, lọc <code>?symbol=&amp;source=</code> + phân trang</td></tr>
 <tr><td><code>/api/v1/backtests</code></td><td><code>""</code> (GET danh sách · POST tạo) · <code>{id}</code> · <code>{id}/metrics</code> · <code>{id}/trades</code></td></tr>
+<tr><td><code>/api/v1/rag</code></td><td><code>/search</code> (truy xuát hibrid + rerank, lọc <code>?symbol=&amp;doc_type=&amp;source=</code>, <code>?top_k=</code>) · <code>/status</code> (kích thước chỉ mục + tên model + trạng thái Qdrant)</td></tr>
+<tr><td><code>/api/v1/evidence</code></td><td>Bằng chứng §19: <code>GET</code> <code>?q=&amp;symbol=&amp;top_k=</code> → mỗi mục có snippet, nguồn, published_at, chunk_id, confidence</td></tr>
 </table>
 <p><b>Lưu ý:</b> <code>POST /api/v1/backtests</code> hiện trả về bản ghi giữ chỗ — phần nối engine thật hoàn tất khi lớp lưu trữ hoạt động (KI-008).</p>
 <h2 class="sec">Quy ước phản hồi</h2>
@@ -66,7 +68,7 @@ curl 'localhost:8000/api/v1/stocks/FPT/ranking'
 curl 'localhost:8000/api/v1/valuation/FPT/summary'
 curl -i 'localhost:8000/api/v1/stocks/KHONGCO'   # -&gt; 404 + phong bì lỗi</pre>
 <h2 class="sec">Kiểm thử</h2>
-<pre>pytest -q tests/unit/test_api.py     # 14 bài: hệ thống, 7 nhóm, phân trang, 404</pre>
+<pre>pytest -q tests/unit/test_api.py     # 17 bài: hệ thống, 7 nhóm, RAG, phân trang, 404</pre>
 <p>Bộ kiểm thử dùng <code>fastapi.testclient.TestClient</code> trên chính đối tượng <code>app</code> — không cần máy chủ đang chạy, không cần CSDL.</p>
 </div>
 <div class="footer">Tài liệu DTCK · 2026-09-15 · <a href="index.html">Trang chủ</a></div>

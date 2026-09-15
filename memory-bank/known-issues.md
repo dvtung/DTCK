@@ -14,6 +14,7 @@
 | KI-008 | API | `apps/api` serves an **in-memory synthetic** `MarketService` (7 base symbols, 60 business days); no TimescaleDB wiring yet | OPEN (by design) | Router contracts are final; swap service for a SQLAlchemy repository without touching routers. Blocks nothing until the persistence layer goes live |
 | KI-009 | Backtest | T009 engine validated on **synthetic/fixture price series only** — no real VN market history loaded | OPEN | Depends on KI-006/KI-007 (live collection). Metrics math is unit-tested against hand-computed values; strategy results are not yet meaningful |
 | KI-010 | Dashboard | T011 dashboard renders **synthetic in-memory data** (in-process `MarketService` fallback) until TimescaleDB + real data are wired | OPEN (by design) | Same KI-008 root cause; HTTP client will hit the live API with zero dashboard changes once routers serve DB-backed payloads |
+| KI-011 | RAG | T012 RAG index is built from **synthetic in-memory news** (same `MarketService` fixture); `qdrant_client` not installed → in-memory vector store is the baseline, Qdrant mirror is best-effort | OPEN (by design) | Contract + retrieval math are unit-tested (232 tests); swap `MemoryVectorStore` → Qdrant by installing the client and pointing `QDRANT_HOST`. Real news collection blocked by KI-006/KI-007 |
 
 ---
 

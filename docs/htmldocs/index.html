@@ -28,7 +28,7 @@
       <span class="badge">Python 3.12 · FastAPI · Streamlit</span>
       <span class="badge">TimescaleDB · Qdrant · Redis</span>
       <span class="badge">Tác tử LangGraph · XGBoost / LightGBM</span>
-      <span class="badge">209 kiểm thử đơn vị đạt</span>
+      <span class="badge">232 kiểm thử đơn vị đạt</span>
     </div>
   </div>
   <div class="grid">
@@ -56,9 +56,10 @@
     <tr><td>Hàm quant</td><td>9 kỹ thuật + 12 cơ bản + 11 định giá + 4 động lượng + 6 rủi ro + 4 chấm điểm</td></tr>
     <tr><td>Engine chấm điểm (T008)</td><td>Phân rã đóng góp từng hệ số + nhãn tín hiệu + độ tin cậy; payload giải thích cho mọi mã</td></tr>
     <tr><td>Engine kiểm thử ngược (T009)</td><td>Cuốn chiếu (walk-forward), chi phí giao dịch/trượt giá, 11 chỉ số đo hiệu quả</td></tr>
-    <tr><td>API REST (T010)</td><td>7 nhóm <code>/api/v1/*</code> · 23 đường dẫn / 24 thao tác · 21 schema Pydantic</td></tr>
+    <tr><td>API REST (T010 + T012)</td><td>8 nhóm <code>/api/v1/*</code> (7 + RAG) · 26 đường dẫn / 27 thao tác · 21 schema Pydantic</td></tr>
     <tr><td>Bảng điều khiển (T011)</td><td>Tổng quan, bộ lọc, xếp hạng, chi tiết mã, backtests, sức khỏe API · <code>apps/dashboard/</code> + 34 kiểm thử</td></tr>
-    <tr><td>Kiểm thử đơn vị</td><td>209 bài đạt (pipeline 38 · technical 40 · quality 26 · api 14 · dashboard 34 · scoring 11 · backtest 10 · quant 18 · models 7 · sources 7 · smoke 4)</td></tr>
+    <tr><td>RAG + bằng chứng (T012)</td><td><code>src/rag/</code> (nhúng hash, chunking, kho în bộ nhớ + Qdrant best-effort, truy xuát hibrid, rerank) + <code>src/evidence/</code> (§19) + 3 endpoint API + 23 kiểm thử</td></tr>
+    <tr><td>Kiểm thử đơn vị</td><td>232 bài đạt (pipeline 38 · technical 40 · quality 26 · api 17 · dashboard 34 · scoring 11 · backtest 10 · quant 18 · models 7 · sources 7 · rag+evidence 20 · smoke 4)</td></tr>
     <tr><td>Tài liệu</td><td>13 đặc tả markdown trong <code>docs/</code></td></tr>
   </table>
 </div>

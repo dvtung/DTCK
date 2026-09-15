@@ -2,6 +2,25 @@
 
 **Last updated:** 2026-09-15
 
+## 2026-09-15 — T012: News ingestion + RAG + evidence engine (Phase 4 → MVP-2)
+
+- Added `src/rag/` (T012):
+  - `embedding/hash_embed.py` — `HashEmbedding`: deterministic hash-based embedding (dim 128, `model_name="hash-embed-v1"`), no external model dep; `embed(text) -> list[float]`
+  - `ingestion/chunking.py` — `Chunk` dataclass + `chunk_news_item(item, max_chars=800)`: sliding-window chunker with metadata (symbol, doc_type="news", source, published_at, title)
+  - `retrieval/store.py` — `MemoryVectorStore` (in-memory cosine store, `upsert`/`query`/`size`) + `QdrantAdapter` (best-effort mirror, importable `qdrant_client` only)
+  - `retrieval/retriever.py` — `RankedDoc` + `Retriever.retrieve(...)`: hybrid vector + keyword overlap + recency + source-reliability priors, metadata filters (symbol/doc_type/source)
+  - `reranking/reranker.py` — `rerank(query, docs)`: RRF-style re-scoring combining vector/keyword/recency ranks
+  - `service.py` — `RagService`: singleton `ingest_news_items`/`search`/`evidence_for`/`status`/`to_payload`/`evidence_payload`
+- Added `src/evidence/engine.py` — `Evidence` (§19) dataclass + `confidence_for(doc)` + `build_evidence(...)` + `evidence_to_dict(ev)`; fine-grained provenance (chunk id, symbol, source, published_at, snippet)
+- Added API wiring:
+  - `apps/api/routers/rag.py` — 3 endpoints: `GET /api/v1/rag/search`, `GET /api/v1/rag/status`, `GET /api/v1/evidence` → API total **26 paths / 27 ops** (was 23/24)
+  - `apps/api/services/rag_service.py` — `get_rag_service()` process-wide singleton, lazily seeded from `MarketService().list_news()` fixture (KI-011)
+  - `apps/api/main.py` — `rag` router registered; `readyz` now reports `qdrant` status (`offline-index-ready` when client absent)
+- Added `tests/unit/test_rag_evidence.py` (20 tests: chunking, embedding stability/determinism, store upsert/query, hybrid retrieval filters, rerank monotonicity, evidence confidence ranges, evidence dict schema) + 3 new API tests in `tests/unit/test_api.py`
+- Added KI-011 (RAG index over synthetic news; Qdrant adapter best-effort; real news blocked by KI-006/KI-007)
+- Updated `docs/htmldocs/` (standing rule): `status.html` RAG bar 0→85% + T012 row + roadmap (T013 next) + KI-011 row; `index.html` RAG rows + 232 test badge; `modules.html` T012 RAG section + TOC anchor; `api.html` rag/evidence endpoints + 26/27 counts; `structure.html` rag/evidence marked done
+- Verified: **232 total tests pass** · `ruff check .` clean · `mypy src/ apps/` → "Success: no issues found in 102 source files"
+
 ## 2026-09-15 — T011: Streamlit dashboard
 
 - Added `apps/dashboard/` (T011):

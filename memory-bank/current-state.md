@@ -15,7 +15,7 @@ Quant Engine:   ████████████████████ 100
 Backtesting:    ██████████████████░░  90%   (T009 engine+metrics+walk-forward DONE; real-market validation pending KI-006/007)
 API:            █████████████████░░░  85%   (T010: 7 router groups / 23 paths / 24 ops DONE on synthetic service; DB wiring pending KI-008)
 Dashboard:      █████████████████░░░  85%   (T011 Streamlit DONE on synthetic fallback; DB/real-data wiring pending KI-010)
-RAG:            ░░░░░░░░░░░░░░░░░░░░   0%
+RAG:            █████████████████░░░  85%   (T012 news chunking+embedding+retrieval+rerank+evidence engine DONE; Qdrant adapter best-effort, real news pending KI-006/007)
 AI Agent:       ░░░░░░░░░░░░░░░░░░░░   0%
 ML:             ░░░░░░░░░░░░░░░░░░░░   0%
 Production:     ░░░░░░░░░░░░░░░░░░░░   0%
@@ -45,16 +45,17 @@ Production:     ░░░░░░░░░░░░░░░░░░░░   0
 - **Risk** (`src/market/risk/risk.py`) — rolling annualized volatility (log returns), beta, trailing max drawdown, liquidity, gap risk, debt-risk buckets.
 - **Factor scoring** (`src/quant/factors/scoring.py`) — §12 baseline weights (fund 0.30/tech 0.20/mom 0.15/val 0.15/qual 0.10/risk 0.10), percentile-rank aggregation, renormalized overall score, stock ranking.
 - **Technical indicators** (`src/market/technical/indicators.py`) — SMA, EMA, RSI (Wilder's smoothing), MACD (12/26/9), Bollinger Bands (20, 2σ), ATR (14), OBV, volume SMA, relative strength vs benchmark. Pure-Python, deterministic, tested against hand-computed expected values (40 tests).
+- **RAG + evidence engine** (`src/rag/` + `src/evidence/`, T012) — `HashEmbedding` (deterministic hash-based, dim 128, model_name "hash-embed-v1"), `chunk_news_item` (sliding-window chunker w/ metadata + symbol + source + published_at), `MemoryVectorStore` (in-memory cosine store; `upsert`/`query`) + optional `QdrantAdapter` (best-effort mirror when `qdrant_client` importable), `Retriever` (hybrid: vector + keyword overlap + recency + source-reliability priors, metadata filters symbol/doc_type/source), `rerank` (RRF-style re-scoring), `RagService` singleton (`ingest_news_items`/`search`/`evidence_for`/`status`/`to_payload`), `src/evidence/engine.py` (`Evidence` §19 dataclass + `confidence_for` + `build_evidence` + `evidence_to_dict`). 3 new API endpoints (`/api/v1/rag/search`, `/api/v1/rag/status`, `/api/v1/evidence`) → API now 26 paths / 27 ops; `readyz` reports qdrant status ("offline-index-ready" when Qdrant absent).
 - Git repo on branch `feat/data-source-design`.
 
 ---
 
 ## 3. Active Task
 
-**ID:** `T011 — Streamlit dashboard (market overview, screener, ranking, stock detail, backtests, system health)`
+**ID:** `T012 — News ingestion + RAG + evidence engine (Phase 4 → MVP-2)`
 **State:** COMPLETED (2026-09-15)
 
-**Prior tasks:** `T001 — Phase 0 scaffold` (2026-09-06) · `T003 — migrations+seeds` (2026-09-13) · `T002 — data-source design` (2026-09-13) · `T004+T005 — pipeline+quality` (2026-09-14) · `T006 — technical indicators` (2026-09-14) · `T007 — factors/scoring` (2026-09-14) · `T008+T009+T010 — scoring engine, backtesting engine, FastAPI read API` (2026-09-15)
+**Prior tasks:** `T001 — Phase 0 scaffold` (2026-09-06) · `T003 — migrations+seeds` (2026-09-13) · `T002 — data-source design` (2026-09-13) · `T004+T005 — pipeline+quality` (2026-09-14) · `T006 — technical indicators` (2026-09-14) · `T007 — factors/scoring` (2026-09-14) · `T008+T009+T010 — scoring engine, backtesting engine, FastAPI read API` (2026-09-15) · `T011 — Streamlit dashboard` (2026-09-15)
 
 ---
 
@@ -80,7 +81,7 @@ Production:     ░░░░░░░░░░░░░░░░░░░░   0
 7. BACKTEST ENGINE        → DONE (T009 engine + metrics + walk-forward, 2026-09-15)
 8. API LAYER              → DONE (T010 FastAPI /api/v1/*, 2026-09-15)
 9. DASHBOARD              → DONE (T011 Streamlit overview/screener/rankings/detail/backtests/health, 2026-09-15)
-10. RAG                   → T012
+10. RAG                   → DONE (T012 news+RAG+evidence, 2026-09-15; Qdrant adapter best-effort — KI-011)
 11. AI AGENT              ← NOT before Data+Quant+Backtest baseline (§57) → T013
 12. ML PREDICTION         → T014
 13. PORTFOLIO INTELLIGENCE

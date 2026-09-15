@@ -131,3 +131,28 @@ def test_backtests_group() -> None:
     assert len(r.json()) == 2
     r = client.get("/api/v1/backtests/nope/metrics")
     assert r.status_code == 404
+
+
+# --------------------------------------------------------------- rag/evidence (T012)
+def test_rag_search() -> None:
+    r = client.get("/api/v1/rag/search", params={"q": "FPT lợi nhuận", "top_k": 3})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["query"] == "FPT lợi nhuận"
+    assert body["total"] >= 1
+    assert "scores" in body["items"][0]
+
+
+def test_rag_status() -> None:
+    r = client.get("/api/v1/rag/status")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["chunks"] >= 1 and "model" in body
+
+
+def test_evidence_list() -> None:
+    r = client.get("/api/v1/evidence", params={"q": "FPT", "top_k": 2})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["total"] >= 1
+    assert "confidence" in body["items"][0]

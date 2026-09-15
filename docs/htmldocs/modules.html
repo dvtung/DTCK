@@ -14,7 +14,7 @@
 </header>
 <div class="wrap">
 <div class="toc"><b>Mục lục:</b>
-<a href="#data">src/data</a> · <a href="#tech">kỹ thuật</a> · <a href="#fund">cơ bản</a> · <a href="#val">định giá</a> · <a href="#mom">động lượng</a> · <a href="#risk">rủi ro</a> · <a href="#scoring">chấm điểm</a> · <a href="#engine">engine xếp hạng</a> · <a href="#backtest">kiểm thử ngược</a> · <a href="#api">API</a> · <a href="#dashboard">dashboard</a> · <a href="#models">models</a> · <a href="#seeds">seed &amp; worker</a>
+<a href="#data">src/data</a> · <a href="#tech">kỹ thuật</a> · <a href="#fund">cơ bản</a> · <a href="#val">định giá</a> · <a href="#mom">động lượng</a> · <a href="#risk">rủi ro</a> · <a href="#scoring">chấm điểm</a> · <a href="#engine">engine xếp hạng</a> · <a href="#backtest">kiểm thử ngược</a> · <a href="#api">API</a> · <a href="#dashboard">dashboard</a> · <a href="#rag">RAG &amp; bằng chứng</a> · <a href="#models">models</a> · <a href="#seeds">seed &amp; worker</a>
 </div>
 <h2 class="sec" id="data">src/data — luồng nạp dữ liệu (T004 + T005)</h2>
 <p><b>Thiết kế:</b> bản ghi độc lập nhà cung cấp chảy qua thu thập → kiểm tra → chuẩn hóa → lưu trữ → chấm điểm. Mọi giai đoạn đều là hàm thuần; đổi nhà cung cấp chỉ là thay đổi cấu hình trong <code>sources.yaml</code>.</p>
@@ -111,7 +111,7 @@ result = run_backtest(data, chien_luoc, BacktestConfig(
 print(result.metrics["cagr"], result.metrics["sharpe_ratio"], result.metrics["max_drawdown"])</pre>
 <h2 class="sec" id="api">apps/api — dịch vụ REST FastAPI (T010)</h2>
 <p><b>Thiết kế:</b> router mỏng → service chứa nghiệp vụ → schema Pydantic làm hợp đồng. Hiện service dùng kho dữ liệu <b>trong bộ nhớ</b> (tất định, không cần CSDL) nên API kiểm thử được độc lập với hạ tầng; khi lớp lưu trữ hoạt động chỉ cần thay service bằng repository SQLAlchemy — <b>hợp đồng router không đổi</b>.</p>
-<div class="sig"><b>7 nhóm router</b> — <code>/api/v1/market</code> (indices, regime, breadth) · <code>/stocks</code> (danh sách, chi tiết, giá, xếp hạng) · <code>/fundamentals</code> (statements, ratios, quality) · <code>/technical</code> (indicators, features) · <code>/valuation</code> (summary, history) · <code>/news</code> · <code>/backtests</code>. Tổng <b>23 đường dẫn / 24 thao tác</b>.</div>
+<div class="sig"><b>8 nhóm router</b> — <code>/api/v1/market</code> (indices, regime, breadth) · <code>/stocks</code> (danh sách, chi tiết, giá, xếp hạng) · <code>/fundamentals</code> (statements, ratios, quality) · <code>/technical</code> (indicators, features) · <code>/valuation</code> (summary, history) · <code>/news</code> · <code>/backtests</code> · <code>/rag</code> + <code>/evidence</code> (T012). Tổng <b>26 đường dẫn / 27 thao tác</b>.</div>
 <div class="sig"><b>class MarketService</b> — <code>apps/api/services/market_data.py</code>. Sinh dữ liệu tổng hợp tất định cho 7 mã cơ sở (FPT, VCB, VNM, VIC, HPG, BID, TCB) trên 60 ngày làm việc, tính chỉ báo bằng chính engine quant. Phương thức: <code>list_stocks</code>, <code>get_stock</code>, <code>get_prices</code>, <code>list_rankings</code>, <code>get_indicators</code>, <code>get_valuation_summary</code>, <code>get_quality</code>, <code>list_news</code>, <code>list_backtests</code>, <code>get_backtest_metrics</code>…</div>
 <div class="sig"><b>schemas.py</b> — 21 lớp Pydantic, gồm <code>Page[T]</code> generic cho phân trang, <code>ErrorResponse</code> phong bì lỗi, và schema đầu ra cho từng nhóm nghiệp vụ.</div>
 <div class="sig"><b>MarketDep</b> — phụ thuộc FastAPI (<code>apps/api/dependencies.py</code>) cấp một <code>MarketService</code> dùng chung. Trợ giúp chung trong <code>routers/common.py</code>: <code>page_of()</code>, <code>paginate_params()</code>, <code>not_found()</code>.</div>
@@ -132,6 +132,23 @@ curl -i 'localhost:8000/api/v1/stocks/KHONGCO'   # -&gt; 404 + phong bì lỗi</
 <div class="sig"><b>app.py</b> — 6 trang qua thanh bên: tổng quan (chỉ số + regime + độ rộng) · bộ lọc (<code>st.data_editor</code>) · xếp hạng (bảng + phân rã đóng góp) · chi tiết mã (nến giá, scatter kỹ thuật/cơ bản, thanh chất lượng) · backtests (chỉ số + giao dịch) · sức khỏe (<code>/healthz</code> + <code>/readyz</code>).</div>
 <pre>streamlit run apps/dashboard/app.py
 # hoặc qua Docker Compose: docker compose up dashboard  (cổng 8501)</pre>
+<h2 class="sec" id="rag">src/rag + src/evidence — tin tức, RAG &amp; bằng chứng (T012)</h2>
+<p><b>Thiết kế:</b> tin tức chảy prin luồng: chunking (împărțire) → nhúng (embedding) → kho în bộ nhớ → truy xuát hibrid → rerank → <i>Evidence</i> (§19). Qdrant — optional (best-effort), fără dependențe.</p>
+<div class="sig"><b>embedding/hash_embed.py — class HashEmbedding</b> — <code>embed(text) -&gt; list[float]</code> (dim 128), <code>model_name == "hash-embed-v1"</code>. Deterministic: același text → același vector.</div>
+<div class="sig"><b>ingestion/chunking.py — chunk_news_item(item, max_chars=800)</b> — impărtire în fragmente cu metadata: symbol, doc_type="news", source, published_at, title.</div>
+<div class="sig"><b>retrieval/store.py — class MemoryVectorStore / QdrantAdapter</b> — <code>upsert(chunks)</code>, <code>query(vector, top_k, filters)</code>, <code>size</code>; cosine distance, filter symbol/doc_type/source.</div>
+<div class="sig"><b>retrieval/retriever.py — class Retriever</b> — <code>retrieve(query, top_k, symbol, doc_type, source)</code>: hybrid vector + keyword + recency + source trust; returnează <code>RankedDoc</code>.</div>
+<div class="sig"><b>reranking/reranker.py — rerank(query, docs)</b> — re-scoring RRF-style pentru ordine finală.</div>
+<div class="sig"><b>service.py — class RagService</b> — <code>ingest_news_items / search / evidence_for / status</code>; singleton, inițiat prin <code>rag_service.py</code>.</div>
+<div class="sig"><b>src/evidence/engine.py — class Evidence, build_evidence, confidence_for</b> — obiect §19: snippet, source, symbol, published_at, chunk_id, confidence 0..1.</div>
+<pre>from src.rag.service import RagService
+
+svc = RagService()
+svc.ingest_news_items([{"title": "FPT...", "body": "...", "source": "CafeF",
+                        "published_at": "2026-09-10T08:00:00", "symbol": "FPT"}])
+hits = svc.search("FPT profit", top_k=3)
+evs  = svc.evidence_for("FPT profit", top_k=2)
+# REST: GET /api/v1/rag/search?q=FPT&amp;top_k=3 · GET /api/v1/evidence?q=FPT</pre>
 <h2 class="sec" id="models">src/common/models — ORM (T003)</h2>
 <p>13 file, 38 lớp. <code>Base</code> (DeclarativeBase) + <code>TimestampMixin</code> (created_at/updated_at) + <code>AuditMixin</code> (+ created_by/updated_by). Các lớp chính: <code>Stock</code>, <code>Price</code>, <code>IndexPrice</code>, <code>ForeignFlow</code>, <code>FinancialStatement</code> (lưỡng thời), <code>FactorScore</code>, <code>Signal</code>, <code>ValuationDaily</code> (tính toán), <code>Backtest/BacktestTrade/BacktestMetric</code>, <code>Evidence/Document</code>, <code>AgentRun</code>, <code>DataQualityScore</code>, <code>AuditLog</code>, <code>User/ApiKey</code>.</p>
 <h2 class="sec" id="seeds">Seed, worker &amp; cách triển khai</h2>
@@ -143,6 +160,6 @@ def my_indicator(close: list[float], period: int) -&gt; list[float | None]:
 # rồi: thêm kiểm thử giá trị kỳ vọng trong tests/unit/test_technical_indicators.py,
 # chạy: ruff check . &amp;&amp; mypy &lt;file&gt; &amp;&amp; pytest -q</pre>
 </div>
-<div class="footer">Tài liệu DTCK · 2026-09-15 · <a href="index.html">Trang chủ</a></div>
+<div class="footer">Tài liệu DTCK · 2026-09-15 (T012) · <a href="index.html">Trang chủ</a></div>
 </body>
 </html>

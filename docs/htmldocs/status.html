@@ -23,7 +23,7 @@
 <tr><td>Engine quant</td><td><div class="bar"><div style="width:100%"></div></div>100%</td><td><span class="pill done">T006+T007+T008 xong</span></td></tr>
 <tr><td>Kiểm thử ngược (backtest)</td><td><div class="bar"><div style="width:90%"></div></div>90%</td><td><span class="pill prog">T009 xong · chờ dữ liệu thật (KI-009)</span></td></tr>
 <tr><td>API REST</td><td><div class="bar"><div style="width:85%"></div></div>85%</td><td><span class="pill prog">T010 xong · chờ nối CSDL (KI-008)</span></td></tr>
-<tr><td>RAG / Bằng chứng</td><td><div class="bar"><div style="width:0%"></div></div>0%</td><td><span class="pill todo">T012</span></td></tr>
+<tr><td>RAG / Bằng chứng</td><td><div class="bar"><div style="width:85%"></div></div>85%</td><td><span class="pill prog">T012 xong · chờ thật tin tức + Qdrant (KI-011)</span></td></tr>
 <tr><td>Tác tử AI</td><td><div class="bar"><div style="width:0%"></div></div>0% — bị chặn tới khi có baseline</td><td><span class="pill todo">T013 bị chặn</span></td></tr>
 <tr><td>Học máy (ML)</td><td><div class="bar"><div style="width:0%"></div></div>0% — bị chặn tới khi có baseline</td><td><span class="pill todo">T014 bị chặn</span></td></tr>
 <tr><td>Bảng điều khiển</td><td><div class="bar"><div style="width:85%"></div></div>85%</td><td><span class="pill prog">T011 xong · hiển thị dữ liệu tổng hợp (KI-010)</span></td></tr>
@@ -41,15 +41,15 @@
 <tr><td>T007</td><td>Hệ số + chấm điểm</td><td>5 module, 46 hàm + 18 kiểm thử</td></tr>
 <tr><td>T008</td><td>Engine chấm điểm + giải thích</td><td><code>src/quant/scoring/engine.py</code>: phân rã đóng góp, nhãn tín hiệu, độ tin cậy, xếp hạng + 11 kiểm thử</td></tr>
 <tr><td>T009</td><td>Engine kiểm thử ngược</td><td><code>src/backtesting/</code>: cuốn chiếu, chi phí, kiểm soát thiên lệch, 11 chỉ số đo + 10 kiểm thử</td></tr>
-<tr><td>T010</td><td>API REST FastAPI</td><td><code>apps/api/</code>: 7 router, 23 đường dẫn, 21 schema, lọc/phân trang, phong bì lỗi + 14 kiểm thử</td></tr>
+<tr><td>T010</td><td>API REST FastAPI</td><td><code>apps/api/</code>: 8 router, 26 đường dẫn / 27 thao tác, 21 schema, lọc/phân trang, phong bì lỗi + 17 kiểm thử</td></tr>
 <tr><td>T011</td><td>Bảng điều khiển Streamlit</td><td><code>apps/dashboard/</code>: tổng quan, bộ lọc, xếp hạng, chi tiết mã, backtests, sức khỏe API + 34 kiểm thử</td></tr>
+<tr><td>T012</td><td>Tin tức + RAG + bằng chứng</td><td><code>src/rag/</code> (chunking, hash-embedding, kho trong bộ nhớ + adaptor Qdrant, truy xuất hỗn, rerank) + <code>src/evidence/</code> (§19) + 3 endpoint API + 23 kiểm thử</td></tr>
 </table>
 <h2 class="sec">Lộ trình (thứ tự theo đặc tả §57)</h2>
 <table>
 <tr><th>Tiếp theo</th><th>Phạm vi</th></tr>
-<tr><td><b>T012</b> — tin tức + RAG + bằng chứng</td><td>Truy xuất Qdrant, engine bằng chứng (MVP-2) — <b>kế tiếp</b></td></tr>
-<tr><td>T013 — tác tử (bị chặn)</td><td>Chỉ sau khi Dữ liệu + Quant + Backtest đạt baseline</td></tr>
-<tr><td>T014 — ML (bị chặn)</td><td>XGBoost/LightGBM + hiệu chuẩn + registry mô hình</td></tr>
+<tr><td><b>T013</b> — tác tử AI LangGraph</td><td>Chỉ sau khi Dữ liệu + Quant + Backtest đạt baseline — <b>kế tiếp</b> (bị chặn)</td></tr>
+<tr><td>T014 — ML</td><td>XGBoost/LightGBM + hiệu chuẩn + registry mô hình</td></tr>
 <tr><td>T015 — vận hành thật</td><td>Xác thực, giám sát, cảnh báo, CI/CD</td></tr>
 </table>
 <h2 class="sec">Các vấn đề đã biết</h2>
@@ -60,6 +60,7 @@
 <tr><td>KI-008</td><td>API phục vụ dữ liệu tổng hợp trong bộ nhớ (chưa nối TimescaleDB)</td><td>Router hợp đồng đã chốt; thay service bằng repository khi CSDL sẵn sàng</td></tr>
 <tr><td>KI-009</td><td>Backtest chỉ kiểm chứng trên chuỗi giá tổng hợp (chưa có lịch sử thật)</td><td>Kết quả chiến lược chưa có ý nghĩa cho tới khi nạp dữ liệu thật</td></tr>
 <tr><td>KI-010</td><td>Bảng điều khiển hiển thị dữ liệu tổng hợp trong bộ nhớ (KI-008) cho tới khi CSDL + dữ liệu thật được nối</td><td>Ồn định giao diện; client HTTP sẽ tự dùng API thật khi router phục vụ payload CSDL mà không đổi mã dashboard</td></tr>
+<tr><td>KI-011</td><td>Chỉ RAG T012 xây trên tin tức tổng hợp trong bộ nhớ; <code>qdrant_client</code> không nạp → kho trong bộ nhớ là baseline, adaptor Qdrant best-effort</td><td>Hợp đồng + toán truy xuất kiểm thử (232 kiểm thử); đổi tới Qdrant = nạp client + chỉ QDRANT_HOST. Tin tức thật bị chặn KI-006/KI-007</td></tr>
 </table>
 <h2 class="sec" id="docs">Các tài liệu đặc tả</h2>
 <table>

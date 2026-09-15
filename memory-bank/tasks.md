@@ -31,7 +31,7 @@ Legend: `[ ]` To Do · `[~]` In Progress · `[x]` Completed · `[!]` Blocked
 
 - [x] **T011 — Streamlit dashboard (T011)** — `apps/dashboard/` — `client.py` (HTTP-first `MarketClient` + in-process `MarketService` fallback), `components.py` (framework-agnostic formatting/transforms), `app.py` (6 pages: overview/screener/rankings/detail/backtests/health via Streamlit + plotly). `tests/unit/test_dashboard.py` (34 tests). Verified: ruff clean, mypy clean, 209 total tests pass. *(2026-09-15)*
 
-- [ ] T012 — News ingestion + RAG (Qdrant) + evidence engine (Phase 4 → MVP-2)
+- [x] **T012 — News ingestion + RAG + evidence engine (Phase 4 → MVP-2)** — `src/rag/` (embedding `hash_embed.py` HashEmbedding, ingestion `chunking.py`, retrieval `store.py` MemoryVectorStore + optional QdrantAdapter + `retriever.py` hybrid, `reranking/reranker.py`, `service.py` RagService singleton), `src/evidence/engine.py` (Evidence + confidence_for + build_evidence §19), `apps/api/routers/rag.py` (3 endpoints: `/api/v1/rag/search`, `/api/v1/rag/status`, `/api/v1/evidence` — API total 26 paths / 27 ops), `apps/api/services/rag_service.py` (seeds from MarketService news on first use), `readyz` gains qdrant status. `tests/unit/test_rag_evidence.py` (20) + test_api.py (+3) = +23 tests. Verified: ruff clean, mypy clean (102 files), 232 total tests pass. *(2026-09-15)*
 - [ ] T013 — LangGraph agents + orchestrator + audit (Phase 5)
 - [ ] T014 — ML feature dataset + XGBoost/LightGBM + calibration + registry (Phase 6)
 - [ ] T015 — Production: auth, monitoring, alerts, CI/CD, hardening (Phase 7)
