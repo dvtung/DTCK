@@ -4,6 +4,8 @@
 
 Main deployment doc: `docs/DEPLOYMENT.md`.
 
+> **🇻🇳 Hướng dẫn triển khai chi tiết từng bước bằng tiếng Việt: [`docs/DEPLOYMENT_vi.md`](../docs/DEPLOYMENT_vi.md)** — gồm 6 giai đoạn (chuẩn bị → hạ tầng → migration/seed → dữ liệu → kiểm thử → vận hành) + troubleshooting.
+
 ---
 
 ## Local Setup (MVP)
