@@ -109,6 +109,13 @@ disallow_any_explicit = false
 module = ["apscheduler.*", "streamlit", "streamlit.*", "uvicorn", "pandas.*", "plotly", "plotly.*"]
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+# ML stack (T014): scikit-learn/xgboost/lightgbm ship no py.typed markers;
+# runtime behavior is covered by unit tests (fit/calibrate/metrics).
+module = ["sklearn.*", "xgboost.*", "lightgbm.*"]
+ignore_missing_imports = true
+follow_imports = "skip"
+
 [build-system]
 requires = ["setuptools>=69"]
 build-backend = "setuptools.build_meta"

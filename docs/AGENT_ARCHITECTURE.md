@@ -3,7 +3,7 @@
 ## AI Investment Research & Decision Intelligence Platform
 
 **Version:** 1.0
-**Status:** Baseline — derived from SYSTEM_SPECIFICATION.md v1.0 (§20–§24, §41, §31)
+**Status:** IMPLEMENTED (T013, 2026-09-16) — deterministic, offline, no LLM. The orchestrator resolves tasks through the registry, builds the §21 plan, calls tools (ToolCatalog wrapping MarketService/RagService), audits each run (§31), and supports retry/timeout/failure per §45. LangGraph is the planned Phase-5 upgrade path (§34) for LLM-backed planning; the current baseline is intentionally LLM-free to satisfy the spec §57 ordering gate.
 
 ---
 
@@ -21,7 +21,7 @@ MVP-3: + ML prediction + market regime + Portfolio Agent + monitoring + alerts
 
 # 2. Framework
 
-- **LangGraph** for stateful, controllable agent orchestration (§34).
+- **LangGraph** planned for stateful, controllable agent orchestration (§34) — Phase-5 upgrade path when LLM backing is enabled. MVP-1/T013 baseline uses a deterministic orchestrator (no LLM) that resolves a §21 plan, calls tools, and records §31 audit.
 - **LLM provider abstraction** (ADR-005) — no vendor lock-in.
 - Every agent output follows a **Pydantic schema** (ADR-006, §23).
 

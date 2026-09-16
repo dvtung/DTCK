@@ -11,10 +11,14 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from apps.api.config import settings
 from apps.api.routers import (
+    agents,
+    auth,
     backtests,
     fundamentals,
     market,
+    monitoring,
     news,
+    predictions,
     rag,
     stocks,
     technical,
@@ -41,8 +45,20 @@ if settings.cors_origins:
         allow_headers=["*"],
     )
 
-for _router in (market.router, stocks.router, fundamentals.router, technical.router,
-                valuation.router, news.router, backtests.router, rag.router):
+for _router in (
+    market.router,
+    stocks.router,
+    fundamentals.router,
+    technical.router,
+    valuation.router,
+    news.router,
+    backtests.router,
+    rag.router,
+    agents.router,
+    auth.router,
+    monitoring.router,
+    predictions.router,
+):
     app.include_router(_router)
 
 
@@ -54,7 +70,7 @@ def healthz() -> dict[str, str]:
 
 @app.get("/readyz", tags=["system"])
 def readyz() -> dict[str, str | dict[str, str]]:
-    """Readiness probe — DB pending (KI-008), Qdrant best-effort (KI-011)."""
+    """Readiness probe — DB pending (KI-008), Qdrant + agents best-effort (KI-011/012)."""
     qdrant = "pending"
     try:
         from apps.api.services.rag_service import get_rag_service
@@ -63,8 +79,17 @@ def readyz() -> dict[str, str | dict[str, str]]:
         qdrant = "up" if svc.qdrant_available else "offline-index-ready"
     except Exception:  # noqa: BLE001
         qdrant = "offline-index-ready"
+    agent_framework = "unavailable"
+    try:
+        from apps.api.services.agent_service import get_orchestrator
+
+        orch = get_orchestrator()
+        agent_framework = f"offline:{','.join(orch.registry.tasks())}"
+    except Exception:  # noqa: BLE001
+        agent_framework = "unavailable"
     return {"status": "ready",
-            "dependencies": {"database": "pending", "qdrant": qdrant}}
+            "dependencies": {"database": "pending", "qdrant": qdrant,
+                             "agents": agent_framework}}
 
 
 def run() -> None:

@@ -14,7 +14,7 @@
 | Vector DB | Qdrant | qdrant/qdrant:latest |
 | Data | Pandas / Polars / NumPy | pinned in pyproject |
 | ML | scikit-learn, xgboost, lightgbm | Phase 6 |
-| Agents | LangGraph | Phase 5 |
+| Agents | Deterministic orchestrator (T013, no LLM); LangGraph planned (§34) | Phase 5 |
 | Dashboard | Streamlit | 1.3x |
 | Migrations | Alembic + SQLAlchemy | 2.x |
 

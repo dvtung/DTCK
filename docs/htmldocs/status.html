@@ -13,7 +13,7 @@
 <nav><a href="index.html">Trang chủ</a><a href="structure.html">Cấu trúc</a><a href="status.html" class="active">Tiến độ</a><a href="modules.html">Module</a><a href="api.html">API</a><a href="database.html">Cơ sở dữ liệu</a><a href="pipeline.html">Luồng dữ liệu</a></nav>
 </header>
 <div class="wrap">
-<h2 class="sec">Tiến độ theo đặc tả §58 (2026-09-15)</h2>
+<h2 class="sec">Tiến độ theo đặc tả §58 (2026-09-16)</h2>
 <table>
 <tr><th>Hạng mục</th><th>Tiến độ</th><th>Trạng thái</th></tr>
 <tr><td>Lập đặc tả</td><td><div class="bar"><div style="width:100%"></div></div>100%</td><td><span class="pill done">Xong</span></td></tr>
@@ -24,8 +24,8 @@
 <tr><td>Kiểm thử ngược (backtest)</td><td><div class="bar"><div style="width:90%"></div></div>90%</td><td><span class="pill prog">T009 xong · chờ dữ liệu thật (KI-009)</span></td></tr>
 <tr><td>API REST</td><td><div class="bar"><div style="width:85%"></div></div>85%</td><td><span class="pill prog">T010 xong · chờ nối CSDL (KI-008)</span></td></tr>
 <tr><td>RAG / Bằng chứng</td><td><div class="bar"><div style="width:85%"></div></div>85%</td><td><span class="pill prog">T012 xong · chờ thật tin tức + Qdrant (KI-011)</span></td></tr>
-<tr><td>Tác tử AI</td><td><div class="bar"><div style="width:0%"></div></div>0% — bị chặn tới khi có baseline</td><td><span class="pill todo">T013 bị chặn</span></td></tr>
-<tr><td>Học máy (ML)</td><td><div class="bar"><div style="width:0%"></div></div>0% — bị chặn tới khi có baseline</td><td><span class="pill todo">T014 bị chặn</span></td></tr>
+  <tr><td>Tác tử AI</td><td><div class="bar"><div style="width:95%"></div></div>95%</td><td><span class="pill done">T013 xong · tượng đương, offline, không LLM (301 kiểm thử)</span></td></tr>
+<tr><td>Học máy (ML)</td><td><div class="bar"><div style="width:80%"></div></div>80%</td><td><span class="pill prog">T014 xong · chờ dữ liệu thật (KI-012)</span></td></tr>
 <tr><td>Bảng điều khiển</td><td><div class="bar"><div style="width:85%"></div></div>85%</td><td><span class="pill prog">T011 xong · hiển thị dữ liệu tổng hợp (KI-010)</span></td></tr>
 <tr><td>Vận hành thật</td><td><div class="bar"><div style="width:0%"></div></div>0%</td><td><span class="pill todo">T015</span></td></tr>
 </table>
@@ -44,13 +44,13 @@
 <tr><td>T010</td><td>API REST FastAPI</td><td><code>apps/api/</code>: 8 router, 26 đường dẫn / 27 thao tác, 21 schema, lọc/phân trang, phong bì lỗi + 17 kiểm thử</td></tr>
 <tr><td>T011</td><td>Bảng điều khiển Streamlit</td><td><code>apps/dashboard/</code>: tổng quan, bộ lọc, xếp hạng, chi tiết mã, backtests, sức khỏe API + 34 kiểm thử</td></tr>
 <tr><td>T012</td><td>Tin tức + RAG + bằng chứng</td><td><code>src/rag/</code> (chunking, hash-embedding, kho trong bộ nhớ + adaptor Qdrant, truy xuất hỗn, rerank) + <code>src/evidence/</code> (§19) + 3 endpoint API + 23 kiểm thử</td></tr>
+<tr><td>T013</td><td>Tác tử AI + orchestrator + audit (§20–§24/§31/§41)</td><td><code>src/agents/</code> (research/analysis/monitoring/portfolio + orchestrator + audit + registry + tool catalog), <code>src/agents/util.py</code>; CLI <code>run-agent</code> (4 task); 10 endpoint API (<code>/api/v1/agents/*</code> + <code>/api/v1/analysis/*</code>); tất định, không LLM — <b>70 kiểm thử</b> (63 agent + 7 API)</td></tr>
+<tr><td>T014</td><td>ML: dataset + XGBoost + hiệu chuẩn + registry</td><td><code>src/ml/</code> (feature dataset as-of, huấn luyện tạm-thời, hiệu chuẩn sigmoid, registry vòng đời), <code>/api/v1/predictions</code> (3 endpoint), CLI <code>train-model</code>; chặn rò rỉ mục tiêu + KI-012</td></tr>
 </table>
 <h2 class="sec">Lộ trình (thứ tự theo đặc tả §57)</h2>
 <table>
 <tr><th>Tiếp theo</th><th>Phạm vi</th></tr>
-<tr><td><b>T013</b> — tác tử AI LangGraph</td><td>Chỉ sau khi Dữ liệu + Quant + Backtest đạt baseline — <b>kế tiếp</b> (bị chặn)</td></tr>
-<tr><td>T014 — ML</td><td>XGBoost/LightGBM + hiệu chuẩn + registry mô hình</td></tr>
-<tr><td>T015 — vận hành thật</td><td>Xác thực, giám sát, cảnh báo, CI/CD</td></tr>
+<tr><td><b>T015</b> — vận hành thật</td><td>JWT + RBAC, giám sát, cảnh báo, CI/CD</td></tr>
 </table>
 <h2 class="sec">Các vấn đề đã biết</h2>
 <table>
@@ -61,6 +61,7 @@
 <tr><td>KI-009</td><td>Backtest chỉ kiểm chứng trên chuỗi giá tổng hợp (chưa có lịch sử thật)</td><td>Kết quả chiến lược chưa có ý nghĩa cho tới khi nạp dữ liệu thật</td></tr>
 <tr><td>KI-010</td><td>Bảng điều khiển hiển thị dữ liệu tổng hợp trong bộ nhớ (KI-008) cho tới khi CSDL + dữ liệu thật được nối</td><td>Ồn định giao diện; client HTTP sẽ tự dùng API thật khi router phục vụ payload CSDL mà không đổi mã dashboard</td></tr>
 <tr><td>KI-011</td><td>Chỉ RAG T012 xây trên tin tức tổng hợp trong bộ nhớ; <code>qdrant_client</code> không nạp → kho trong bộ nhớ là baseline, adaptor Qdrant best-effort</td><td>Hợp đồng + toán truy xuất kiểm thử (232 kiểm thử); đổi tới Qdrant = nạp client + chỉ QDRANT_HOST. Tin tức thật bị chặn KI-006/KI-007</td></tr>
+<tr><td>KI-012</td><td>Sinh dữ liệu tổng hợp tăng đơn điệu → 100% nhãn 5 ngày đều dương; không huấn luyện được máy phân loại (từ chối rõ ràng, không giá trị giả)</td><td>Predictor dùng mô hình fallback tất định; huấn luyện thật chờ dữ liệu nạp qua TimescaleDB (KI-006/007/008). Lệnh <code>train-model</code> báo lỗi trung thực</td></tr>
 </table>
 <h2 class="sec" id="docs">Các tài liệu đặc tả</h2>
 <table>
@@ -75,6 +76,6 @@
 <tr><td><code>AI_INVESTMENT_CONCEPT.md · SECURITY.md · DEPLOYMENT.md</code></td><td>Khái niệm, xác thực/kiểm toán, sổ tay vận hành</td></tr>
 </table>
 </div>
-<div class="footer">Tài liệu DTCK · 2026-09-15 · <a href="index.html">Trang chủ</a></div>
+<div class="footer">Tài liệu DTCK · 2026-09-16 · <a href="index.html">Trang chủ</a></div>
 </body>
 </html>

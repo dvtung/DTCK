@@ -1,6 +1,6 @@
 # Memory Bank — Tasks
 
-**Last updated:** 2026-09-15
+**Last updated:** 2026-09-16
 
 Legend: `[ ]` To Do · `[~]` In Progress · `[x]` Completed · `[!]` Blocked
 
@@ -32,9 +32,9 @@ Legend: `[ ]` To Do · `[~]` In Progress · `[x]` Completed · `[!]` Blocked
 - [x] **T011 — Streamlit dashboard (T011)** — `apps/dashboard/` — `client.py` (HTTP-first `MarketClient` + in-process `MarketService` fallback), `components.py` (framework-agnostic formatting/transforms), `app.py` (6 pages: overview/screener/rankings/detail/backtests/health via Streamlit + plotly). `tests/unit/test_dashboard.py` (34 tests). Verified: ruff clean, mypy clean, 209 total tests pass. *(2026-09-15)*
 
 - [x] **T012 — News ingestion + RAG + evidence engine (Phase 4 → MVP-2)** — `src/rag/` (embedding `hash_embed.py` HashEmbedding, ingestion `chunking.py`, retrieval `store.py` MemoryVectorStore + optional QdrantAdapter + `retriever.py` hybrid, `reranking/reranker.py`, `service.py` RagService singleton), `src/evidence/engine.py` (Evidence + confidence_for + build_evidence §19), `apps/api/routers/rag.py` (3 endpoints: `/api/v1/rag/search`, `/api/v1/rag/status`, `/api/v1/evidence` — API total 26 paths / 27 ops), `apps/api/services/rag_service.py` (seeds from MarketService news on first use), `readyz` gains qdrant status. `tests/unit/test_rag_evidence.py` (20) + test_api.py (+3) = +23 tests. Verified: ruff clean, mypy clean (102 files), 232 total tests pass. *(2026-09-15)*
-- [ ] T013 — LangGraph agents + orchestrator + audit (Phase 5)
-- [ ] T014 — ML feature dataset + XGBoost/LightGBM + calibration + registry (Phase 6)
-- [ ] T015 — Production: auth, monitoring, alerts, CI/CD, hardening (Phase 7)
+- [x] **T013 — LangGraph agents + orchestrator + audit (Phase 5)** — `src/agents/` (4 agents: Research/Analysis/Monitoring/Portfolio, Orchestrator with retry/timeout/audit, AgentRegistry §41, AuditTrail §31, ToolCatalog), `src/agents/util.py`, `src/agents/schemas.py`; CLI `run-agent` (4 tasks: analyze/research/monitor/portfolio); 10 API endpoints (`/api/v1/agents/*` + `/api/v1/analysis/*`, sync + async 202+poll pattern); deterministic, offline, no LLM. `tests/unit/test_agents.py` (63 tests) + `test_api.py` (+6 agent API tests). Verified: ruff clean, mypy clean (src/apps only), 301 total tests pass. *(2026-09-16)*
+- [x] **T014 — ML feature dataset + training + calibration + registry + predictions API (Phase 6)** *(2026-09-16; real training pending KI-012)*
+- [ ] T015 — Production: auth, monitoring, alerts, CI/CD, hardening (Phase 7) *(next)*
 
 ---
 
@@ -42,5 +42,5 @@ Legend: `[ ]` To Do · `[~]` In Progress · `[x]` Completed · `[!]` Blocked
 
 > "Không chuyển sang Agent trước khi Data + Quant + Backtest đạt baseline có thể kiểm chứng."
 
-- [ ] T013 — Agents (blocked)
+
 - [ ] T014 — ML prediction (blocked)

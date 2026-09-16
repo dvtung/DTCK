@@ -1,6 +1,19 @@
 # Memory Bank — Changelog
 
-**Last updated:** 2026-09-15
+**Last updated:** 2026-09-16
+
+## 2026-09-16 — T014: ML prediction (feature dataset + training + calibration + registry + API)
+
+- Completed `src/ml/` (T014):
+  - `feature_dataset.py` — `FeatureDatasetBuilder` with strict as-of alignment; **removed target leakage** (`horizon_return_*` forward returns had been written into the feature matrix — `horizon_return_5d` equaled the training target); process-stable `zlib.crc32` symbol encoding (was `hash()`, PYTHONHASHSEED-randomized); `MarketLike` Protocol typed against `MarketService`
+  - `training.py` — `ModelTrainer`: temporal 60/20/20 split on **unique trade dates** (row-count split could place one date in two partitions), XGBoost fit, **custom `_SigmoidCalibrator`** (replaces `CalibratedClassifierCV cv="prefit"`, removed in scikit-learn 1.8), classification metrics (AUC/Brier/log-loss/accuracy/precision/recall/F1), input validation (row alignment, 0/1 labels, ≥3 dates) and **single-class partition guards** — `train_and_register()` → APPROVED entry
+  - `model_registry.py` / `predictor.py` — lifecycle EXPERIMENTAL→…→DEPRECATED + prediction service with deterministic fallback stub
+- Added `apps/api/routers/predictions.py` — 3 endpoints: `GET /api/v1/predictions/{symbol}`, `/predictions/{symbol}/evaluations`, `/predictions/{symbol}/validation` (spec §2.8) → API 39 paths / 40 ops
+- Added `apps/worker/cli.py` `train-model` command (+ `build_parser()` refactor); on the synthetic fixture it fails loudly (single-class labels) instead of registering a fake model
+- Added tests: `test_ml_no_leakage.py` (5: no forward-return columns, future-shock invariance, target reacts to future prices, PYTHONHASHSEED stability), `test_ml_training.py` (7: real fit/calibration, date-partition sizes, per-partition single-class rejection, target/label/alignment validation), +5 predictions API tests +2 CLI tests in `test_t014_t015.py`
+- Added **KI-012**: synthetic fixture is monotonically rising → 100% positive 5-day labels; real classifier training impossible until real data loads (blocked by KI-006/007/008); predictor serves deterministic fallback meanwhile
+- Updated `docs/htmldocs/status.html` (ML 80% · T014 row · KI-012 · roadmap → T015); memory-bank (active-task/current-state/current tasks)
+- Verified: **325 total tests pass** · `ruff check .` clean · `mypy` → "Success: no issues found in 119 source files"
 
 ## 2026-09-15 — T012: News ingestion + RAG + evidence engine (Phase 4 → MVP-2)
 

@@ -156,3 +156,87 @@ def test_evidence_list() -> None:
     body = r.json()
     assert body["total"] >= 1
     assert "confidence" in body["items"][0]
+
+
+# --------------------------------------------------------------- agents (T013)
+def test_agents_registry() -> None:
+    r = client.get("/api/v1/agents")
+    assert r.status_code == 200
+    body = r.json()
+    assert {a["agent_id"] for a in body["agents"]} == {
+        "analysis",
+        "research",
+        "monitoring",
+        "portfolio",
+    }
+    assert "get_stock_price" in body["tools"]
+    assert body["model"] == "deterministic-quant-v1"
+
+
+def test_agent_analyze_and_audit_trail() -> None:
+    r = client.post("/api/v1/agents/analyze", json={"symbol": "FPT"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "succeeded"
+    assert body["analysis"]["symbol"] == "FPT"
+    assert body["analysis"]["thesis"]
+    assert body["analysis"]["confidence"] > 0
+
+    run_id = body["agent_run_id"]
+    r = client.get(f"/api/v1/agents/runs/{run_id}")
+    assert r.status_code == 200
+    run = r.json()
+    assert run["agent_id"] == "analysis"
+    assert run["plan"] and run["tools_called"] and run["finished_at"]
+
+    r = client.get("/api/v1/agents/runs", params={"agent_id": "analysis", "limit": 5})
+    assert r.status_code == 200
+    assert r.json()["total"] >= 1
+
+    r = client.get("/api/v1/agents/runs/00000000-0000-0000-0000-000000000000")
+    assert r.status_code == 404
+
+
+def test_agent_analyze_unknown_symbol() -> None:
+    r = client.post("/api/v1/agents/analyze", json={"symbol": "NOPE"})
+    assert r.status_code == 404
+    assert r.json()["detail"]["error"]["code"] == "not_found"
+    r = client.post("/api/v1/agents/analyze", json={})
+    assert r.status_code == 422
+
+
+def test_agent_research_monitor_portfolio() -> None:
+    r = client.post("/api/v1/agents/research", json={"symbol": "VCB"})
+    assert r.status_code == 200
+    assert r.json()["brief"]["key_facts"]
+    r = client.post("/api/v1/agents/monitor", json={"symbols": ["FPT", "VCB"]})
+    assert r.status_code == 200
+    assert r.json()["report"]["alerts"]
+    r = client.post(
+        "/api/v1/agents/portfolio",
+        json={"positions": [{"symbol": "FPT", "quantity": 100}]},
+    )
+    assert r.status_code == 200
+    assert r.json()["snapshot"]["positions"] == 1
+
+
+def test_analysis_async_pattern() -> None:
+    r = client.post("/api/v1/analysis/request", json={"symbol": "VNM"})
+    assert r.status_code == 202
+    run_id = r.json()["agent_run_id"]
+    r = client.get(f"/api/v1/analysis/request/{run_id}")
+    assert r.status_code == 200
+    assert r.json()["status"] == "succeeded"
+    assert r.json()["analysis"]["symbol"] == "VNM"
+
+    r = client.get("/api/v1/analysis/VNM/latest")
+    assert r.status_code == 200
+    assert r.json()["confidence"] > 0
+    assert client.get("/api/v1/analysis/NOPE/latest").status_code == 404
+    r = client.get("/api/v1/analysis/request/00000000-0000-0000-0000-000000000000")
+    assert r.status_code == 404
+
+
+def test_readyz_reports_agents() -> None:
+    body = client.get("/readyz").json()
+    assert body["dependencies"]["agents"].startswith("offline:")

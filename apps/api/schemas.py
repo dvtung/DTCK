@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from typing import TypeVar
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -179,9 +180,89 @@ class ReadyOut(BaseModel):
     as_of: datetime = Field(default_factory=lambda: datetime.now())
 
 
+# --------------------------------------------------------------- agent API
+
+
+class LoginRequest(BaseModel):
+    """POST /api/v1/auth/login."""
+
+    email: str = Field(min_length=1, max_length=255)
+    password: str = Field(min_length=1, max_length=255)
+
+
+class AnalysisRequest(BaseModel):
+    """POST /api/v1/agents/analyze + /api/v1/analysis/request (§2.7/§2.11)."""
+
+    symbol: str = Field(min_length=1, max_length=16)
+    user_request: str | None = None
+
+
+class ResearchRequest(BaseModel):
+    """POST /api/v1/agents/research (§20.1)."""
+
+    symbol: str = Field(min_length=1, max_length=16)
+    query: str | None = None
+    user_request: str | None = None
+
+
+class MonitorRequest(BaseModel):
+    """POST /api/v1/agents/monitor (§20.3)."""
+
+    symbols: list[str] = Field(min_length=1, max_length=50)
+    previous_signals: dict[str, str] | None = None
+    user_request: str | None = None
+
+
+class PositionIn(BaseModel):
+    """One portfolio position (§20.4/§27)."""
+
+    symbol: str = Field(min_length=1, max_length=16)
+    quantity: float = Field(gt=0)
+    cost_basis: float | None = None
+
+
+class PortfolioRequest(BaseModel):
+    """POST /api/v1/agents/portfolio (§20.4/§27)."""
+
+    positions: list[PositionIn] = Field(min_length=1, max_length=100)
+    risk_budget_annual_vol: float | None = Field(default=None, gt=0)
+    user_request: str | None = None
+
+
+class AgentRunAcceptedOut(BaseModel):
+    """202 response of the async analysis pattern (§2.7/§45)."""
+
+    agent_run_id: UUID
+    status: str
+
+
 __all__ = [
-    "ErrorBody", "ErrorResponse", "Page", "IndexPriceOut", "RegimeOut", "BreadthOut",
-    "StockOut", "PriceRow", "FactorContributionOut", "RankingOut", "StatementOut",
-    "RatioOut", "QualityOut", "IndicatorSeries", "ValuationSummaryOut", "NewsOut",
-    "BacktestOut", "BacktestMetricOut", "BacktestTradeOut", "HealthOut", "ReadyOut",
+    "AgentRunAcceptedOut",
+    "AnalysisRequest",
+    "BacktestMetricOut",
+    "LoginRequest",
+    "BacktestOut",
+    "BacktestTradeOut",
+    "BreadthOut",
+    "ErrorBody",
+    "ErrorResponse",
+    "FactorContributionOut",
+    "HealthOut",
+    "IndexPriceOut",
+    "IndicatorSeries",
+    "MonitorRequest",
+    "NewsOut",
+    "Page",
+    "PortfolioRequest",
+    "PositionIn",
+    "PriceRow",
+    "QualityOut",
+    "RankingOut",
+    "RatioOut",
+    "ReadyOut",
+    "RegimeOut",
+    "ResearchRequest",
+    "StatementOut",
+    "StockOut",
+    "ValuationSummaryOut",
 ]

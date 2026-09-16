@@ -1,6 +1,6 @@
 # Memory Bank — Current State
 
-**Last updated:** 2026-09-15
+**Last updated:** 2026-09-16
 
 ---
 
@@ -13,11 +13,11 @@ Database:       ████████████████████ 100
 Data Pipeline:  ████████████████████ 100%   (T004+T005: collectors/validators/normalizers/pipeline + quality framework DONE)
 Quant Engine:   ████████████████████ 100%   (T006 indicators + T007 factors/valuation/momentum/risk + T008 scoring engine DONE)
 Backtesting:    ██████████████████░░  90%   (T009 engine+metrics+walk-forward DONE; real-market validation pending KI-006/007)
-API:            █████████████████░░░  85%   (T010: 7 router groups / 23 paths / 24 ops DONE on synthetic service; DB wiring pending KI-008)
+API:            ██████████████████░░  90%   (T010: 7 router groups / 23 paths / 24 ops DONE; T012: +3 ops; T013: +10 ops → 36 paths / 37 ops; DB wiring pending KI-008)
 Dashboard:      █████████████████░░░  85%   (T011 Streamlit DONE on synthetic fallback; DB/real-data wiring pending KI-010)
 RAG:            █████████████████░░░  85%   (T012 news chunking+embedding+retrieval+rerank+evidence engine DONE; Qdrant adapter best-effort, real news pending KI-006/007)
-AI Agent:       ░░░░░░░░░░░░░░░░░░░░   0%
-ML:             ░░░░░░░░░░░░░░░░░░░░   0%
+AI Agent:       ████████████████████  95%
+ML:             ████████████████░░░░  80%   (T014: feature dataset + training + calibration + registry + /predictions API DONE; real training pending KI-012)
 Production:     ░░░░░░░░░░░░░░░░░░░░   0%
 ```
 
@@ -52,7 +52,7 @@ Production:     ░░░░░░░░░░░░░░░░░░░░   0
 
 ## 3. Active Task
 
-**ID:** `T012 — News ingestion + RAG + evidence engine (Phase 4 → MVP-2)`
+**ID:** `T013 — LangGraph agents + orchestrator + audit (Phase 5)`
 **State:** COMPLETED (2026-09-15)
 
 **Prior tasks:** `T001 — Phase 0 scaffold` (2026-09-06) · `T003 — migrations+seeds` (2026-09-13) · `T002 — data-source design` (2026-09-13) · `T004+T005 — pipeline+quality` (2026-09-14) · `T006 — technical indicators` (2026-09-14) · `T007 — factors/scoring` (2026-09-14) · `T008+T009+T010 — scoring engine, backtesting engine, FastAPI read API` (2026-09-15) · `T011 — Streamlit dashboard` (2026-09-15)
@@ -82,7 +82,8 @@ Production:     ░░░░░░░░░░░░░░░░░░░░   0
 8. API LAYER              → DONE (T010 FastAPI /api/v1/*, 2026-09-15)
 9. DASHBOARD              → DONE (T011 Streamlit overview/screener/rankings/detail/backtests/health, 2026-09-15)
 10. RAG                   → DONE (T012 news+RAG+evidence, 2026-09-15; Qdrant adapter best-effort — KI-011)
-11. AI AGENT              ← NOT before Data+Quant+Backtest baseline (§57) → T013
+11. AI AGENT              → DONE (T013, 2026-09-16: 4 agents + orchestrator + audit + 70 tests)
+12. ML PREDICTION         → T014 (next)
 12. ML PREDICTION         → T014
 13. PORTFOLIO INTELLIGENCE
 14. PRODUCTION            → T015

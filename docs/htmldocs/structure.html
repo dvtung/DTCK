@@ -36,7 +36,7 @@
 │   │   └── scoring/       # ★ engine xếp hạng + payload giải thích (T008)
 │   ├── backtesting/       # ★ engine kiểm thử cuốn chiếu (T009)
 │   ├── rag/               # ★ nạp tin tức + truy xuát RAG (T012, chunking/nhúng/kho/retriever/rerank)
-│   ├── agents/            # tác tử LangGraph (T013, bị chặn tới khi có baseline)
+│   ├── agents/            # ★ tác tử LangGraph (T013): 4 agent + orchestrator + audit + registry + tools, tất định
 │   ├── ml/                # kho đặc trưng + mô hình (T014, bị chặn tới khi có baseline)
 │   ├── portfolio/         # nghiệp vụ danh mục (đã dựng khung)
 │   └── evidence/          # ★ engine bằng chứng §19 (T012)
@@ -46,7 +46,7 @@
 ├── configs/sources.yaml   # ★ registry nhà cung cấp đọc được bằng máy (T002)
 ├── docs/                  # 13 đặc tả markdown (nguồn chân lý)
 ├── docs/htmldocs/         # ★ chính trang web tĩnh này
-├── tests/unit/            # 175 kiểm thử đơn vị
+├── tests/unit/            # 301 kiểm thử đơn vị
 ├── memory-bank/           # tasks / current-state / decisions / changelog
 ├── docker/ docker-compose.yml
 └── pyproject.toml requirements.txt .env.example</pre>
@@ -59,7 +59,7 @@
 <tr><td>Quant</td><td><code>src/market/*</code>, <code>src/quant</code></td><td>Chỉ báo tất định, hệ số, định giá, điểm số, xếp hạng kèm giải thích</td><td><span class="pill done">T006 → T008 xong</span></td></tr>
 <tr><td>Lưu trữ</td><td><code>src/common/models</code>, <code>database/</code></td><td>Lược đồ 38 bảng, hypertable, seed</td><td><span class="pill done">T003 xong</span></td></tr>
 <tr><td>Kiểm chứng</td><td><code>src/backtesting</code></td><td>Cuốn chiếu, chi phí, kiểm soát thiên lệch, chỉ số đo hiệu quả</td><td><span class="pill done">T009 xong</span></td></tr>
-<tr><td>Trí tuệ</td><td><code>src/rag</code>, <code>src/agents</code>, <code>src/ml</code></td><td>RAG bằng chứng, tác tử, dự báo ML</td><td><span class="pill todo">T012–T014</span></td></tr>
+<tr><td>Trí tuệ</td><td><code>src/rag</code>, <code>src/agents</code>, <code>src/ml</code></td><td>RAG bằng chứng, tác tử AI, dự báo ML</td><td><span class="pill done">T012 + T013 xong · T014 chặn</span></td></tr>
 <tr><td>Nền tảng</td><td><code>docker/</code>, <code>configs/</code>, <code>helper/</code></td><td>Dịch vụ Compose, registry nhà cung cấp, sổ tay vận hành</td><td><span class="pill prog">Một phần</span></td></tr>
 </table>
 <h2 class="sec">Luồng xử lý của một yêu cầu (kiến trúc mục tiêu)</h2>
@@ -75,6 +75,6 @@
 <tr><td><code>docker-compose.yml</code></td><td>db (TimescaleDB) · qdrant · redis · api · worker · dashboard</td></tr>
 </table>
 </div>
-<div class="footer">Tài liệu DTCK · tạo ngày 2026-09-15 · <a href="index.html">Trang chủ</a></div>
+<div class="footer">Tài liệu DTCK · tạo ngày 2026-09-16 · <a href="index.html">Trang chủ</a></div>
 </body>
 </html>
