@@ -97,14 +97,17 @@ def decompose_score(
     if not available:
         return ScoreDecomposition(overall_score=None, contributions=[])
 
-    # weight_sum is > 0 whenever available is non-empty (weights are all > 0).
+    # Weight sum is > 0 whenever available is non-empty (weights are all > 0).
+    # Each factor is weighted by its RENORMALIZED weight (mirroring the overall
+    # score), so Σ weighted_score == overall and Σ contribution_pct == 1.
+    weight_sum = sum(w[k] for k in available)
     contributions = [
         FactorContribution(
             factor=k,
             score=v,
-            weight=w[k],
-            weighted_score=v * w[k],
-            contribution_pct=v * w[k] / overall if overall else None,
+            weight=w[k] / weight_sum,
+            weighted_score=v * w[k] / weight_sum,
+            contribution_pct=(v * w[k] / weight_sum) / overall if overall else None,
         )
         for k, v in available.items()
     ]

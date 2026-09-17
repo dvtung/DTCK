@@ -127,3 +127,19 @@ class ModelRegistry:
 
     def count(self) -> int:
         return len(self._entries)
+
+
+_DEFAULT_REGISTRY: ModelRegistry | None = None
+
+
+def get_default_registry() -> ModelRegistry:
+    """Process-wide registry shared by trainers and prediction services.
+
+    A process-level singleton keeps registration (worker CLI / API) and
+    serving (ToolCatalog predictions) pointed at the SAME store — separate
+    instances would make trained models invisible to the serving layer.
+    """
+    global _DEFAULT_REGISTRY
+    if _DEFAULT_REGISTRY is None:
+        _DEFAULT_REGISTRY = ModelRegistry()
+    return _DEFAULT_REGISTRY

@@ -113,7 +113,9 @@ Async pattern: POST returns `202 + { agent_run_id }`; poll GET until `SUCCESS/FA
 
 # 3. Authentication & Authorization (Production)
 
-- `POST /api/v1/auth/login` → JWT (access + refresh).
+- `POST /api/v1/auth/login` → JWT (access + refresh). Invalid credentials → **401** with the
+  `invalid_credentials` error envelope (the DB-free MVP compares against a deterministic demo
+  identity via `secrets.compare_digest`; production replaces it with JWT issuance, §32).
 - API keys: `Authorization: Bearer <api_key>`; DB stores only `key_hash` (§32, see SECURITY.md).
 - RBAC roles: `ADMIN`, `ANALYST`, `VIEWER`.
 - Rate limiting per user/key on LLM-backed endpoints (cost control §47).

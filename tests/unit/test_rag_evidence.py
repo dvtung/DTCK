@@ -193,3 +193,47 @@ class TestRagService:
 
         chunks = chunk_news_item(_news(7, "T", "Nội dung tin FPT"))
         assert chunks and chunks[0].doc_type == "news"
+
+
+class TestQdrantMirrorIdentity:
+    """Qdrant point ids must be process-stable (never Python's randomized hash)."""
+
+    def test_stable_point_id_is_deterministic_and_positive(self) -> None:
+        from src.rag.retrieval.store import stable_point_id
+
+        first = stable_point_id("news:42#c0")
+        assert first == stable_point_id("news:42#c0")
+        assert 0 <= first < 2**63
+        assert stable_point_id("news:42#c1") != first
+
+    def test_stable_point_id_survives_pythonhashseed(self) -> None:
+        import os
+        import subprocess
+        import sys
+        from pathlib import Path
+
+        code = (
+            "from src.rag.retrieval.store import stable_point_id\n"
+            "print(stable_point_id('news:42#c0'))\n"
+        )
+        repo = Path(__file__).resolve().parents[2]
+        outs = []
+        for seed in ("1", "2"):
+            proc = subprocess.run(
+                [sys.executable, "-c", code],
+                capture_output=True,
+                text=True,
+                check=True,
+                cwd=repo,
+                env={**os.environ, "PYTHONHASHSEED": seed},
+            )
+            outs.append(proc.stdout.strip())
+        assert outs[0] == outs[1]
+
+    def test_vectors_for_matches_stored_embeddings(self) -> None:
+        embedder = HashEmbedding(dim=16)
+        store = MemoryVectorStore(embedder)
+        chunks = chunk_text("FPT tăng trưởng lợi nhuận", doc_id="news:1")
+        store.upsert(chunks)
+        assert store.vectors_for(chunks) == [embedder.embed(c.text) for c in chunks]
+

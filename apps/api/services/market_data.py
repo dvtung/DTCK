@@ -53,7 +53,6 @@ class MarketService:
             "VNINDEX": self._make_prices(1200.0),
             "VN30": self._make_prices(1300.0),
         }
-        self._scores = self._make_scores()
         self._quality = self._make_quality()
         self._valuation = self._make_valuation()
         self._news = self._make_news()

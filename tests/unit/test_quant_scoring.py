@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import math
 
+import pytest
+
 from src.market.risk import risk
 from src.quant.factors import scoring
 
@@ -48,6 +50,18 @@ class TestRisk:
 
 
 class TestScoring:
+    def test_weights_match_registry_config(self) -> None:
+        """``configs/scoring_weights.yaml`` must stay in sync with the code."""
+        from pathlib import Path
+
+        yaml = pytest.importorskip("yaml")
+
+        config = Path(__file__).resolve().parents[2] / "configs" / "scoring_weights.yaml"
+        with config.open(encoding="utf-8") as fh:
+            loaded = yaml.safe_load(fh)
+        assert loaded["weights"] == scoring.WEIGHTS
+        assert loaded["version"] == scoring.DEFAULT_SCORING_VERSION
+
     def test_overall_weighted(self) -> None:
         scores: dict[str, float | None] = {
             "fundamental": 80.0,

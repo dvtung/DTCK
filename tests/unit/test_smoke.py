@@ -28,7 +28,9 @@ def test_api_app_imports_and_has_health() -> None:
 def test_worker_cli_ingest_argument() -> None:
     from apps.worker.cli import main
 
-    assert main(["ingest", "--source", "fixture"]) == 0
+    # prices without --symbols must fail loudly instead of "succeeding" with an
+    # empty ingest (and without touching the database).
+    assert main(["ingest", "--source", "fixture"]) == 2
 
 
 def test_seeds_run_all() -> None:

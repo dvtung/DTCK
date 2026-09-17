@@ -57,6 +57,10 @@ def run_ingest(args: argparse.Namespace) -> int:
     """Execute one pipeline run and print its summary + quality gate verdict."""
     from src.data.pipelines import ingest_eod, ingest_index, ingest_news
 
+    if args.dataset == "prices" and not args.symbols:
+        # An empty universe would "succeed" while ingesting nothing — fail loudly.
+        logger.error("--symbols is required for --dataset prices")
+        return 2
     engine = _engine()
     provider = _build_provider(args.source, args)
     if args.dataset == "prices":
@@ -97,7 +101,7 @@ def train_model(args: argparse.Namespace) -> int:
     """
     from apps.api.services.market_data import MarketService
     from src.ml.feature_dataset import FeatureDatasetBuilder
-    from src.ml.model_registry import ModelRegistry
+    from src.ml.model_registry import get_default_registry
     from src.ml.training import ModelTrainer
 
     symbols = args.symbols or None
@@ -110,11 +114,11 @@ def train_model(args: argparse.Namespace) -> int:
         dataset.features.shape[1],
         "feature_v1",
     )
-    registry = ModelRegistry()
+    registry = get_default_registry()
     try:
-        entry = ModelTrainer(horizon_days=args.horizon).train_and_register(
-            dataset, registry
-        )
+        entry = ModelTrainer(
+            horizon_days=args.horizon, algorithm=getattr(args, "algorithm", "xgboost")
+        ).train_and_register(dataset, registry)
     except ValueError as exc:
         logger.error("training rejected: %s", exc)
         return 1
@@ -226,6 +230,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     train.add_argument("--symbols", help="comma-separated tickers (default: full universe)")
     train.add_argument("--horizon", type=int, default=5, help="prediction horizon in trade days")
+    train.add_argument(
+        "--algorithm",
+        default="xgboost",
+        choices=["xgboost", "lightgbm"],
+        help="gradient-boosting implementation (lightgbm needs the optional [ml] extra)",
+    )
     train.set_defaults(
         func=train_model,
         start=None,

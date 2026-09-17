@@ -1,6 +1,65 @@
 # Memory Bank — Changelog
 
-**Last updated:** 2026-09-16
+**Last updated:** 2026-09-17
+
+## 2026-09-17 — Code audit: logic/consistency fixes across data, quant, backtest, ML, RAG, agents, API
+
+- Full-codebase audit (`src/`, `apps/`, `configs/`); 16 defects found and fixed:
+  - **Backtest engine** (`src/backtesting/engine.py`): partial sells booked the WHOLE open leg
+    (P&L inflated ~2×, remainder orphaned) → now logs the sold quantity only and keeps the
+    remainder open (original entry price/date); adding merges into the open leg at VWAP
+    (average-cost). Target weights summing > 1.0 now raise (no implicit margin). Fills ordered
+    **sells before buys**. Added a 0.5% no-trade band (`MIN_REBALANCE_PCT`). Final equity point is
+    re-marked after the end-of-window liquidation (cost included in `final_equity()`).
+  - **Backtest metrics** (`metrics.py`): `transaction_cost_total`/`turnover` counted entry legs
+    only; the engine now reports the exact charged cost/notional via `compute_metrics` overrides
+    (estimate from the trade log stays as fallback for direct pure-function callers).
+  - **Scoring decomposition** (`src/quant/scoring/engine.py`): contributions used RAW baseline
+    weights while the overall score renormalized — shares didn't sum to 1 when factors were
+    missing. Now every contribution uses its renormalized weight (Σ weighted == overall,
+    Σ share == 1). `configs/scoring_weights.yaml` drift-guarded by a unit test.
+  - **RAG store** (`src/rag/retrieval/store.py`): Qdrant point ids used `hash()` (PYTHONHASHSEED-
+    randomized → mirror not idempotent) → `stable_point_id` (sha256-based); added public
+    `MemoryVectorStore.vectors_for()` replacing `RagService`'s private-attr access.
+  - **Dashboard client** (`apps/dashboard/client.py`): called `/stocks/rankings` but the API route
+    is `/stocks/ranked` (per API_SPECIFICATION) → rankings always fell into the in-process
+    fallback; fixed + removed a duplicated dead `_fallback` branch (`/stocks/{symbol}/indicators`
+    was shadowed by a duplicate key).
+  - **Auth** (`apps/api/routers/auth.py`): bad credentials returned HTTP 200 with an error body;
+    now raises 401 `invalid_credentials` and compares via `secrets.compare_digest`.
+  - **Tool catalog** (`src/agents/tools.py`): `call()` allowed any method of the class (incl.
+    private helpers) — whitelist is now the §22 `catalog` itself.
+  - **Model registry** (`src/ml/model_registry.py` + `predictor.py` + `apps/worker/cli.py`): each
+    trainer/prediction service built its own registry → trained models were invisible to serving.
+    Introduced process-wide `get_default_registry()`.
+  - **Pipeline news dedup** (`src/data/pipelines.py`): loaded the ENTIRE `news` table per run;
+    now looks up only this batch's titles (chunked IN). Empty batches return before opening a DB
+    transaction; EOD/index completeness denominators dedup+upper the requested symbols.
+  - **Validators** (`src/data/validators.py`): naive-vs-aware `published_at` comparison could
+    raise TypeError → naive timestamps coerced to local-aware.
+  - **Normalizers** (`resolve_stock_ids`): pointless `Exchange` join removed; now filters
+    `status == 'ACTIVE'` (matching the docstring) and normalizes symbols to upper.
+  - **HttpJsonProvider**: `_build_request` leaked an unclosed `httpx.Client` per call → builds the
+    `httpx.Request` standalone.
+  - **ML training**: `_make_lightgbm` was dead code → wired as an explicit
+    `ModelTrainer(algorithm=...)` option (`xgboost|lightgbm`, honest error when the optional extra
+    is missing); CLI `train-model --algorithm`; parameters record the algorithm.
+  - **Worker CLI**: `ingest --dataset prices` without `--symbols` "succeeded" with an empty run →
+    exits 2 with a clear message; fixture news timestamp moved to 15:00 (a same-day window no
+    longer fetches zero items under `published > since`).
+  - **RagService singleton**: `get_rag_service()` now seeds from the SHARED `MarketService`
+    (`get_market_service()`), not a separate instance; monitoring router uses the singleton.
+  - **Feature dataset** (`src/ml/feature_dataset.py`): `FEATURE_VERSION`/`DEFAULT_HORIZON_DAYS`
+    were defined twice; single definition at module top.
+- Tests: +17 unit tests (partial sell, weight-sum guard, both-legs cost/turnover, engine-vs-
+  metrics cost identity, renormalized contributions, stable point ids across PYTHONHASHSEED,
+  fixture news visibility, private-tool rejection, 401 auth, algorithm flag, weights-vs-yaml
+  sync). **342 passed, 1 skipped** · `ruff check .` clean · mypy clean (119 files).
+- Docs updated: `docs/BACKTESTING.md` §6 (execution rules), `docs/QUANT_ENGINE.md` §7
+  (decomposition contract), `docs/API_SPECIFICATION.md` §3 (401 semantics),
+  `helper/resources.md` (CLI reference); htmldocs `index.html`/`status.html`/`modules.html`
+  (test counts 301→342, backtest execution rules, audit row); memory-bank (this file,
+  `current-state.md`, `known-issues.md`, `tasks.md`).
 
 ## 2026-09-16 — T014: ML prediction (feature dataset + training + calibration + registry + API)
 

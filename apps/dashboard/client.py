@@ -55,39 +55,8 @@ class MarketClient:
                 sector=params.get("sector"),
                 vn30=params.get("vn30"),
             )
-        if key == "/stocks/rankings":
+        if key == "/stocks/ranked":
             return self._svc.get_ranked()
-        if key == "/news":
-            return self._svc.list_news()
-        if key == "/backtests":
-            return self._svc.list_backtests()
-        if key.startswith("/backtests/"):
-            tail = key.removeprefix("/backtests/")
-            bt_id, slash, sub = tail.partition("/")
-            if slash and sub == "metrics":
-                return self._svc.get_backtest_metrics(bt_id)
-            if slash and sub == "trades":
-                return self._svc.get_backtest_trades(bt_id)
-            if not slash:
-                return self._svc.get_backtest(bt_id) or {}
-        if not symbol:
-            if key in ("/healthz", "/readyz"):
-                return {"status": "ok", "service": "dashboard-fallback"}
-            return {}
-        if key == "/stocks/{symbol}":
-            return self._svc.get_stock(symbol) or {}
-        if key == "/stocks/{symbol}/prices":
-            return self._svc.get_prices(symbol) or []
-        if key == "/stocks/{symbol}/ranking":
-            return self._svc.get_ranking(symbol) or {}
-        if key == "/stocks/{symbol}/indicators":
-            return self._svc.get_indicators(symbol) or {}
-        if key == "/valuation/{symbol}/summary":
-            return self._svc.get_valuation_summary(symbol) or {}
-        if key == "/fundamentals/{symbol}/quality":
-            return self._svc.get_quality(symbol) or {}
-        if key == "/technical/{symbol}/indicators":
-            return self._svc.get_indicators(symbol) or {}
         if key == "/news":
             return self._svc.list_news()
         if key == "/backtests":
@@ -103,6 +72,20 @@ class MarketClient:
                 return self._svc.get_backtest(bt_id) or {}
         if key in ("/healthz", "/readyz"):
             return {"status": "ok", "service": "dashboard-fallback"}
+        if not symbol:
+            return {}
+        if key == "/stocks/{symbol}":
+            return self._svc.get_stock(symbol) or {}
+        if key == "/stocks/{symbol}/prices":
+            return self._svc.get_prices(symbol) or []
+        if key == "/stocks/{symbol}/ranking":
+            return self._svc.get_ranking(symbol) or {}
+        if key == "/technical/{symbol}/indicators":
+            return self._svc.get_indicators(symbol) or {}
+        if key == "/valuation/{symbol}/summary":
+            return self._svc.get_valuation_summary(symbol) or {}
+        if key == "/fundamentals/{symbol}/quality":
+            return self._svc.get_quality(symbol) or {}
         raise KeyError(f"Unknown dashboard route: {key}")
 
     # -- high-level accessors ----------------------------------------------
@@ -119,7 +102,7 @@ class MarketClient:
         return self._get("/api/v1/stocks")  # type: ignore[return-value]
 
     def get_ranked(self) -> list[dict[str, Any]]:
-        return self._get("/api/v1/stocks/rankings")  # type: ignore[return-value]
+        return self._get("/api/v1/stocks/ranked")  # type: ignore[return-value]
 
     def get_stock(self, symbol: str) -> dict[str, Any]:
         return self._get("/api/v1/stocks/{symbol}", symbol=symbol)  # type: ignore[return-value]

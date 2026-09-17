@@ -24,7 +24,7 @@
 <tr><td>Kiểm thử ngược (backtest)</td><td><div class="bar"><div style="width:90%"></div></div>90%</td><td><span class="pill prog">T009 xong · chờ dữ liệu thật (KI-009)</span></td></tr>
 <tr><td>API REST</td><td><div class="bar"><div style="width:85%"></div></div>85%</td><td><span class="pill prog">T010 xong · chờ nối CSDL (KI-008)</span></td></tr>
 <tr><td>RAG / Bằng chứng</td><td><div class="bar"><div style="width:85%"></div></div>85%</td><td><span class="pill prog">T012 xong · chờ thật tin tức + Qdrant (KI-011)</span></td></tr>
-  <tr><td>Tác tử AI</td><td><div class="bar"><div style="width:95%"></div></div>95%</td><td><span class="pill done">T013 xong · tượng đương, offline, không LLM (301 kiểm thử)</span></td></tr>
+  <tr><td>Tác tử AI</td><td><div class="bar"><div style="width:95%"></div></div>95%</td><td><span class="pill done">T013 xong · tượng đương, offline, không LLM (342 kiểm thử)</span></td></tr>
 <tr><td>Học máy (ML)</td><td><div class="bar"><div style="width:80%"></div></div>80%</td><td><span class="pill prog">T014 xong · chờ dữ liệu thật (KI-012)</span></td></tr>
 <tr><td>Bảng điều khiển</td><td><div class="bar"><div style="width:85%"></div></div>85%</td><td><span class="pill prog">T011 xong · hiển thị dữ liệu tổng hợp (KI-010)</span></td></tr>
 <tr><td>Vận hành thật</td><td><div class="bar"><div style="width:0%"></div></div>0%</td><td><span class="pill todo">T015</span></td></tr>
@@ -46,6 +46,7 @@
 <tr><td>T012</td><td>Tin tức + RAG + bằng chứng</td><td><code>src/rag/</code> (chunking, hash-embedding, kho trong bộ nhớ + adaptor Qdrant, truy xuất hỗn, rerank) + <code>src/evidence/</code> (§19) + 3 endpoint API + 23 kiểm thử</td></tr>
 <tr><td>T013</td><td>Tác tử AI + orchestrator + audit (§20–§24/§31/§41)</td><td><code>src/agents/</code> (research/analysis/monitoring/portfolio + orchestrator + audit + registry + tool catalog), <code>src/agents/util.py</code>; CLI <code>run-agent</code> (4 task); 10 endpoint API (<code>/api/v1/agents/*</code> + <code>/api/v1/analysis/*</code>); tất định, không LLM — <b>70 kiểm thử</b> (63 agent + 7 API)</td></tr>
 <tr><td>T014</td><td>ML: dataset + XGBoost + hiệu chuẩn + registry</td><td><code>src/ml/</code> (feature dataset as-of, huấn luyện tạm-thời, hiệu chuẩn sigmoid, registry vòng đời), <code>/api/v1/predictions</code> (3 endpoint), CLI <code>train-model</code>; chặn rò rỉ mục tiêu + KI-012</td></tr>
+<tr><td>Bảo trì</td><td>Kiểm toán logic + sửa lỗi (2026-09-17)</td><td>Sửa accounting backtest (bán-một-phần ghi sai số lượng, chi phí thiếu leg ra, không chặn tổng trọng số &gt; 1, bán trước mua sau), phân rã chấm điểm chuẩn hóa trọng số (Σ share = 100%), Qdrant point id tất định, dashboard client sai route <code>/stocks/ranked</code>, auth sai thông tin trả 401, whitelist tool §22, registry ML dùng chung, CLI yêu cầu <code>--symbols</code>; +17 kiểm thử (342 tổng)</td></tr>
 </table>
 <h2 class="sec">Lộ trình (thứ tự theo đặc tả §57)</h2>
 <table>

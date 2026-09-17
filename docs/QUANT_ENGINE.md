@@ -142,6 +142,11 @@ FPT Overall Score: 86
   Risk:        73  → Volatility | Beta | MaxDD | Liquidity
 ```
 
+Decomposition contract (`src/quant/scoring/engine.py`): when a factor score is missing the remaining
+weights are **renormalized**, and every reported contribution uses its renormalized weight, so
+`Σ weighted_score == overall_score` and `Σ contribution_pct == 1` (shares add up to 100% of the
+score). `weight` is therefore the *applied* weight, not the raw `scoring_weights.yaml` baseline.
+
 ---
 
 # 8. Testing Requirements (§38)

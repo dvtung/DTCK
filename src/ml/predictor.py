@@ -18,6 +18,7 @@ from src.ml.model_registry import (
     STATUS_APPROVED,
     ModelEntry,
     ModelRegistry,
+    get_default_registry,
 )
 
 __all__ = ["Prediction", "PredictionService"]
@@ -73,7 +74,7 @@ class PredictionService:
         horizon_days: int = 5,
     ) -> None:
         self._market = market
-        self._registry = registry or ModelRegistry()
+        self._registry = registry or get_default_registry()
         self._builder = FeatureDatasetBuilder(horizon_days=horizon_days)
         self._horizon = horizon_days
 

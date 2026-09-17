@@ -91,6 +91,14 @@ def test_worker_cli_train_model_help() -> None:
     assert args.func.__name__ == "train_model"
 
 
+def test_worker_cli_train_model_algorithm_flag() -> None:
+    from apps.worker.cli import build_parser
+
+    parser = build_parser()
+    assert parser.parse_args(["train-model"]).algorithm == "xgboost"
+    assert parser.parse_args(["train-model", "--algorithm", "lightgbm"]).algorithm == "lightgbm"
+
+
 def test_prediction_validation_endpoint_matches_schema() -> None:
     resp = client.get("/api/v1/predictions/VCB/validation")
     assert resp.status_code == 200

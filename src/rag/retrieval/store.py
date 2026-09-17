@@ -8,6 +8,7 @@ in-memory index always remains the source of truth for tests.
 
 from __future__ import annotations
 
+import hashlib
 import os
 from dataclasses import dataclass, field
 from typing import Any
@@ -16,6 +17,13 @@ from src.rag.embedding.hash_embed import EmbeddingModel, cosine_similarity
 from src.rag.ingestion.chunking import Chunk
 
 PAYLOAD_INDEXES = ("symbol", "published_at", "source", "doc_type")
+
+
+def stable_point_id(chunk_id: str) -> int:
+    """Process-stable positive 63-bit id for a chunk (never ``hash()`` — that
+    is randomized per process and would break Qdrant upsert idempotency)."""
+    digest = hashlib.sha256(chunk_id.encode("utf-8")).digest()[:8]
+    return int.from_bytes(digest, "big") >> 1
 
 
 @dataclass
@@ -86,6 +94,10 @@ class MemoryVectorStore:
         self._chunks.clear()
         self._vectors.clear()
 
+    def vectors_for(self, chunks: list[Chunk]) -> list[list[float]]:
+        """Stored embeddings for ``chunks`` (public API for mirror adapters)."""
+        return [self._vectors[c.chunk_id] for c in chunks]
+
 
 class QdrantAdapter:
     """Optional mirror to a real Qdrant collection (best-effort, offline-safe).
@@ -141,7 +153,7 @@ class QdrantAdapter:
             from qdrant_client.models import PointStruct
             points = [
                 PointStruct(
-                    id=abs(hash(c.chunk_id)) % (2**63),
+                    id=stable_point_id(c.chunk_id),
                     vector=v,
                     payload={
                         "chunk_id": c.chunk_id, "doc_id": c.doc_id,
@@ -160,4 +172,10 @@ class QdrantAdapter:
             return 0
 
 
-__all__ = ["MemoryVectorStore", "QdrantAdapter", "ScoredChunk", "PAYLOAD_INDEXES"]
+__all__ = [
+    "MemoryVectorStore",
+    "QdrantAdapter",
+    "ScoredChunk",
+    "PAYLOAD_INDEXES",
+    "stable_point_id",
+]

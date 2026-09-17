@@ -312,10 +312,15 @@ class ToolCatalog:
         )
 
     def call(self, name: str, **kwargs: Any) -> dict[str, Any]:
-        """Invoke a tool by name (orchestrator + audit hook)."""
-        fn = getattr(self, name, None)
-        if not callable(fn) or name in ("catalog", "call", "collect"):
+        """Invoke a tool by name (orchestrator + audit hook).
+
+        Only names published in ``catalog`` are callable — private helpers and
+        non-tool attributes are rejected so the catalog is the real §22/§41
+        tool surface, not ``getattr`` on the class.
+        """
+        if name not in self.catalog:
             raise ValueError(f"unknown tool '{name}'")
+        fn = getattr(self, name)
         started = perf_counter()
         try:
             result = fn(**kwargs)

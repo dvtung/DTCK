@@ -240,3 +240,19 @@ def test_analysis_async_pattern() -> None:
 def test_readyz_reports_agents() -> None:
     body = client.get("/readyz").json()
     assert body["dependencies"]["agents"].startswith("offline:")
+def test_auth_rejects_bad_credentials_with_401() -> None:
+    """Invalid credentials are an auth failure (401), not a 200 with an error body."""
+    r = client.post(
+        "/api/v1/auth/login", json={"email": "nobody@dtck.local", "password": "wrong"}
+    )
+    assert r.status_code == 401
+    assert r.json()["detail"]["error"]["code"] == "invalid_credentials"
+
+
+def test_auth_wrong_password_for_known_email_is_401() -> None:
+    r = client.post(
+        "/api/v1/auth/login",
+        json={"email": "admin@dtck.local", "password": "not-admin123"},
+    )
+    assert r.status_code == 401
+

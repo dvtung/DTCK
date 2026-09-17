@@ -121,7 +121,10 @@ def profit_factor(trades: list[Trade]) -> float:
 
 
 def turnover(trades: list[Trade], initial_capital: float) -> float:
-    traded = sum(t.entry_price * t.quantity for t in trades)
+    """Traded notional (entry + exit legs) / initial capital."""
+    traded = sum(
+        t.entry_price * t.quantity + (t.exit_price or 0.0) * t.quantity for t in trades
+    )
     if initial_capital <= 0:
         return 0.0
     return traded / initial_capital
@@ -130,8 +133,14 @@ def turnover(trades: list[Trade], initial_capital: float) -> float:
 def transaction_cost_total(
     trades: list[Trade], commission_bps: float, slippage_bps: float
 ) -> float:
+    """Both entry and exit fills incur costs (mirrors the engine's cash flow)."""
     bps = (commission_bps + slippage_bps) / 10_000.0
-    return sum(t.entry_price * t.quantity * bps for t in trades)
+    total = 0.0
+    for t in trades:
+        total += t.entry_price * t.quantity * bps
+        if t.exit_price is not None:
+            total += t.exit_price * t.quantity * bps
+    return total
 
 
 def compute_metrics(
@@ -142,7 +151,15 @@ def compute_metrics(
     commission_bps: float = 15.0,
     slippage_bps: float = 5.0,
     trading_days: int = TRADING_DAYS,
+    traded_notional: float | None = None,
+    execution_cost: float | None = None,
 ) -> dict[str, float]:
+    """Performance metrics for one run.
+
+    ``traded_notional`` / ``execution_cost`` are the engine's *actual* fills
+    (source of truth). When omitted, they are estimated from the trade log so
+    direct callers of this pure function still get sensible numbers.
+    """
     return {
         "total_return": total_return(curve),
         "cagr": cagr(curve, trading_days),
@@ -153,6 +170,14 @@ def compute_metrics(
         "calmar_ratio": calmar_ratio(curve, trading_days),
         "win_rate": win_rate(trades),
         "profit_factor": profit_factor(trades),
-        "turnover": turnover(trades, initial_capital),
-        "transaction_cost": transaction_cost_total(trades, commission_bps, slippage_bps),
+        "turnover": (
+            turnover(trades, initial_capital)
+            if traded_notional is None
+            else (traded_notional / initial_capital if initial_capital > 0 else 0.0)
+        ),
+        "transaction_cost": (
+            transaction_cost_total(trades, commission_bps, slippage_bps)
+            if execution_cost is None
+            else execution_cost
+        ),
     }

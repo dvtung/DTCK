@@ -83,7 +83,18 @@ Run types stored in `backtests.run_type`.
 # 6. Execution Simulation
 
 - Signals produced on day `t` using close-of-`t` data → trades execute at `t+1` open (avoids look-ahead).
-- Transaction costs: `commission_bps + slippage_bps` recorded on `backtests` (configurable per run).
+- Transaction costs: `commission_bps + slippage_bps` charged on **every fill** (entry and exit) and
+  deducted from cash; the engine reports the exact charged total as `transaction_cost` (the trade
+  log is not used to re-derive it).
+- Target weights must sum to ≤ 1.0 (long-only, no implicit margin); a run with a larger sum raises.
+- Fills are ordered **sells before buys** so freed cash funds the rebalance.
+- A **no-trade band** (`MIN_REBALANCE_PCT = 0.5%` of portfolio value) skips economically
+  meaningless rebalance drift instead of burning commission on dust trades.
+- Partial exits are logged with the **sold quantity only**; the remainder stays open with its
+  original entry price/date. Adds are merged into the open leg at the volume-weighted entry price
+  (average-cost accounting).
+- The final equity point is re-marked **after** the end-of-window liquidation, so `final_equity()`
+  includes the cost of closing out.
 - Corporate actions applied via adjusted prices so returns are continuous.
 
 ---

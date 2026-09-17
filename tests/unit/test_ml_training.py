@@ -90,3 +90,17 @@ def test_invalid_binary_labels_rejected() -> None:
     invalid = replace(dataset, target_positive=pd.Series([2] * 206))
     with pytest.raises(ValueError, match="labels must be"):
         ModelTrainer().train(invalid)
+def test_unknown_algorithm_rejected() -> None:
+    with pytest.raises(ValueError, match="algorithm must be"):
+        ModelTrainer(algorithm="catboost")
+
+
+def test_lightgbm_without_dependency_is_reported_honestly() -> None:
+    """Selecting lightgbm without the optional extra must fail loudly, not silently."""
+    import importlib.util
+
+    if importlib.util.find_spec("lightgbm") is not None:
+        pytest.skip("lightgbm installed — the optional path is exercised instead")
+    with pytest.raises(ValueError, match="lightgbm"):
+        ModelTrainer(algorithm="lightgbm").train(mixed_dataset())
+

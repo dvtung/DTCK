@@ -50,7 +50,11 @@
 ## CLI scripts
 
 - `python -m database.seeds.run_all` — seed reference data
-- `python -m apps.worker.cli ingest --source=... --date=...` — run a collector
+- `python -m apps.worker.cli ingest --dataset prices --source fixture --symbols FPT,VCB --start … --end …` — run a collector
+  (`--dataset prices` requires `--symbols`; exits `2` instead of reporting an empty ingest as success)
+- `python -m apps.worker.cli train-model [--horizon 5] [--algorithm xgboost|lightgbm]` — train + calibrate + register
+  (`lightgbm` needs the optional `[ml]` extra; the CLI reports honestly when it is missing)
+- `python -m apps.worker.cli run-agent --task analyze --symbol FPT` — offline agent run
 - `uvicorn apps.api.main:app --reload` — **chạy API REST phát triển** (cổng 8000)
 - `python -m apps.api.main` — chạy API bằng `python -m`
 - `curl localhost:8000/docs` — tài liệu tương tác (Swagger UI)

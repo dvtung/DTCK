@@ -1,6 +1,6 @@
 # Memory Bank — Current State
 
-**Last updated:** 2026-09-16
+**Last updated:** 2026-09-17
 
 ---
 
@@ -38,7 +38,7 @@ Production:     ░░░░░░░░░░░░░░░░░░░░   0
 - **Backtesting engine** (`src/backtesting/`, T009) — `models.py` (PriceBar/BacktestData/ExecutionCosts/Trade/EquityPoint/BacktestConfig/BacktestResult), `metrics.py` (total return, CAGR, volatility, Sharpe, Sortino, max drawdown, Calmar, win rate, profit factor, turnover, transaction-cost total), `engine.py` (`run_backtest`, `select_window`, rebalance/close-leg logic), `walkforward.py` (`walk_forward_windows`, `rolling_windows`). Deterministic, cost-aware, no look-ahead.
 - **REST API** (`apps/api/`, T010) — FastAPI app with 7 router groups (`market`, `stocks`, `fundamentals`, `technical`, `valuation`, `news`, `backtests`) = 23 paths / 24 operations per `docs/API_SPECIFICATION.md`; shared pagination + `not_found` error envelope; 21 Pydantic schemas; `/healthz` + `/readyz`; `MarketDep` dependency injection.
 - **Streamlit dashboard** (`apps/dashboard/`, T011) — `client.py` (`MarketClient`: HTTP-first over `/api/v1/*`, in-process `MarketService` fallback offline), `components.py` (pure-Python signal/format/ranking/decomposition transforms), `app.py` (6 pages: market overview, screener, rankings, stock detail, backtests, system health; plotly candlestick/scatter/contribution charts).
-- Tests: 209 total pass; ruff + mypy (strict over `src/` + `apps/`) clean.
+- Tests: 342 total pass / 1 skipped; ruff + mypy (strict over `src/` + `apps/`) clean.
 - **Fundamental factors** (`src/market/fundamental/factors.py`) — revenue/EPS growth, ROE, ROA, margins, D/E, interest coverage, FCF, FCF margin, earnings quality. All return `None` on zero denominators.
 - **Valuation** (`src/market/valuation/valuation.py`) — P/E, forward P/E, P/B, EV/EBITDA, EV/Sales, dividend yield, PEG, enterprise value + percentile ranks (industry/historical).
 - **Momentum** (`src/market/momentum/momentum.py`) — n-day returns, multi-period, volume expansion, relative momentum vs benchmark.
@@ -83,8 +83,8 @@ Production:     ░░░░░░░░░░░░░░░░░░░░   0
 9. DASHBOARD              → DONE (T011 Streamlit overview/screener/rankings/detail/backtests/health, 2026-09-15)
 10. RAG                   → DONE (T012 news+RAG+evidence, 2026-09-15; Qdrant adapter best-effort — KI-011)
 11. AI AGENT              → DONE (T013, 2026-09-16: 4 agents + orchestrator + audit + 70 tests)
-12. ML PREDICTION         → T014 (next)
-12. ML PREDICTION         → T014
+12. ML PREDICTION         → DONE (T014, 2026-09-16; real training pending KI-012)
+12b. CODE AUDIT           → DONE (MAINT-2026-09-17: 16 logic/consistency fixes, 342 tests)
 13. PORTFOLIO INTELLIGENCE
 14. PRODUCTION            → T015
 ```

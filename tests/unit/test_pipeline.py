@@ -55,6 +55,19 @@ def make_index(code="VNINDEX", d=None, **over):
     return IndexBar(**defaults)
 
 
+def test_fixture_news_is_visible_on_a_same_day_window() -> None:
+    """A one-day window must still surface the fixture news item.
+
+    Regression: the item was stamped at 00:00 of the window end while ``since``
+    defaults to 00:00 of the window start, so ``published > since`` dropped it.
+    """
+    provider = build_fixture_provider(symbols=["FPT", "VCB"], start=END, end=END)
+    since = datetime.combine(END, datetime.min.time(), tzinfo=UTC)
+    items = provider.fetch_news(since)
+    assert len(items) == 1
+    assert items[0].published_at > since
+
+
 def make_news(**over):
     defaults = dict(
         source="test",

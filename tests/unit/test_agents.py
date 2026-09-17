@@ -198,6 +198,13 @@ class TestToolCatalog:
         with pytest.raises(ValueError, match="invalid arguments"):
             tools.call("get_stock_price")
 
+    def test_private_helpers_are_not_callable(self) -> None:
+        """Only §22 catalog tools are reachable — no ``getattr`` escape hatch."""
+        tools = _tools()
+        for name in ("_peer_symbols", "_record", "_market", "_rag"):
+            with pytest.raises(ValueError, match="unknown tool"):
+                tools.call(name)
+
     def test_collect_records_tool_calls(self) -> None:
         tools = _tools()
         sink: list[object] = []

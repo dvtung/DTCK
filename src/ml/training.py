@@ -138,15 +138,27 @@ class TrainingResult:
 
 
 class ModelTrainer:
-    """Train an XGBoost classifier with temporal splits + calibration.
+    """Train a gradient-boosting classifier with temporal splits + calibration.
 
-    Temporal split: first 60% of dates for training, next 20% for validation,
-    last 20% for test.  No shuffling across time (§17).
+    Algorithm is selectable: ``xgboost`` (default, required dependency) or
+    ``lightgbm`` (optional ``[ml]`` extra).  Temporal split: first 60% of dates
+    for training, next 20% for validation, last 20% for test.  No shuffling
+    across time (§17).
     """
 
-    def __init__(self, horizon_days: int = 5, random_state: int = 42) -> None:
+    def __init__(
+        self,
+        horizon_days: int = 5,
+        random_state: int = 42,
+        algorithm: str = "xgboost",
+    ) -> None:
+        if algorithm not in ("xgboost", "lightgbm"):
+            raise ValueError(
+                f"algorithm must be 'xgboost' or 'lightgbm', got {algorithm!r}"
+            )
         self.horizon_days = horizon_days
         self.random_state = random_state
+        self.algorithm = algorithm
 
     _VALID_TARGET_COLS = ("target_positive",)
 
@@ -214,7 +226,15 @@ class ModelTrainer:
         x_test_s = scaler.transform(x_test)
 
         # XGBoost with modest depth (synthetic data is small)
-        model = _make_xgboost(self.random_state)
+        if self.algorithm == "lightgbm":
+            model = _make_lightgbm(self.random_state)
+            if model is None:
+                raise ValueError(
+                    "algorithm='lightgbm' requires the optional lightgbm dependency "
+                    "(pip install 'dtck[ml]'); use algorithm='xgboost' otherwise"
+                )
+        else:
+            model = _make_xgboost(self.random_state)
         model.fit(x_train_s, y_train)
 
         # Calibrate on validation set (Platt = sigmoid, fast for small data)
@@ -268,7 +288,12 @@ class ModelTrainer:
             scaler=result.scaler,
             feature_columns=result.feature_columns,
             metrics=result.metrics,
-            parameters={"n_estimators": 50, "max_depth": 3, "calibration": "sigmoid"},
+            parameters={
+                "n_estimators": 50,
+                "max_depth": 3,
+                "algorithm": self.algorithm,
+                "calibration": "sigmoid",
+            },
             owner="system",
             status="APPROVED",
         )

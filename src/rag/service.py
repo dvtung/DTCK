@@ -48,7 +48,7 @@ class RagService:
         for it in items:
             chunks.extend(chunk_news_item(it, max_chars=max_chars))
         n = self._store.upsert(chunks)
-        vecs = [self._store._vectors[c.chunk_id] for c in chunks]  # noqa: SLF001
+        vecs = self._store.vectors_for(chunks)
         mirrored = self._qdrant.upsert(chunks, vecs)
         self._ingested_docs += len(items)
         return {"docs": len(items), "chunks": n, "mirrored": mirrored}

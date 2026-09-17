@@ -51,10 +51,6 @@ class MarketLike(Protocol):
     def list_news(self) -> list[dict[str, object]]: ...
 
 
-FEATURE_VERSION = "feature_v1"
-DEFAULT_HORIZON_DAYS = 5
-
-
 @dataclass(frozen=True)
 class Dataset:
     """A ready-to-train dataset with as-of-aligned features and targets.

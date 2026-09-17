@@ -34,6 +34,8 @@ class TestDecompose:
         weighted_sum = sum(c.weighted_score for c in dec.contributions)
         # renormalized over available factors (all 6 present → weights sum to 1)
         assert abs(weighted_sum - dec.overall_score) < 1e-9
+        # contribution shares must add up to 1 when all 6 dimensions exist
+        assert abs(sum(c.contribution_pct or 0.0 for c in dec.contributions) - 1.0) < 1e-9
 
     def test_renormalization_excludes_missing(self) -> None:
         scores = _full_scores()
@@ -56,13 +58,31 @@ class TestDecompose:
         assert dec.overall_score is None
         assert dec.contributions == []
 
-    def test_weighted_score_uses_stored_weight(self) -> None:
+    def test_single_factor_renormalizes_to_full_weight(self) -> None:
+        """One available factor drives 100% of the score (weight 1.0, share 1.0)."""
         scores = {"fundamental": 100.0}
         dec = decompose_score(scores)
         assert len(dec.contributions) == 1
-        assert dec.contributions[0].weight == 0.30
-        assert dec.contributions[0].weighted_score == 30.0
+        contribution = dec.contributions[0]
+        assert contribution.weight == 1.0  # renormalized from baseline 0.30
+        assert contribution.weighted_score == 100.0
+        assert contribution.contribution_pct == 1.0
         assert dec.overall_score == 100.0  # renormalized single-dimension
+
+    def test_weights_are_renormalized_over_available_factors(self) -> None:
+        """Σ weighted_score == overall and Σ contribution_pct == 1 even when
+        factors are missing (the overall score itself is renormalized)."""
+        scores = {k: None for k in _full_scores()}
+        scores["fundamental"] = 80.0
+        scores["valuation"] = 40.0
+        dec = decompose_score(scores)
+        assert dec.overall_score is not None
+        weight_sum = sum(c.weight for c in dec.contributions)
+        assert abs(weight_sum - 1.0) < 1e-12  # stored weights sum to 1
+        weighted_sum = sum(c.weighted_score for c in dec.contributions)
+        assert abs(weighted_sum - dec.overall_score) < 1e-9
+        pct_sum = sum(c.contribution_pct or 0.0 for c in dec.contributions)
+        assert abs(pct_sum - 1.0) < 1e-9
 
 
 class TestBuildPayloads:

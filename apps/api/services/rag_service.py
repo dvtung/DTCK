@@ -11,14 +11,14 @@ from src.rag.service import RagService
 def get_rag_service() -> RagService:
     """Provide the process-wide RAG + evidence service (MVP-2).
 
-    Lazily seeded from the in-memory ``MarketService`` news fixture on
-    first use so the endpoints work with zero setup.
+    Lazily seeded from the shared ``MarketService`` news fixture on first use so
+    the endpoints work with zero setup (empty index is a valid baseline).
     """
     svc = RagService()
     try:
-        from apps.api.services.market_data import MarketService
+        from apps.api.dependencies import get_market_service
 
-        items = MarketService().list_news()
+        items = get_market_service().list_news()
         if items:
             svc.ingest_news_items(items)
     except Exception:  # noqa: BLE001 — empty index is a valid baseline
