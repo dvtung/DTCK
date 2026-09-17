@@ -50,6 +50,26 @@ docker compose logs -f db  # đợi "database system is ready to accept connecti
 
 **Thứ tự phụ thuộc:** `timescaledb` → `qdrant` → `api` + `worker` + `dashboard`. Nếu port conflict, đổi trong `.env` (`POSTGRES_PORT`, `API_PORT=8000`, `DASHBOARD_PORT=8501`).
 
+### Nếu API lỗi `ModuleNotFoundError: No module named 'sklearn'`
+
+`sklearn` thuộc package **scikit-learn**, nằm trong extra `[ml]` của dự án.
+Dockerfile API/worker đã chuyển sang cài `.[dev,ml]`; package ML dùng lazy import
+để API không kéo training stack ngay khi khởi động.
+
+Phải **build lại image và tạo lại container**, chỉ `restart` không cài dependency mới:
+
+```bash
+docker compose build api worker
+docker compose up -d --no-deps api worker
+docker compose exec -T api python -c "import sklearn, xgboost, lightgbm; print(sklearn.__version__)"
+docker compose exec -T worker python -c "from src.ml import ModelTrainer; print('OK')"
+docker compose exec -T api curl --fail http://localhost:8000/healthz
+```
+
+Không cần xóa volume hay chạy lại migration. Image lớn hơn vì chứa thư viện ML;
+không cần đổi Python 3.12 hay thêm biến môi trường.
+
+
 ---
 
 ## Giai đoạn 2: Database migration + seed

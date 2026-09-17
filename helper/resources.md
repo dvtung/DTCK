@@ -18,6 +18,12 @@
 | Dashboard | Streamlit | 1.3x |
 | Migrations | Alembic + SQLAlchemy | 2.x |
 
+API/worker Docker images install `.[dev,ml]`: scikit-learn `>=1.4,<2.0`,
+xgboost `>=2.0,<3.0`, lightgbm `>=4.3,<5.0` (declared in `pyproject.toml`).
+Rebuild after Dockerfile dependency changes; restarting does not update packages.
+See the sklearn troubleshooting steps in `helper/deployment.md`.
+
+
 ## Environment variables (from `.env.example`)
 
 | Var | Purpose |

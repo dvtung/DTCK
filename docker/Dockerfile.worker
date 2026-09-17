@@ -16,6 +16,8 @@ COPY pyproject.toml README.md ./
 COPY src ./src
 COPY apps ./apps
 COPY database ./database
-RUN pip install --upgrade pip && pip install -e ".[dev]"
+# [ml] extra: the worker runs train-model (scikit-learn/xgboost); [dev] keeps
+# pytest/ruff/mypy available in this image.
+RUN pip install --upgrade pip && pip install -e ".[dev,ml]"
 
 CMD ["python", "-m", "apps.worker.main"]

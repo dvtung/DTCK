@@ -39,6 +39,25 @@ docker compose down -v                # WIPEOUT volumes (destructive — data lo
 See `.env.example` — never commit real secrets.
 
 ## Known issues / troubleshooting
+### API fails with `ModuleNotFoundError: No module named 'sklearn'`
+
+API and worker images install the existing `.[dev,ml]` extra. `sklearn` is
+provided by the `scikit-learn` package. The ML package also loads training exports
+lazily so API startup does not require the optional training stack.
+
+After updating the Dockerfiles, rebuild and recreate (restart alone is insufficient):
+
+```bash
+docker compose build api worker
+docker compose up -d --no-deps api worker
+docker compose exec -T api python -c "import sklearn, xgboost, lightgbm; print(sklearn.__version__)"
+docker compose exec -T api curl --fail http://localhost:8000/healthz
+```
+
+These commands preserve database volumes. ML packages increase image size and
+build time; no new environment variables are needed.
+
+
 
 - **Port conflicts:** change `POSTGRES_PORT`, `API_PORT` etc. in `.env`.
 - **TimescaleDB not ready:** worker/api depend_on healthcheck; wait for `pg_isready`.

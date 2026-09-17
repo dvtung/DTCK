@@ -1,5 +1,25 @@
 # Memory Bank — Active Task
 
+## Deployment fix — missing sklearn (2026-09-17)
+
+**State:** COMPLETED
+**Goal:** API starts with reproducible ML dependencies in Docker; preserve public ML imports.
+**Scope:** API/worker Dockerfiles, lazy ML package exports, regression tests and deployment docs.
+**Constraints:** Preserve existing Compose edits and database volumes; use existing `[ml]` extra.
+
+- [x] Build API/worker images: `BUILD_EXIT_CODE=0`.
+- [x] Recreate only API/worker with `docker compose up -d --no-deps api worker`.
+- [x] API imports sklearn 1.9.1, xgboost 2.1.4, lightgbm 4.7.0; worker imports ModelTrainer.
+- [x] Container `/healthz` and `/api/v1/predictions/VNM` return HTTP 200.
+- [x] Lint, types and unit regression tests (including blocked optional ML imports).
+  - `ruff check .` clean · `mypy src apps` clean (119 files) · `pytest tests/unit` **343 passed, 1 skipped**
+    (run with `LLM_PROVIDER=mock`; local `.env` sets `ollama`, which the smoke-test allowlist rejects)
+  - In-container: `import sklearn` → 1.9.1; blocked-import smoke proves `apps.api.main`
+    imports without sklearn and `src.ml.training` stays lazy.
+
+## Previous task
+
+
 **ID:** `T014 — ML prediction: feature dataset + training + calibration + registry + predictions API (Phase 6)`
 **State:** COMPLETED (2026-09-16)
 

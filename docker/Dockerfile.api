@@ -13,12 +13,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install project (editable, dev deps included so tests can run in this image)
+# Install project (editable). [ml] = scikit-learn/xgboost — the API imports the
+# ML layer via agent tools + the predictions endpoints; [dev] keeps pytest/ruff/
+# mypy available in this image.
 COPY pyproject.toml README.md ./
 COPY src ./src
 COPY apps ./apps
 COPY database ./database
-RUN pip install --upgrade pip && pip install -e ".[dev]"
+RUN pip install --upgrade pip && pip install -e ".[dev,ml]"
 
 EXPOSE 8000
 
