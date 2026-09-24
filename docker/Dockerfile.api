@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install project (editable). [ml] = scikit-learn/xgboost — the API imports the
 # ML layer via agent tools + the predictions endpoints; [dev] keeps pytest/ruff/
 # mypy available in this image.
-COPY pyproject.toml README.md ./
+COPY pyproject.toml README.md alembic.ini ./
 COPY src ./src
 COPY apps ./apps
 COPY database ./database

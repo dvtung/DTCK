@@ -1,6 +1,40 @@
 # Memory Bank — Changelog
 
-**Last updated:** 2026-09-17
+**Last updated:** 2026-09-18 (2)
+
+## 2026-09-18 (2) — Phase 2 unblocked from the host (`POSTGRES_PASSWORD` drift)
+
+- `.env` restored to `POSTGRES_PASSWORD=change_me` + matching `DATABASE_URL` (the value the
+  database volume was initialised with on 2026-09-13); stack recreated so api/worker pick
+  up the new DSN. `POSTGRES_PASSWORD` is only read at first init, so editing `.env` alone
+  never changes an existing role — documented in `docs/DEPLOYMENT_vi.md` +
+  `helper/deployment.md`.
+- Host-side phase-2 verification passed: `alembic current` → `0001_initial_schema (head)`,
+  `alembic upgrade head` exit 0, `python -m database.seeds.run_all` → 3 exchanges /
+  10 sectors / 15 industries / 30 VN30 rows (idempotent), counts `39 | 12 | 30`.
+- Remaining blocker: host firewall/forwarding still drops container→`db`/`qdrant` frames
+  (`alembic heads` works in-container, `alembic current` times out, exit 143).
+
+## 2026-09-18 — Deployment: Alembic config missing from images (+ host/env blockers)
+
+- **Fixed (repo):** `alembic upgrade head` inside the containers failed with
+  `FAILED: No 'script_location' key found in configuration`. `alembic.ini` (repo root,
+  `script_location = database/migrations`) was never copied into the images and Compose
+  mounts only `./src` + `./database`. `docker/Dockerfile.api` and `Dockerfile.worker` now
+  `COPY ... alembic.ini ./`; the dashboard image stays minimal (no `database/`, no
+  migrations). Verified in-container: `alembic heads` → `0001_initial_schema (head)`.
+- **Tests:** new `tests/unit/test_deployment_config.py` guards the invariant
+  (script_location resolves, ini holds no real credentials + `env.py` prefers
+  `DATABASE_URL`, images carrying migrations also carry the config, the documented runner
+  image can run alembic, alembic remains a core dependency).
+- **Docs:** troubleshooting entries for `script_location`, `password authentication
+  failed` (credential drift) and "containers cannot reach db/qdrant" in
+  `docs/DEPLOYMENT_vi.md` + `helper/deployment.md`.
+- **Reported (not repo defects):** (1) host firewall/forwarding drops container→container
+  frames to the `db`/`qdrant` containers — proven with veth counters (host→container and
+  container→api/worker/dashboard still work); needs root-level iptables/nft inspection or
+  a Docker restart. (2) `POSTGRES_PASSWORD` in `.env` no longer matches the role inside
+  the volume initialised 2026-09-13 (`change_me` still authenticates).
 
 ## 2026-09-17 — Code audit: logic/consistency fixes across data, quant, backtest, ML, RAG, agents, API
 

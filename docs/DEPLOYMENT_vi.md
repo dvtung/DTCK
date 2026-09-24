@@ -193,6 +193,9 @@ docker compose exec db pg_dump -U dtck dtck | gzip > backup_$(date +%F).sql.gz
 | Triệu chứng | Nguyên nhân / cách xử lý |
 |---|---|
 | Port đã được sử dụng | Đổi `POSTGRES_PORT` / `API_PORT` / `DASHBOARD_PORT` trong `.env` |
+| `FAILED: No 'script_location' key found in configuration` | Image cũ không chứa `alembic.ini` (đã sửa: bake vào image API/worker). Build lại: `docker compose build api worker && docker compose up -d --no-deps api worker` |
+| `FATAL: password authentication failed for user "dtck"` | `.env` đổi `POSTGRES_PASSWORD` **sau khi** volume DB được khởi tạo — Postgres chỉ đọc biến này ở lần init đầu tiên. Đồng bộ lại: `docker compose exec -T db psql -U dtck -d dtck -c "ALTER USER dtck WITH PASSWORD '<mật-khẩu-trong-.env>'"`, hoặc khôi phục mật khẩu cũ trong `.env`, hoặc `docker compose down -v` (⚠️ mất dữ liệu) |
+| Container `api` timeout khi tới `db` (không phải lỗi xác thực) | Firewall/forwarding của **host** chặn traffic giữa container (không phải lỗi dự án). Kiểm tra: `sudo iptables -S FORWARD`, `sudo nft list ruleset \\| grep -i drop`, `sudo ebtables -L`; sau đó `sudo systemctl restart docker` |
 | `alembic upgrade` lỗi kết nối | DB chưa healthy — đợi `pg_isready`, xem `docker compose logs db` |
 | `readyz` báo qdrant offline | Bình thường khi không có `qdrant_client` — RAG dùng index in-memory (KI-011) |
 | Ingest trả exit 1 | Quality gate §39 từ chối batch kém chất lượng — xem log `validation issue` |
