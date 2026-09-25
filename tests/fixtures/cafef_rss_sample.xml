@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Recorded CaféF market-news RSS sample (https://cafef.vn/thi-truong-chung-khoan.rss).
+  Captured 2026-09-25; trimmed to two items so it can live in the repo.
+  Used by tests/unit/test_rss_provider.py — do not hand-edit the structure:
+  it must stay a faithful capture so a schema drift breaks the tests.
+-->
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:media="http://search.yahoo.com/mrss/">
+    <channel>
+        <title>Thị trường chứng khoán | cafef</title>
+        <link>https://cafef.vn/thi-truong-chung-khoan.chn</link>
+        <description><![CDATA[CafeF - Kênh tin tức kinh tế, tài chính, thông tin chứng khoán của Việt Nam mới nhất được cập nhật liên tục, chính xác và đầy đủ,chuyên sâu]]></description>
+        <atom:link href="https://cafef.vn/thi-truong-chung-khoan.rss" rel="self" type="application/rss+xml" />
+        <copyright>https://cafef.vn</copyright>
+        <generator>https://cafef.vn</generator>
+        <pubDate>Fri, 25 Sep 26 21:21:07 +0700</pubDate>
+        <language>vi-vn</language>
+        <lastBuildDate>Fri, 25 Sep 26 21:21:07 +0700</lastBuildDate>
+        <ttl>15</ttl>
+                    <item>
+                <title><![CDATA[Dàn CEO 'đỉnh nóc kịch trần' dự quốc yến đón ông Tập ở Nhà Trắng]]></title>
+                <link>https://cafef.vn/dan-ceo-dinh-noc-kich-tran-du-quoc-yen-don-ong-tap-o-nha-trang-188260925183839252.chn</link>
+                <description><![CDATA[<a href="https://cafef.vn/dan-ceo-dinh-noc-kich-tran-du-quoc-yen-don-ong-tap-o-nha-trang-188260925183839252.chn"><img src="https://cafefcdn.com/zoom/600_315/203337114487263232/2026/9/25/avatar1790336263038-1790336263638660069026.webp"></a> Quốc yến đón Chủ tịch Trung Quốc Tập Cận Bình tại Nhà Trắng tối 24/9 có sự tham dự của Elon Musk, Jensen Huang, Sam Altman, Mark Zuckerberg cùng nhiều lãnh đạo công nghệ, tài chính Mỹ. Sự hiện diện của họ thu hút chú ý khi thương mại, chip bán dẫn và AI là những vấn đề lớn trong quan hệ Mỹ - Trung.]]></description>
+                <pubDate>Fri, 25 Sep 26 19:10:00 +0700</pubDate>
+                <guid >https://cafef.vn/dan-ceo-dinh-noc-kich-tran-du-quoc-yen-don-ong-tap-o-nha-trang-188260925183839252.chn</guid>
+            </item>
+                    <item>
+                <title><![CDATA[PNJ trình kế hoạch lỗ kỷ lục, em trai bà Cao Thị Ngọc Dung đăng ký bán 9 triệu cổ phiếu]]></title>
+                <link>https://cafef.vn/pnj-trinh-ke-hoach-lo-ky-luc-em-trai-ba-cao-thi-ngoc-dung-dang-ky-ban-9-trieu-co-phieu-188260925181026047.chn</link>
+                <description><![CDATA[<a href="https://cafef.vn/pnj-trinh-ke-hoach-lo-ky-luc-em-trai-ba-cao-thi-ngoc-dung-dang-ky-ban-9-trieu-co-phieu-188260925181026047.chn"><img src="https://cafefcdn.com/zoom/600_315/203337114487263232/2026/9/25/avatar1790336263038-1790336263638660069026.webp"></a> PNJ vừa công bố kế hoạch kinh doanh với mức lỗ kỷ lục.]]></description>
+                <pubDate>Fri, 25 Sep 26 18:10:26 +0700</pubDate>
+                <guid >https://cafef.vn/pnj-trinh-ke-hoach-lo-ky-luc-em-trai-ba-cao-thi-ngoc-dung-dang-ky-ban-9-trieu-co-phieu-188260925181026047.chn</guid>
+            </item>
+    </channel>
+</rss>

@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     qdrant_url: str = "http://localhost:6333"
     qdrant_api_key: str | None = None
 
+    # Market-data source (W1): "memory" (deterministic fixture, default),
+    # "db" (TimescaleDB read path) or "auto" (DB when reachable and populated).
+    market_data_source: str = "memory"
+
     # LLM abstraction (ADR-005) — Phase 5
     llm_provider: str = "mock"
     llm_api_key: str | None = None

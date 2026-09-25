@@ -26,6 +26,14 @@ def stable_point_id(chunk_id: str) -> int:
     return int.from_bytes(digest, "big") >> 1
 
 
+def chunk_symbols(chunk: Chunk) -> set[str]:
+    """Extract upper-cased set of symbols associated with a chunk."""
+    if not chunk.symbol:
+        return set()
+    return {s.strip().upper() for s in chunk.symbol.split(",") if s.strip()}
+
+
+
 @dataclass
 class ScoredChunk:
     """A chunk with its vector similarity score."""
@@ -78,7 +86,7 @@ class MemoryVectorStore:
         scored: list[ScoredChunk] = []
         sym = symbol.upper() if symbol else ""
         for cid, chunk in self._chunks.items():
-            if sym and chunk.symbol != sym:
+            if sym and sym not in chunk_symbols(chunk):
                 continue
             if doc_type and chunk.doc_type != doc_type:
                 continue

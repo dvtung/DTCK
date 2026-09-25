@@ -35,12 +35,13 @@ def percentile_rank(value: float, distribution: list[float]) -> float:
 
 
 def compute_factor_scores(
-    stock_values: dict[str, float],
+    stock_values: dict[str, float | None],
     universe_values: dict[str, list[float]],
 ) -> dict[str, float | None]:
     """Compute 6 factor scores for a single stock.
 
-    ``stock_values`` maps factor name → raw value for this stock.
+    ``stock_values`` maps factor name → raw value for this stock (``None`` when
+    the factor could not be computed — for example no fundamentals ingested yet).
     ``universe_values`` maps factor name → list of raw values for all stocks.
 
     Returns a dict mapping factor name → score (0-100) or None.

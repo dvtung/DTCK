@@ -4,8 +4,10 @@ Deterministic, DB-free so the API is unit-testable and runs without a live
 TimescaleDB. Data is synthetic but aligned with the seeded reference data
 (exchanges, VN30 universe) and produced by the deterministic engine functions.
 
-Swap this implementation for a SQLAlchemy-backed repository when the persistence
-layer goes live — the router contracts do not change.
+This is the **fallback** implementation of ``MarketSource``
+(``apps/api/services/market_source.py``): ``apps/api/dependencies.py`` selects
+``DbMarketService`` instead when ``MARKET_DATA_SOURCE`` asks for the database.
+Both sources return the same payload shapes, so routers never change.
 """
 
 from __future__ import annotations
@@ -13,8 +15,9 @@ from __future__ import annotations
 from datetime import date, datetime
 from decimal import Decimal
 
+from apps.api.services.ranking_payload import to_ranking_payload
 from src.market.technical import indicators as tech
-from src.quant.scoring.engine import StockRanking, score_universe
+from src.quant.scoring.engine import score_universe
 
 BASE_STOCKS: dict[str, tuple[str, str, str, bool]] = {
     "FPT": ("FPT Corporation", "TECH", "Technology", True),
@@ -154,30 +157,9 @@ class MarketService:
             }
             universe[sym] = {k: float(v) for k, v in values.items()}
         rankings = score_universe(universe)
-        return [self._to_ranking(r, i, len(rankings)) for i, r in enumerate(rankings, start=1)]
-
-    @staticmethod
-    def _to_ranking(r: StockRanking, i: int, total: int) -> dict[str, object]:
-        return {
-            "symbol": r.stock_id,
-            "overall_score": round(r.overall_score, 2) if r.overall_score is not None else None,
-            "signal": r.signal,
-            "confidence": r.confidence,
-            "rank": i,
-            "total": total,
-            "contributions": [
-                {
-                    "factor": c.factor,
-                    "score": c.score,
-                    "weight": c.weight,
-                    "weighted_score": round(c.weighted_score, 4),
-                    "contribution_pct": round(c.contribution_pct, 4)
-                        if c.contribution_pct is not None
-                        else None,
-                }
-                for c in r.decomposition.contributions
-            ],
-        }
+        return [
+            to_ranking_payload(r, i, len(rankings)) for i, r in enumerate(rankings, start=1)
+        ]
 
     # -------------------------------------------------- fundamentals/tech
     def get_indicators(self, symbol: str) -> dict[str, object] | None:
@@ -204,6 +186,44 @@ class MarketService:
         if symbol not in self._stocks:
             return None
         return {"symbol": symbol, "as_of_date": self._dates[-1], **self._quality.get(symbol, {})}
+
+    def get_valuation_history(self, symbol: str) -> list[dict[str, object]]:
+        if symbol not in self._stocks:
+            return []
+        return [
+            {"trade_date": date(2026, 8, 1), "pe": 12.0, "pb": 2.0},
+            {"trade_date": date(2026, 8, 8), "pe": 12.4, "pb": 2.05},
+        ]
+
+    def get_statements(self, symbol: str) -> list[dict[str, object]]:
+        if symbol not in self._stocks:
+            return []
+        return [
+            {
+                "period_end": date(2026, 6, 30),
+                "statement_type": "income",
+                "currency": "VND",
+                "items": {"revenue": 2.4e12, "net_income": 4.1e11},
+            },
+            {
+                "period_end": date(2026, 3, 31),
+                "statement_type": "income",
+                "currency": "VND",
+                "items": {"revenue": 2.1e12, "net_income": 3.7e11},
+            },
+        ]
+
+    def get_ratios(self, symbol: str) -> list[dict[str, object]]:
+        if symbol not in self._stocks:
+            return []
+        return [
+            {"period_end": date(2026, 6, 30), "name": "roe", "value": 0.21},
+            {"period_end": date(2026, 6, 30), "name": "debt_to_equity", "value": 0.42},
+        ]
+
+    def get_features(self, symbol: str) -> dict[str, object]:
+        """No feature store in the in-memory source (the real one is the DB)."""
+        return {"symbol": symbol, "feature_version": "baseline_1.0", "rows": []}
 
     # ---------------------------------------------------------- news
     def list_news(self) -> list[dict[str, object]]:

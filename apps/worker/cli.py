@@ -36,6 +36,27 @@ def _parse_date(value: str | None, *, default: date) -> date:
     return date.fromisoformat(value) if value else default
 
 
+def _active_symbols() -> set[str]:
+    """Reference symbols used for deterministic news→symbol linking (best effort).
+
+    Without the universe the RSS provider cannot tell a ticker from an arbitrary
+    uppercase word, so it would attach no symbol links at all.
+    """
+    from sqlalchemy import select
+
+    from src.common.models.reference import Stock
+
+    try:
+        with _engine().connect() as conn:
+            return {
+                str(symbol).upper()
+                for symbol in conn.scalars(select(Stock.symbol).where(Stock.status == "ACTIVE"))
+            }
+    except Exception:  # noqa: BLE001 — news still ingests, just without links
+        logger.warning("could not load the symbol universe for news matching")
+        return set()
+
+
 def _build_provider(source: str, args: argparse.Namespace) -> DataProvider:
     """Build the provider named by ``source`` ('fixture' = offline rows)."""
     from src.data.providers import create_provider
@@ -43,8 +64,16 @@ def _build_provider(source: str, args: argparse.Namespace) -> DataProvider:
     if source == "fixture":
         from src.data.providers.fixture import build_fixture_provider
 
-        return build_fixture_provider(symbols=args.symbols or [], start=args.start, end=args.end)
-    return create_provider(source)
+        # ``indexes`` matters for `--dataset index_prices`; without it the fixture
+        # provider returns no index bars and the run would report a silent no-op.
+        return build_fixture_provider(
+            symbols=args.symbols or [],
+            start=args.start,
+            end=args.end,
+            indexes=args.indexes or [],
+        )
+    universe = _active_symbols() if args.dataset == "news" else set()
+    return create_provider(source, universe=frozenset(universe))
 
 
 def _engine() -> Engine:
@@ -86,6 +115,29 @@ def run_ingest(args: argparse.Namespace) -> int:
     logger.info("%s", result.summary())
     if not result.quality_passed:
         logger.error("quality gate FAILED — dataset flagged below_threshold (§39)")
+        return 1
+    return 0
+
+
+def compute_scores(args: argparse.Namespace) -> int:
+    """Compute + persist daily factor scores over stored prices (W1b, §12/§43).
+
+    Only price-derived dimensions (technical/momentum/risk) are computed today —
+    fundamentals/valuation need provider data that is not available yet
+    (KI-006/KI-007), so those dimensions stay NULL instead of being invented.
+    """
+    from src.quant.factors.scoring import DEFAULT_SCORING_VERSION
+    from src.quant.scoring.job import compute_and_store_scores
+
+    result = compute_and_store_scores(
+        _engine(),
+        lookback=args.lookback,
+        scoring_version=args.scoring_version or DEFAULT_SCORING_VERSION,
+        as_of=args.as_of,
+    )
+    logger.info("%s", result.summary())
+    if result.scored == 0:
+        logger.error("no symbols scored — is `prices` populated for the as-of date?")
         return 1
     return 0
 
@@ -225,6 +277,29 @@ def build_parser() -> argparse.ArgumentParser:
         threshold=None,
     )
 
+    scores = sub.add_parser(
+        "compute-scores", help="compute + persist daily factor scores (W1b, §12)"
+    )
+    scores.add_argument(
+        "--lookback", type=int, default=250, help="bars per symbol used for the raw factors"
+    )
+    scores.add_argument(
+        "--scoring-version", default=None, help="scoring version tag (default: baseline_1.0)"
+    )
+    scores.add_argument(
+        "--as-of", default=None, help="YYYY-MM-DD; default = latest trade date in `prices`"
+    )
+    scores.set_defaults(
+        func=compute_scores,
+        start=None,
+        end=None,
+        symbols=None,
+        indexes=None,
+        since=None,
+        threshold=None,
+        as_of=None,
+    )
+
     train = sub.add_parser(
         "train-model", help="train + calibrate + register the ML model (T014, §14.3/§40)"
     )
@@ -290,6 +365,8 @@ def main(argv: list[str] | None = None) -> int:
         if args.since
         else datetime.combine(args.start, datetime.min.time(), tzinfo=UTC)
     )
+    raw_as_of = getattr(args, "as_of", None)
+    args.as_of = date.fromisoformat(raw_as_of) if raw_as_of else None
     return int(args.func(args))
 
 

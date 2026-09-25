@@ -36,9 +36,13 @@ providers:
     licensed: false
     enabled: true
     priority: 80
-    endpoints_status: TO_VERIFY
-    # Candidate EOD endpoint — MUST be snapshot-tested in T004 before live use
-    # (KI-006). Field names below are the expected mapping, not yet confirmed.
+    # 2026-09-25: NOT reachable from the project host — DNS resolves
+    # finfo-api.vndirect.com.vn to a private RFC1918 address (10.210.100.8) and
+    # connections time out. Kept enabled in config; the collector must skip it
+    # until the network/DNS path is fixed (see docs/DATA_SOURCES.md §8).
+    endpoints_status: UNREACHABLE_FROM_HOST_2026-09-25
+    # Candidate EOD endpoint — MUST be snapshot-tested before live use.
+    # Field names below are the expected mapping, not yet confirmed (KI-006).
     endpoints:
       eod:
         url: "https://finfo-api.vndirect.com.vn/v4/stocks/daily_prices"
@@ -68,7 +72,9 @@ providers:
     licensed: false
     enabled: true
     priority: 70
-    endpoints_status: TO_VERIFY
+    # 2026-09-25: requests are answered with a Cloudflare JS challenge
+    # ("Just a moment…"), so headless collection is not possible.
+    endpoints_status: BLOCKED_BY_CLOUDFLARE_2026-09-25
 
   - id: dsc
     description: DSC GraphData public GraphQL (unofficial)
@@ -166,7 +172,14 @@ providers:
     licensed: false
     enabled: true
     priority: 90
-    endpoints_status: TO_VERIFY
+    # 2026-09-25: VERIFIED — the market feed answers 302 → 200 with redirect
+    # following + a descriptive User-Agent and returns valid RSS 2.0
+    # (recorded sample: tests/fixtures/cafef_rss_sample.xml).
+    endpoints_status: VERIFIED_2026-09-25
+    endpoints:
+      news:
+        url: "https://cafef.vn/thi-truong-chung-khoan.rss"
+        user_agent: "DTCK/0.1 (+https://github.com/dvtung/DTCK)"
 
   - id: vnexpress
     description: VnExpress finance news (RSS)

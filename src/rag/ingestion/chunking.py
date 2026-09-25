@@ -88,6 +88,22 @@ def chunk_text(
     return chunks
 
 
+def _coerce_symbols(item: dict[str, object]) -> str:
+    """News dict → comma-joined ticker string (multi-symbol aware).
+
+    ``news_symbols`` is many-to-many, so a DB row can carry several tickers
+    (``symbols`` list); fixture rows carry a scalar ``symbol``. Chunks keep the
+    joined form and stores filter by membership, so a two-ticker article is
+    retrievable by either ticker.
+    """
+    raw = item.get("symbols", item.get("symbol", ""))
+    if isinstance(raw, (list, tuple, set)):
+        parts = [str(part).strip().upper() for part in raw]
+    else:
+        parts = [str(raw).strip().upper()]
+    return ",".join(sorted({part for part in parts if part}))
+
+
 def chunk_news_item(item: dict[str, object], *, max_chars: int = 800) -> list[Chunk]:
     """Chunk one news dict (`title`/`content` or `body`) into ``Chunk``s."""
     doc_id = str(item.get("id", item.get("title", "news")))
@@ -101,7 +117,7 @@ def chunk_news_item(item: dict[str, object], *, max_chars: int = 800) -> list[Ch
         title=str(item.get("title", "")),
         source=str(item.get("source", "")),
         doc_type="news",
-        symbol=str(item.get("symbol", "")),
+        symbol=_coerce_symbols(item),
         published_at=published,
         max_chars=max_chars,
     )

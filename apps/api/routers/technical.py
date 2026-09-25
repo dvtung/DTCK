@@ -24,4 +24,4 @@ def indicators(symbol: str, service: MarketDep) -> dict[str, Any]:
 def features(symbol: str, service: MarketDep) -> dict[str, Any]:
     if service.get_stock(symbol.upper()) is None:
         raise not_found("stock", symbol)
-    return {"symbol": symbol.upper(), "feature_version": "baseline_1.0", "rows": []}
+    return service.get_features(symbol.upper())

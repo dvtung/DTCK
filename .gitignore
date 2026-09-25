@@ -42,3 +42,8 @@ backtest_artifacts/
 
 # --- Docker ---
 *.log
+
+# --- Vendor SDK bundles (SSI FastConnect downloads; contain PDFs + sample
+#     credential files — never commit) ---
+fc-data*.zip
+fc-data*.tar.gz

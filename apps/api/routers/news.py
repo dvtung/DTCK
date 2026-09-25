@@ -22,7 +22,14 @@ def list_news(
 ) -> dict[str, Any]:
     rows = service.list_news()
     if symbol:
-        rows = [r for r in rows if r.get("symbol") == symbol.upper()]
+        wanted = symbol.upper()
+        # DB rows carry ``symbols`` (news_symbols join); fixture rows may carry
+        # a scalar ``symbol``. Support both without changing the payload shape.
+        rows = [
+            r
+            for r in rows
+            if wanted in (r.get("symbols") or []) or r.get("symbol") == wanted
+        ]
     if source:
         rows = [r for r in rows if r["source"] == source]
     limit, offset = paginate_params(limit, offset)

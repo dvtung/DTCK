@@ -67,6 +67,9 @@ include = ["apps*", "src*"]
 testpaths = ["tests"]
 addopts = "-q"
 pythonpath = ["."]
+markers = [
+    "live: hits external services (providers, network); skipped unless -m live",
+]
 
 [tool.ruff]
 line-length = 100

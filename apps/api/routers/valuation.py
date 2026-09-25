@@ -25,7 +25,4 @@ def summary(symbol: str, service: MarketDep) -> dict[str, Any]:
 def history(symbol: str, service: MarketDep) -> list[dict[str, Any]]:
     if service.get_stock(symbol.upper()) is None:
         raise not_found("stock", symbol)
-    return [
-        {"trade_date": "2026-08-01", "pe": 12.0, "pb": 2.0},
-        {"trade_date": "2026-08-08", "pe": 12.4, "pb": 2.05},
-    ]
+    return service.get_valuation_history(symbol.upper())
