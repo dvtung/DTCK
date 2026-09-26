@@ -63,14 +63,15 @@ For T010 read endpoints and T008/T009 engines, a full Docker stack is **not** re
 # activate the local venv (.venv)
 source .venv/bin/activate
 
-# API (in-memory deterministic service — KI-008, no DB needed)
-uvicorn apps.api.main:app --reload       # http://localhost:8000/docs
+# API (memory mode by default — KI-008 read path opened 2026-09-25:
+# MARKET_DATA_SOURCE=db|auto serves TimescaleDB via DbMarketService, no router changes)
+LLM_PROVIDER=mock uvicorn apps.api.main:app --reload       # http://localhost:8000/docs
 
-# run all unit tests
-pytest -q
+# run all unit tests (expect 422 passed, 3 skipped as of 2026-09-25)
+LLM_PROVIDER=mock pytest -q
 
 # run just the API tests (uses TestClient, no server needed)
-pytest tests/unit/test_api.py -q
+LLM_PROVIDER=mock pytest tests/unit/test_api.py -q
 ```
 
 ---
@@ -81,11 +82,14 @@ Core variables (full list in `.env.example`):
 
 | Variable | Purpose |
 |---|---|
-| `POSTGRES_USER/DB/PASSWORD` | DB credentials |
+| `POSTGRES_USER/DB/PASSWORD` | DB credentials (⚠️ compose `worker` DSN falls back to `dtckpassword` while `api` falls back to `change_me` — set `POSTGRES_PASSWORD` explicitly in `.env`) |
 | `DATABASE_URL` | SQLAlchemy connection string |
 | `QDRANT_URL` | Qdrant gRPC/HTTP endpoint |
-| `LLM_PROVIDER` / `LLM_API_KEY` / `LLM_MODEL` | provider abstraction (ADR-005) |
+| `LLM_PROVIDER` / `LLM_API_KEY` / `LLM_MODEL` | provider abstraction (ADR-005); use `LLM_PROVIDER=mock` for tests (`test_smoke` rejects `ollama` from a local `.env`) |
 | `EMBEDDING_PROVIDER` / `EMBEDDING_MODEL` | embedding service |
+| `MARKET_DATA_SOURCE` | API read path: `memory` (code default) / `db` / `auto` (compose default `auto`; needs rebuilt images) |
+| `SCHEDULER_JOBS_ENABLED`, `SCHEDULER_NEWS_*`, `SCHEDULER_EOD_*`, `SCHEDULER_SCORING_*` | worker jobs: news every 15m (`cafef`), EOD Mon–Fri 15:05 (`yahoo`, 7-day window), scoring Mon–Fri 15:30 (`Asia/Ho_Chi_Minh`) |
+| `DATA_QUALITY_THRESHOLD` | quality gate 0–100 (default `80.0`) |
 | `REDIS_URL` (optional) | cache/queue (future) |
 | `LOG_LEVEL` | logging verbosity |
 
@@ -117,7 +121,8 @@ Logs: structured JSON (api, worker, pipeline). Metrics tracked: CPU, memory, dis
 
 # 6. Running Jobs
 
-- Scheduler (APScheduler) runs inside worker: EOD market data, foreign flow, news, feature/scoring recompute, regime update.
+- Scheduler (APScheduler) runs inside worker (`python -m apps.worker.main`, timezone `Asia/Ho_Chi_Minh`): 3 real jobs since 2026-09-25 — periodic news ingestion (`cafef`), daily EOD price ingestion Mon–Fri 15:05 (`yahoo`, 7-day idempotent window), daily factor scoring Mon–Fri 15:30 (`compute-scores` in-process, `max_instances=1` + `coalesce`, fail-soft). Disable with `SCHEDULER_JOBS_ENABLED=false`; old images predate this code — rebuild (`docker compose build api worker`) to get it.
+- Live EOD verified 2026-09-25: `python -m apps.worker.cli ingest --dataset prices --source yahoo --symbols FPT,VCB,HPG,ACB ...` → fetched=62 written=62 quality=94.88; chain `[yahoo, vndirect, tcbs, dsc]` per `configs/sources.yaml`; CaféF RSS news verified (50 real articles).
 - For offline experimentation: `python -m apps.worker.cli ingest --source=... --date=...`.
 - Backtests triggered via API (POST `/api/v1/backtests`) or CLI.
 

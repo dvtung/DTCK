@@ -1,6 +1,11 @@
 # Memory Bank — Changelog
 
-**Last updated:** 2026-09-25
+**Last updated:** 2026-09-26
+
+## 2026-09-26 — D4: deployment guides refreshed for step 3
+
+- `docs/DEPLOYMENT_vi.md`: marked "BẠN ĐANG Ở ĐÂY" at step 3, renumbered 11–21, added mandatory `docker compose build api worker` + 3-job log check, Yahoo ingest → `compute-scores` → API read-back sequence, re-statused production roadmap (KI-008 read done, KI-009 gated on ingest, worker DSN drift as item 7), new troubleshooting rows.
+- `helper/deployment.md` + `docs/DEPLOYMENT.md`: env tables (`MARKET_DATA_SOURCE`, `SCHEDULER_*`), scheduler/jobs section, `LLM_PROVIDER=mock` test commands (422 passed, 3 skipped).
 
 ## 2026-09-25 — D3: static docs relocation + live-data refresh + env wiring (done)
 

@@ -56,8 +56,12 @@ Production:     ███░░░░░░░░░░░░░░░░░  15
 
 ## 3. Active Task
 
-**ID:** `D3 — Static docs relocation + live-data refresh + env wiring (2026-09-25)`
+**ID:** `D4 — Deployment guides refresh for step 3 (2026-09-26)`
 **State:** COMPLETED
+
+**Deliverables:** `docs/DEPLOYMENT_vi.md` rewritten for your position (step 3: rebuild → verify → Yahoo ingest + scoring), env table with `MARKET_DATA_SOURCE`/`SCHEDULER_*`/DSN-drift warning, roadmap re-statused (KI-008 read done, KI-009 gated on your ingest, DSN drift noted); `helper/deployment.md` + `docs/DEPLOYMENT.md` (env tables, scheduler/jobs section, mock-test commands) updated to match.
+
+**Verification:** markdown fence balance OK (28 fences); no stale "325 passed / scheduler chưa đăng ký / KI-008 chưa làm" strings remain; suite untouched by docs-only change (last run 422 passed, 3 skipped).
 
 **Verification:** `LLM_PROVIDER=mock pytest` → 422 passed, 3 skipped · `ruff check .` clean · `mypy` clean (126 files) · 7 HTML pages tag-balanced · internal link check OK (`style.css` + cross-links resolve).
 
