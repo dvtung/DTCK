@@ -28,7 +28,7 @@ htmlcov/
 .DS_Store
 
 # --- Data / artifacts (never commit real data) ---
-data/
+/data/
 *.parquet
 *.feather
 *.h5
@@ -47,3 +47,7 @@ backtest_artifacts/
 #     credential files — never commit) ---
 fc-data*.zip
 fc-data*.tar.gz
+
+# --- Temporary files & archives ---
+files/
+files.zip

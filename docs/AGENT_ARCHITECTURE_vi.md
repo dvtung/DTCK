@@ -4,8 +4,8 @@
 
 > Thuật ngữ chuyên môn (tên bảng, API, mã nguồn) giữ nguyên tiếng Anh.
 
-**Phiên bản:** 1.0
-**Trạng thái:** ĐÃ TRIỂN KHAI (T013, 2026-09-16) — tất định, offline, không LLM. Orchestrator giải task qua registry, dựng kế hoạch §21, gọi tool (ToolCatalog bọc MarketService/RagService), audit từng lượt chạy (§31), hỗ trợ retry/timeout/failure theo §45. LangGraph là hướng nâng cấp Phase-5 (§34) khi bật LLM; baseline hiện cố ý không LLM để thỏa cổng thứ tự đặc tả §57.
+**Phiên bản:** 1.1
+**Trạng thái:** ĐÃ TRIỂN KHAI (T013, 2026-09-16) — lõi tất định, offline. Orchestrator giải task qua registry, dựng kế hoạch §21, gọi tool (ToolCatalog bọc MarketService/RagService), audit từng lượt chạy (§31), hỗ trợ retry/timeout/failure theo §45. **Cập nhật 2026-09-26 (T016):** tầng suy luận LLM đã được nối (ADR-005) — `src/agents/llm/` cung cấp client trừu tượng (`MockLLMClient`, `OllamaLLMClient`); Analysis Agent dùng `LLM_PROVIDER=local` để sinh luận điểm đầu tư tiếng Việt từ dữ liệu quant do tool trả về, tự động rơi về mẫu tất định khi LLM lỗi/timeout. LangGraph vẫn là hướng nâng cấp Phase-5 (§34).
 
 ---
 
@@ -38,6 +38,7 @@ MVP-3: + ML prediction + market regime + Portfolio Agent + monitoring + alerts
 ## 3.2. Analysis Agent (Phân tích)
 - Phân tích một mã: gọi Quant Tool, RAG Tool, tổng hợp bằng chứng → dựng luận điểm đầu tư.
 - Sinh `InvestmentAnalysis` (§23) gồm điểm, luận điểm, chất xúc tác, rủi ro, điều kiện vô hiệu, độ tin cậy, bằng chứng.
+- **Tầng suy luận (tùy chọn, T016):** khi có client LLM, agent dựng prompt từ chính dữ liệu tool trả về (điểm đa yếu tố, điểm thành phần, giá, chế độ thị trường, chất xúc tác, rủi ro, tin tức) và dùng văn bản trả về làm `thesis`. Điểm số, bằng chứng, chất xúc tác, rủi ro và confidence **không đổi** — chỉ phần diễn giải ngôn ngữ đổi. Nếu LLM lỗi, timeout hoặc trả về rỗng → tự động dùng lại mẫu câu tất định.
 
 ## 3.3. Monitoring Agent (Giám sát)
 - Theo dõi biến động giá/khối lượng/tin/sự kiện/cơ bản/rủi ro.
@@ -114,6 +115,19 @@ class InvestmentAnalysis(BaseModel):
 - LLM **không bao giờ** bịa số liệu tài chính (đặc tả §3 phi mục tiêu).
 - Output phải validate theo schema; output sai → retry với fallback → failure.
 - Timeout + retry + fallback là bắt buộc khi chạy agent (§45).
+
+## 8.1. Nối provider local (Ollama) — T016
+
+| Mảnh | Vị trí | Ghi chú |
+|---|---|---|
+| Giao diện provider | `src/agents/llm/client.py` → `LLMClient` (Protocol `@runtime_checkable`), `MockLLMClient`, `OllamaLLMClient`, `create_llm_client()` | ADR-005: đổi nhà cung cấp không chạm agent |
+| Chọn provider | `apps/api/services/agent_service.py` → `get_llm_client()` | `LLM_PROVIDER=mock` ⇒ **không** tạo client (baseline tất định, test không gọi mạng) |
+| Gắn vào agent | `Orchestrator(..., llm=...)` → `AnalysisAgent(llm=...)` | Chỉ Analysis Agent dùng LLM ở bước này |
+| Gọi HTTP | `POST {LLM_BASE_URL}/api/generate` với `stream=false`, `options.temperature/num_predict`, `think=false` | `think=false` tắt khối suy luận của model hybrid (Qwen3.5…) để giữ độ trễ trong hạn mức §45 |
+| Hạn mức thời gian | `LLM_TIMEOUT_SECONDS` (client) và `timeout_s = LLM_TIMEOUT_SECONDS + 15` (§45) | Hạn mức lượt chạy **phải lớn hơn** timeout client, nếu không mọi lượt chạy đều bị coi là timeout |
+| Nhãn audit | `agent_runs.model` = `deterministic-quant-v1` hoặc `deterministic-quant-v1+<model>` | §13.2 — nhìn audit là biết lượt chạy có dùng LLM hay không |
+
+Độ trễ tham chiếu (máy tham chiếu: RTX 3050 6 GB, Qwen3.5 Q4_K_M, `think=false`): ~12–22 giây cho một luận điểm, `POST /api/v1/agents/analyze` chạy đồng bộ nên dùng `POST /api/v1/analysis/request` + poll khi cần giao diện không chặn (§2.7/§45).
 
 ---
 

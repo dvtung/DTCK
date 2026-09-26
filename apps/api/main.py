@@ -68,28 +68,85 @@ def healthz() -> dict[str, str]:
     return {"status": "ok", "service": "api", "version": "0.1.0"}
 
 
-@app.get("/readyz", tags=["system"])
-def readyz() -> dict[str, str | dict[str, str]]:
-    """Readiness probe — DB pending (KI-008), Qdrant + agents best-effort (KI-011/012)."""
-    qdrant = "pending"
+def _database_status() -> str:
+    """Live DB status: ``connected`` · ``connected-no-prices`` · ``unreachable``.
+
+    The API read path (``MARKET_DATA_SOURCE``, KI-008) only serves TimescaleDB
+    once ``prices`` has rows, so "connected" and "connected but nothing to read
+    yet" are reported separately instead of a hardcoded ``pending``.
+    """
+    try:
+        from apps.api.db import database_is_ready
+
+        if not database_is_ready(require_prices=False):
+            return "unreachable"
+        return "connected" if database_is_ready(require_prices=True) else "connected-no-prices"
+    except Exception:  # noqa: BLE001 — a probe must never fail the endpoint
+        return "unreachable"
+
+
+def _qdrant_status() -> str:
+    """``up`` when the Qdrant mirror answers, else the documented offline mode.
+
+    ``offline-index-ready`` is a valid state, not an error: the RAG service keeps
+    serving from the deterministic in-memory index (KI-011, ADR-001 fail-soft).
+    """
     try:
         from apps.api.services.rag_service import get_rag_service
 
-        svc = get_rag_service()
-        qdrant = "up" if svc.qdrant_available else "offline-index-ready"
+        return "up" if get_rag_service().qdrant_available else "offline-index-ready"
     except Exception:  # noqa: BLE001
-        qdrant = "offline-index-ready"
-    agent_framework = "unavailable"
-    try:
-        from apps.api.services.agent_service import get_orchestrator
+        return "offline-index-ready"
 
-        orch = get_orchestrator()
-        agent_framework = f"offline:{','.join(orch.registry.tasks())}"
+
+def _agents_status() -> str:
+    """``llm:<model>`` when the LLM tier is wired (T016), else the deterministic core.
+
+    Reports the reasoning layer that would actually serve a run, so operators can
+    tell a local Ollama deployment apart from the offline baseline.
+    """
+    try:
+        from apps.api.services.agent_service import get_llm_client, get_orchestrator
+
+        tasks = ",".join(get_orchestrator().registry.tasks())
+        llm = get_llm_client()
+        if llm is None:
+            return f"offline:{tasks}"
+        return f"llm:{getattr(llm, 'model', None) or settings.llm_model}"
     except Exception:  # noqa: BLE001
-        agent_framework = "unavailable"
-    return {"status": "ready",
-            "dependencies": {"database": "pending", "qdrant": qdrant,
-                             "agents": agent_framework}}
+        return "unavailable"
+
+
+def _market_source_status() -> str:
+    """Configured read mode plus the service actually serving requests (KI-008)."""
+    try:
+        from apps.api.dependencies import get_market_service
+        from apps.api.services.db_market import DbMarketService
+
+        served = "db" if isinstance(get_market_service(), DbMarketService) else "memory"
+        return f"{settings.market_data_source}->{served}"
+    except Exception:  # noqa: BLE001
+        return settings.market_data_source
+
+
+@app.get("/readyz", tags=["system"])
+def readyz() -> dict[str, str | dict[str, str]]:
+    """Readiness probe — live status of every dependency (best-effort, never 5xx).
+
+    * ``database`` — real connectivity + whether ``prices`` holds rows (KI-008);
+    * ``qdrant`` — mirror reachable (``up``) or in-memory index (``offline-index-ready``, KI-011);
+    * ``agents`` — reasoning layer: ``llm:<model>`` (T016) or the deterministic baseline;
+    * ``market_source`` — ``<configured mode>-><service serving reads>``.
+    """
+    return {
+        "status": "ready",
+        "market_source": _market_source_status(),
+        "dependencies": {
+            "database": _database_status(),
+            "qdrant": _qdrant_status(),
+            "agents": _agents_status(),
+        },
+    }
 
 
 def run() -> None:

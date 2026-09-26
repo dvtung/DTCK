@@ -7,7 +7,8 @@
 Tài liệu triển khai chính: `docs/DEPLOYMENT.md`.
 
 > **Hướng dẫn triển khai chi tiết từng bước bằng tiếng Việt: [`docs/DEPLOYMENT_vi.md`](../docs/DEPLOYMENT_vi.md)** — 6 giai đoạn (chuẩn bị → hạ tầng → migration/seed → kiểm tra + dữ liệu thật → kiểm thử → vận hành) + troubleshooting. Bạn đang ở **giai đoạn 3**.
-> Cập nhật 2026-09-26: rebuild `api`/`worker` trước (scheduler 3 job + đường đọc CSDL), nạp Yahoo EOD + `compute-scores`; kỳ vọng **422 passed, 3 skipped**.
+> Cập nhật 2026-09-27: `ssix_finipro` (SSI FastConnect) là **nguồn chính** đã kiểm chứng (68 dòng giá + 34 dòng chỉ số); job EOD tự chuyển sang `yahoo → vndirect → tcbs → dsc` khi nguồn chính lỗi/0 dòng; `/readyz` dò thật `database`/`qdrant`/`agents` + `market_source`; image api/worker đã cài `qdrant-client` (extra `[qdrant]`). Chạy test `LLM_PROVIDER=mock MARKET_DATA_SOURCE=memory pytest -q` → kỳ vọng **442 passed, 3 skipped** (chạy trên máy chủ — `tests/` không nằm trong image `api`).
+> Cập nhật 2026-09-26: rebuild `api`/`worker` trước (scheduler 3 job + đường đọc CSDL), nạp Yahoo EOD + `compute-scores`; ĐÃ NỐI tầng suy luận LLM local (`src/agents/llm/`).
 
 ---
 
@@ -27,9 +28,17 @@ docker compose build api worker
 docker compose up -d --no-deps api worker
 docker compose logs worker 2>&1 | grep -i "registered job"   # kỳ vọng 3 job: news / EOD 15:05 / scoring 15:30
 
-# 1. EOD Việt Nam trực tiếp (đã kiểm chứng 2026-09-25: fetched=62 written=62 quality=94.88)
+# 1. EOD Việt Nam trực tiếp qua SSI FastConnect — nguồn CHÍNH (2026-09-27: fetched=68 written=68 quality=93.74)
 docker compose exec -T worker python -m apps.worker.cli ingest --dataset prices \
-  --source yahoo --symbols FPT,VCB,HPG,ACB --start 2026-09-01 --end 2026-09-25
+  --source ssix_finipro --symbols FPT,VCB,HPG,ACB --start 2026-09-01 --end 2026-09-26
+
+# 1b. Chỉ số qua SSI (Market/DailyIndex — 2026-09-27: written=34)
+docker compose exec -T worker python -m apps.worker.cli ingest --dataset index_prices \
+  --source ssix_finipro --indexes VNINDEX,VN30 --start 2026-09-01 --end 2026-09-26
+
+# 1c. Dự phòng Yahoo khi SSI lỗi/hết hạn ngạch (2026-09-25: fetched=62 quality=94.88)
+docker compose exec -T worker python -m apps.worker.cli ingest --dataset prices \
+  --source yahoo --symbols FPT,VCB,HPG,ACB --start 2026-09-01 --end 2026-09-26
 
 # 2. Chấm điểm trên dữ liệu thật
 docker compose exec -T worker python -m apps.worker.cli compute-scores --lookback 60
@@ -48,7 +57,7 @@ Endpoint:
 
 ```bash
 docker compose logs -f api            # theo dõi log API
-docker compose exec -T api sh -c "LLM_PROVIDER=mock pytest -q"   # kỳ vọng 422 passed, 3 skipped
+LLM_PROVIDER=mock MARKET_DATA_SOURCE=memory pytest -q       # kỳ vọng 442 passed, 3 skipped (chạy trên máy chủ)
 docker compose down                   # dừng (giữ volume)
 docker compose down -v                # XOÁ volume (phá huỷ — mất dữ liệu!)
 ```
@@ -60,7 +69,7 @@ docker compose down -v                # XOÁ volume (phá huỷ — mất dữ l
 | `MARKET_DATA_SOURCE` | `memory` (mặc định trong code, không cần CSDL) / `db` (ép dùng TimescaleDB) / `auto` (dùng CSDL khi `prices` có dòng; compose mặc định `auto`) |
 | `SCHEDULER_JOBS_ENABLED` | `false` tắt 3 job worker (news / EOD 15:05 / scoring 15:30 ICT, `Asia/Ho_Chi_Minh`); vẫn nạp thủ công được |
 | `SCHEDULER_NEWS_SOURCE` / `SCHEDULER_NEWS_INTERVAL_MINUTES` | mặc định `cafef` / `15` |
-| `SCHEDULER_EOD_SOURCE` / `SCHEDULER_EOD_CRON_HOUR` / `SCHEDULER_EOD_CRON_MINUTE` / `SCHEDULER_EOD_LOOKBACK_DAYS` | mặc định `yahoo` / `15` / `5` / `7` |
+| `SCHEDULER_EOD_SOURCE` / `SCHEDULER_EOD_CRON_HOUR` / `SCHEDULER_EOD_CRON_MINUTE` / `SCHEDULER_EOD_LOOKBACK_DAYS` | mặc định `ssix_finipro` (chính) / `15` / `5` / `7`; job tự chuyển `yahoo → vndirect → tcbs → dsc` khi nguồn chính lỗi hoặc trả 0 dòng |
 | `SCHEDULER_SCORING_CRON_HOUR` / `SCHEDULER_SCORING_CRON_MINUTE` | mặc định `15` / `30` |
 
 Lệch DSN của worker (không chặn nếu `.env` đặt `POSTGRES_PASSWORD`): trong compose, `worker.DATABASE_URL` dự phòng bằng `dtckpassword` còn `api` dự phòng bằng `change_me` — hãy đặt mật khẩu tường minh trong `.env` để hai dịch vụ khớp nhau.

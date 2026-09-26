@@ -63,6 +63,10 @@ def list_agents(orch: AgentDep) -> dict[str, Any]:
         "agents": orch.registry.to_payload(),
         "tools": orch.tools.catalog,
         "model": MODEL,
+        # Reasoning layer state (ADR-005): the deterministic baseline alone, or
+        # baseline + the configured local/remote LLM (§4/§20).
+        "llm_model": orch.llm.model if orch.llm is not None else None,
+        "reasoning": "llm" if orch.llm is not None else "deterministic",
     }
 
 

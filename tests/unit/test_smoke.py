@@ -11,7 +11,8 @@ def test_api_config_loads() -> None:
     from apps.api.config import settings
 
     assert settings.scoring_version == "baseline_1.0"
-    assert settings.llm_provider in {"openai", "anthropic", "local", "mock"}
+    # "ollama" is an accepted alias of "local" (see src/agents/llm.create_llm_client).
+    assert settings.llm_provider in {"openai", "anthropic", "local", "ollama", "mock"}
 
 
 def test_api_app_imports_and_has_health() -> None:

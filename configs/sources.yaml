@@ -3,8 +3,11 @@
 #
 # Selection rule: for each (domain, datatype) pick the highest-priority `enabled`
 # provider; on validation failure or data-quality gate (§39) fall back to the next.
-# Secrets are NEVER here — providers reference env var NAMES via credential_env
-# (spec §32, docs/SECURITY.md §2).
+# For market EOD the worker enforces this chain at runtime
+# (`src/data/providers/registry.py::market_provider_chain` — primary first, then
+# `fallback_chains.market`), so one vendor outage does not leave the universe
+# un-scored. Secrets are NEVER here — providers reference env var NAMES via
+# credential_env (spec §32, docs/SECURITY_vi.md §2).
 
 version: t002_baseline
 
@@ -16,15 +19,27 @@ defaults:
 providers:
   # --- Market + fundamental (primary) -------------------------------------
   - id: ssix_finipro
-    description: SSI FiniPro — registered per-user access
+    description: SSI FastConnect / FiniPro — registered per-user access
     roles: [market, fundamental, corporate_events, news]
     auth: bearer
+    # Either credential path works: SSI_CONSUMER_ID + SSI_CONSUMER_SECRET are
+    # exchanged for a JWT (Market/AccessToken), or a ready-made token is provided
+    # via FINIPRO_ACCESS_TOKEN. Names only — values live in .env (never here).
     credential_env: FINIPRO_ACCESS_TOKEN
     free: true
     licensed: true
     enabled: true
     priority: 100
-    endpoints_status: TO_VERIFY   # confirm in T004 before first run
+    # 2026-09-27: VERIFIED end to end from the project host with live consumer
+    # credentials — Market/DailyOhlc returned 68 bars for FPT,VCB,HPG,ACB
+    # (2026-09-01..26, quality 93.74, written=68) and Market/DailyIndex returned
+    # 34 bars for VNINDEX,VN30 (written=34). Token caching + 401 refresh tested in
+    # tests/unit/test_ssi_provider.py.
+    endpoints_status: VERIFIED_2026-09-27
+    endpoints:
+      eod:
+        client: ssi_fastconnect
+        url: https://fc-data.ssi.com.vn
 
   # --- Market + fundamental fallbacks (anonymous/unofficial) --------------
   # Yahoo is the only market fallback VERIFIED reachable from the project host

@@ -101,3 +101,26 @@ def test_valuation_has_no_external_source(sources: dict[str, Any]) -> None:
         )
     # silence unused-var lint for ids (kept for readability of the guard above)
     assert ids
+
+
+def test_market_chain_is_ssi_primary_then_yahoo(sources: dict[str, Any]) -> None:
+    """SSI FastConnect is the primary market source, Yahoo the first fallback."""
+    from src.data.providers import market_provider_chain
+
+    chain = market_provider_chain(path=SOURCES_PATH)
+    assert chain[0] == sources["selection"]["market"] == "ssix_finipro"
+    assert chain[1] == "yahoo"
+    assert chain == ["ssix_finipro", "yahoo", "vndirect", "tcbs", "dsc"]
+
+
+def test_market_chain_honours_an_explicit_primary_and_dedupes() -> None:
+    from src.data.providers import market_provider_chain
+
+    # An operator override wins but never duplicates a fallback provider.
+    chain = market_provider_chain("yahoo", path=SOURCES_PATH)
+    assert chain[0] == "yahoo"
+    assert chain.count("yahoo") == 1
+    assert "ssix_finipro" not in chain
+
+    # A `computed` selection (never the case for market) must not inject an id.
+    assert market_provider_chain("computed", path=SOURCES_PATH)[0] == "yahoo"

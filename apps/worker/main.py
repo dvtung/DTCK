@@ -57,14 +57,21 @@ def scheduled_eod_ingestion() -> None:
     Runs before the scoring job (15:05 vs 15:30) so factor scores see same-day
     bars. The lookback window makes the job idempotent: a missed day is
     recovered on the next run and late vendor corrections are picked up.
+
+    Providers are tried in priority order — the configured source first (SSI
+    FastConnect by default), then the registry's ``fallback_chains.market``
+    (Yahoo, …). A provider that cannot be built (missing credentials) or returns
+    no rows is skipped with a log line, so one vendor outage does not leave the
+    universe un-scored.
     """
     from apps.worker.cli import _active_symbols
     from src.data.pipelines import ingest_eod
-    from src.data.providers import create_provider
+    from src.data.providers import create_provider, market_provider_chain
 
+    chain = market_provider_chain(settings.scheduler_eod_source)
     logger.info(
-        "Executing scheduled EOD ingestion (source=%s, lookback=%dd)",
-        settings.scheduler_eod_source,
+        "Executing scheduled EOD ingestion (chain=%s, lookback=%dd)",
+        " → ".join(chain),
         settings.scheduler_eod_lookback_days,
     )
     try:
@@ -72,19 +79,28 @@ def scheduled_eod_ingestion() -> None:
         if not symbols:
             logger.warning("No active symbols in the reference universe — skipping EOD ingestion")
             return
-        provider = create_provider(settings.scheduler_eod_source)
         end = datetime.now(UTC).date()
         start = end - timedelta(days=settings.scheduler_eod_lookback_days)
         engine = get_engine()
-        result = ingest_eod(
-            engine,
-            provider,
-            symbols,
-            start=start,
-            end=end,
-            threshold=settings.data_quality_threshold,
-        )
-        logger.info("Scheduled EOD ingestion finished: %s", result.summary())
+        for provider_id in chain:
+            try:
+                provider = create_provider(provider_id)
+            except Exception as exc:  # noqa: BLE001 — try the next source instead
+                logger.warning("EOD source '%s' unavailable: %s", provider_id, exc)
+                continue
+            result = ingest_eod(
+                engine,
+                provider,
+                symbols,
+                start=start,
+                end=end,
+                threshold=settings.data_quality_threshold,
+            )
+            if result.rows_fetched:
+                logger.info("Scheduled EOD ingestion finished: %s", result.summary())
+                return
+            logger.warning("EOD source '%s' returned no rows — trying the next source", provider_id)
+        logger.error("Scheduled EOD ingestion failed: no provider in %s returned rows", chain)
     except Exception as exc:
         logger.exception("Scheduled EOD ingestion failed: %s", exc)
 

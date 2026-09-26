@@ -84,4 +84,5 @@ Xem `docs/ARCHITECTURE_vi.md` để có bức tranh đầy đủ.
 | Hướng dẫn vận hành | `helper/deployment_vi.md` · `helper/resources_vi.md` |
 | Trang HTML báo cáo | `docs/index.html`, `status.html`, `structure.html`, `modules.html`, `database.html`, `pipeline.html`, `api.html` |
 | Quy ước ngôn ngữ tài liệu | **Từ nay toàn bộ tài liệu markdown của dự án chỉ sử dụng tiếng Việt và các file tiếng Việt.** |
+| Quy ước cập nhật HTML | **Chỉ cập nhật các file HTML (`docs/*.html`) khi người dùng yêu cầu trực tiếp để tiết kiệm token context.** |
 

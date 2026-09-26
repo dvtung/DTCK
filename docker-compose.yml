@@ -18,6 +18,8 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    networks:
+      - dtck
 
   qdrant:
     image: qdrant/qdrant:latest
@@ -33,6 +35,8 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    networks:
+      - dtck
 
   api:
     build:
@@ -48,7 +52,7 @@ services:
       SCHEDULER_JOBS_ENABLED: ${SCHEDULER_JOBS_ENABLED:-true}
       SCHEDULER_NEWS_SOURCE: ${SCHEDULER_NEWS_SOURCE:-cafef}
       SCHEDULER_NEWS_INTERVAL_MINUTES: ${SCHEDULER_NEWS_INTERVAL_MINUTES:-15}
-      SCHEDULER_EOD_SOURCE: ${SCHEDULER_EOD_SOURCE:-yahoo}
+      SCHEDULER_EOD_SOURCE: ${SCHEDULER_EOD_SOURCE:-ssix_finipro}
       SCHEDULER_EOD_CRON_HOUR: ${SCHEDULER_EOD_CRON_HOUR:-15}
       SCHEDULER_EOD_CRON_MINUTE: ${SCHEDULER_EOD_CRON_MINUTE:-5}
       SCHEDULER_EOD_LOOKBACK_DAYS: ${SCHEDULER_EOD_LOOKBACK_DAYS:-7}
@@ -65,7 +69,12 @@ services:
     volumes:
       - ./src:/app/src
       - ./database:/app/database
+      - ./configs:/app/configs
     restart: unless-stopped
+    networks:
+      - dtck
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   worker:
     build:
@@ -81,7 +90,7 @@ services:
       SCHEDULER_JOBS_ENABLED: ${SCHEDULER_JOBS_ENABLED:-true}
       SCHEDULER_NEWS_SOURCE: ${SCHEDULER_NEWS_SOURCE:-cafef}
       SCHEDULER_NEWS_INTERVAL_MINUTES: ${SCHEDULER_NEWS_INTERVAL_MINUTES:-15}
-      SCHEDULER_EOD_SOURCE: ${SCHEDULER_EOD_SOURCE:-yahoo}
+      SCHEDULER_EOD_SOURCE: ${SCHEDULER_EOD_SOURCE:-ssix_finipro}
       SCHEDULER_EOD_CRON_HOUR: ${SCHEDULER_EOD_CRON_HOUR:-15}
       SCHEDULER_EOD_CRON_MINUTE: ${SCHEDULER_EOD_CRON_MINUTE:-5}
       SCHEDULER_EOD_LOOKBACK_DAYS: ${SCHEDULER_EOD_LOOKBACK_DAYS:-7}
@@ -96,7 +105,12 @@ services:
     volumes:
       - ./src:/app/src
       - ./database:/app/database
+      - ./configs:/app/configs
     restart: unless-stopped
+    networks:
+      - dtck
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   dashboard:
     build:
@@ -113,7 +127,13 @@ services:
     depends_on:
       - api
     restart: unless-stopped
+    networks:
+      - dtck
 
 volumes:
   db-data:
   qdrant-data:
+
+networks:
+  dtck:
+    driver: bridge

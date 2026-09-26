@@ -14,13 +14,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install project (editable). [ml] = scikit-learn/xgboost — the API imports the
-# ML layer via agent tools + the predictions endpoints; [dev] keeps pytest/ruff/
-# mypy available in this image.
+# ML layer via agent tools + the predictions endpoints; [qdrant] = the Qdrant
+# client only (the mirror behind the in-memory index, see /readyz); [dev] keeps
+# pytest/ruff/mypy available in this image.
 COPY pyproject.toml README.md alembic.ini ./
 COPY src ./src
 COPY apps ./apps
+COPY configs ./configs
 COPY database ./database
-RUN pip install --upgrade pip && pip install -e ".[dev,ml]"
+RUN pip install --upgrade pip && pip install -e ".[dev,ml,qdrant]"
 
 EXPOSE 8000
 

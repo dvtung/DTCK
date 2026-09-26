@@ -74,3 +74,33 @@ def test_alembic_cli_is_a_core_dependency() -> None:
         .split("[project.optional-dependencies]", 1)[0]
     )
     assert "alembic>" in core_dependencies
+
+
+def _extras() -> dict[str, str]:
+    """``{extra_name: body}`` from pyproject's optional-dependencies section."""
+    import tomllib
+
+    raw = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    return raw["project"]["optional-dependencies"]
+
+
+def test_qdrant_extra_matches_the_rag_pin() -> None:
+    """`qdrant` is the client-only install used by the images — pins must agree.
+
+    `rag` additionally pulls sentence-transformers (torch); the api/worker images
+    only need the client so the mirror works and `/readyz` can report it.
+    """
+    extras = _extras()
+    qdrant_pins = [p for p in extras["rag"] if p.startswith("qdrant-client")]
+    assert qdrant_pins == extras["qdrant"], (
+        "the qdrant extra must repeat the exact qdrant-client pin from [rag]"
+    )
+
+
+@pytest.mark.parametrize("dockerfile_name", ("Dockerfile.api", "Dockerfile.worker"))
+def test_images_install_the_qdrant_client(dockerfile_name: str) -> None:
+    """Without the client the API silently degrades to the in-memory index (KI-011)."""
+    content = _dockerfile(dockerfile_name)
+    assert "qdrant" in content, (
+        f"{dockerfile_name} must install the qdrant extra so the RAG mirror connects"
+    )

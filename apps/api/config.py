@@ -43,6 +43,9 @@ class Settings(BaseSettings):
     llm_temperature: float = 0.0
     llm_max_tokens: int = 4096
     llm_timeout_seconds: int = 120
+    # Hybrid reasoning models (Qwen3.5…) emit a long thinking block before the
+    # answer; disabling it keeps agent runs inside the §45 latency budget (§47).
+    llm_think: bool = False
 
     # Embeddings — Phase 4
     embedding_provider: str = "sentence-transformers"
@@ -58,7 +61,9 @@ class Settings(BaseSettings):
     scheduler_scoring_cron_minute: int = 30
     scheduler_news_source: str = "cafef"
     # Daily EOD price ingestion (feeds the 15:30 scoring job with same-day bars).
-    scheduler_eod_source: str = "yahoo"
+    # Primary source only — the job walks `fallback_chains.market` (Yahoo, …)
+    # from `configs/sources.yaml` when the primary fails or returns no rows.
+    scheduler_eod_source: str = "ssix_finipro"
     scheduler_eod_cron_hour: int = 15
     scheduler_eod_cron_minute: int = 5
     scheduler_eod_lookback_days: int = 7  # idempotent window: re-fetches recent bars

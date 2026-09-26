@@ -9,11 +9,15 @@ factor extremes, invalidation conditions from regime/risk, confidence from the
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
+from src.agents.llm.client import LLMClient
 from src.agents.schemas import InvestmentAnalysis
 from src.agents.tools import ToolCatalog
 from src.agents.util import bottom_factor, clamp01, round_score, signal_word, top_factor
+
+logger = logging.getLogger(__name__)
 
 PLAN: list[str] = [
     "Market regime",
@@ -86,10 +90,12 @@ class AnalysisAgent:
         *,
         agent_id: str = "analysis",
         version: str = "1.0",
+        llm: LLMClient | None = None,
     ) -> None:
         self._tools = tools
         self.agent_id = agent_id
         self.version = version
+        self._llm = llm
 
     def analyze(self, symbol: str) -> InvestmentAnalysis:
         regime = self._tools.call("get_market_regime")
@@ -124,6 +130,24 @@ class AnalysisAgent:
         risks = self._risks(contributions, risk, regime, val)
         invalidation = self._invalidations(regime, risk, top)
         warnings = self._warnings(tech, prediction, events)
+
+        # Optional LLM reasoning enrichment (ADR-005, Phase 5)
+        # Quant numbers remain authoritative; LLM synthesizes natural Vietnamese reasoning.
+        if self._llm is not None:
+            llm_thesis = self._synthesize_llm_thesis(
+                symbol=symbol,
+                overall=overall,
+                signal=signal,
+                scores=scores,
+                price=price,
+                regime=regime,
+                catalysts=catalysts,
+                risks=risks,
+                news=news,
+                fallback_thesis=thesis,
+            )
+            if llm_thesis:
+                thesis = llm_thesis
 
         confidence = self._confidence(
             signal=signal,
@@ -189,6 +213,86 @@ class AnalysisAgent:
             f"sector peers average {peer_txt} (n={peers.get('count', 0)})."
         )
         return " ".join(parts)
+
+    def _synthesize_llm_thesis(
+        self,
+        *,
+        symbol: str,
+        overall: float,
+        signal: str,
+        scores: dict[str, float | None],
+        price: dict[str, Any],
+        regime: dict[str, Any],
+        catalysts: list[str],
+        risks: list[str],
+        news: dict[str, Any],
+        fallback_thesis: str,
+    ) -> str:
+        """Call LLM to synthesize natural Vietnamese reasoning from quant facts."""
+        if self._llm is None:
+            return fallback_thesis
+
+        last_price = price.get("price")
+        change_pct = price.get("change_pct")
+        chg_str = f"{change_pct:+.2%}" if isinstance(change_pct, float) else "n/a"
+        regime_name = regime.get("regime", "UNKNOWN")
+        news_titles = [
+            str(n.get("title", "")).strip()
+            for n in (news.get("news") or [])[:3]
+            if isinstance(n, dict) and n.get("title")
+        ]
+
+        system_prompt = "\n".join(
+            [
+                "Bạn là trợ lý AI phân tích tài chính chuyên sâu của nền tảng DTCK "
+                "(Chứng khoán Việt Nam).",
+                "Nhiệm vụ: Dựa trên dữ liệu định lượng (Quant), rủi ro và tin tức do hệ "
+                "thống cung cấp, hãy tổng hợp thành một Luận điểm đầu tư (Investment "
+                "Thesis) cô đọng, khách quan và chuyên nghiệp.",
+                "Quy tắc tuyệt đối:",
+                "1. KHÔNG tự bịa số liệu hay chỉ báo ngoài dữ liệu được cung cấp.",
+                "2. Viết bằng tiếng Việt tự nhiên, súc tích (khoảng 2-3 câu).",
+                "3. Phản ánh đúng tín hiệu (Tích cực / Trung lập / Tiêu cực) và làm nổi "
+                "bật các động lực chính.",
+            ]
+        )
+
+        catalysts_txt = "; ".join(catalysts) if catalysts else "Không có"
+        risks_txt = "; ".join(risks) if risks else "Không có"
+        news_txt = "; ".join(news_titles) if news_titles else "Không có"
+        detail_scores = (
+            f"Kỹ thuật {scores.get('technical')}, Cơ bản {scores.get('fundamental')}, "
+            f"Định giá {scores.get('valuation')}, Động lượng {scores.get('momentum')}, "
+            f"Rủi ro {scores.get('risk')}"
+        )
+        user_prompt = "\n".join(
+            [
+                f"Dữ liệu phân tích cho mã cổ phiếu {symbol}:",
+                f"- Điểm đa yếu tố (Overall Score): {overall:.1f}/100 "
+                f"(Tín hiệu: {signal})",
+                f"- Chi tiết điểm: {detail_scores}",
+                f"- Giá gần nhất: {last_price} ({chg_str})",
+                f"- Chế độ thị trường (Regime): {regime_name}",
+                f"- Chất xúc tác nổi bật: {catalysts_txt}",
+                f"- Yếu tố rủi ro: {risks_txt}",
+                f"- Tin tức gần đây: {news_txt}",
+                "",
+                "Hãy viết đoạn tóm tắt luận điểm đầu tư ngắn gọn (2-3 câu).",
+            ]
+        )
+
+        try:
+            resp = self._llm.generate(
+                prompt=user_prompt,
+                system=system_prompt,
+                temperature=0.2,
+                max_tokens=384,
+            )
+            cleaned = resp.strip()
+            return cleaned if cleaned else fallback_thesis
+        except Exception as exc:
+            logger.warning("LLM thesis synthesis failed (%s); using deterministic thesis", exc)
+            return fallback_thesis
 
     def _catalysts(
         self,

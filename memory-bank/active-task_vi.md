@@ -2,7 +2,56 @@
 
 > Thuật ngữ chuyên môn (tên bảng, biến môi trường, lệnh, đường dẫn) giữ nguyên tiếng Anh.
 
-## Task: Chuẩn hóa 100% tài liệu tiếng Việt — Xóa bỏ các bản tiếng Anh & Ban hành quy ước tài liệu tiếng Việt
+## Task: T017 — SSI FastConnect là nguồn chính (Yahoo dự phòng) + `/readyz` báo đúng thực tế
+
+**Trạng thái:** HOÀN THÀNH (2026-09-27)
+**Mục tiêu:** (a) đưa SSI FastConnect thành nguồn dữ liệu thị trường **chính** với chuỗi dự phòng tự động về Yahoo; (b) trả lời trung thực câu hỏi "hệ thống đã sẵn sàng chưa" ở `/readyz` (bỏ giá trị hardcode `pending`/`offline:…`).
+
+### Các công việc đã thực hiện:
+- [x] **Chuỗi nhà cung cấp** — `src/data/providers/registry.py::market_provider_chain(primary)`: nguồn chính trước, rồi `fallback_chains.market`, khử trùng lặp ⇒ `[ssix_finipro, yahoo, vndirect, tcbs, dsc]`; export qua `src/data/providers/__init__.py` + `src/data/__init__.py`.
+- [x] **Dự phòng trong job EOD** — `apps/worker/main.py::scheduled_eod_ingestion()` đi hết chuỗi: nguồn không dựng được (thiếu credential) hoặc trả 0 dòng ⇒ log WARNING + thử nguồn kế tiếp; hết chuỗi ⇒ ERROR. `SCHEDULER_EOD_SOURCE` mặc định `ssix_finipro` (`apps/api/config.py`, `docker-compose.yml` ×2, `.env.example`).
+- [x] **`/readyz` trung thực** — `apps/api/main.py`: `_database_status()` (connected / connected-no-prices / unreachable), `_qdrant_status()`, `_agents_status()` (`llm:<model>` | `offline:<tasks>`), `_market_source_status()` (`<chế độ>-><service>`), thêm khoá `market_source`; probe best-effort không ném 5xx.
+- [x] **Qdrant trong image** — extra `[qdrant]` trong `pyproject.toml` (chỉ client, pin trùng `[rag]`), `docker/Dockerfile.api` + `Dockerfile.worker` cài `.[dev,ml,qdrant]`.
+- [x] **Kiểm thử (+12)** — `test_sources_registry.py` (2), `test_worker_scheduler.py` (2), `test_api.py` (4), `test_deployment_config.py` (3, có test chống trôi pin).
+- [x] **Tài liệu** — `docs/DATA_SOURCES_vi.md`, `docs/DEPLOYMENT_vi.md`, `docs/api.html`, `docs/status.html`, `docs/modules.html`, `docs/pipeline.html`, `helper/deployment_vi.md`, `helper/resources_vi.md`, `memory-bank/{changelog,decisions,known-issues,current-state,tasks,active-task}_vi.md`, `configs/sources.yaml` (`VERIFIED_2026-09-27`).
+
+### Kiểm chứng trực tiếp (fact đã đo, 2026-09-27):
+- `curl /readyz` → `{"status":"ready","market_source":"auto->db","dependencies":{"database":"connected","qdrant":"up","agents":"llm:qwen3.5"}}`
+- `ingest --dataset prices --source ssix_finipro --symbols FPT,VCB,HPG,ACB --start 2026-09-01 --end 2026-09-26` → `fetched=68 written=68 issues=0 quality=93.74`
+- `ingest --dataset index_prices --source ssix_finipro --indexes VNINDEX,VN30 --start 2026-09-01 --end 2026-09-26` → `fetched=34 written=34 quality=93.74`
+- CSDL: 716 dòng `prices` (source `ssix_finipro`) · 34 dòng `index_prices`; Qdrant: collection `dtck_docs`, `GET /rag/status` → `qdrant_available: true`
+- Suite: `LLM_PROVIDER=mock MARKET_DATA_SOURCE=memory pytest tests/unit -q` → **442 passed, 3 skipped**; `ruff` sạch; `mypy apps src` → 129 tệp sạch; `docker compose build api worker` thành công.
+
+### Ghi chú vận hành:
+- `docker compose build api worker` **bắt buộc** sau thay đổi này (Dockerfile + code job).
+- Credential SSI: `SSI_CONSUMER_ID` + `SSI_CONSUMER_SECRET` trong `.env` (đổi JWT qua `Market/AccessToken`); `FINIPRO_ACCESS_TOKEN` có thể để trống.
+- Nếu SSI hết hạn ngạch/lỗi, job tự chuyển Yahoo — không cần đổi cấu hình; log sẽ ghi `EOD source '…' … trying the next source`.
+
+---
+
+## Task: T016 — Nối tầng suy luận LLM local (Ollama) cho Analysis Agent
+
+**Trạng thái:** HOÀN THÀNH (2026-09-26)
+**Mục tiêu:** Cho Analysis Agent sinh `thesis` tiếng Việt từ Ollama `qwen3.5` (ADR-005) **không** đổi dữ liệu quant, có fallback tất định, và giữ nguyên bộ test offline.
+
+### Các công việc đã thực hiện:
+- [x] **Tầng provider LLM** — tạo `src/agents/llm/` (`LLMClient` Protocol `@runtime_checkable`, `MockLLMClient`, `OllamaLLMClient` dùng `httpx` + `transport` để test không cần mạng, `create_llm_client`).
+- [x] **Nối vào agent** — `AnalysisAgent(llm=...)` + `_synthesize_llm_thesis()` (prompt gồm điểm đa yếu tố, điểm thành phần, giá, regime, catalysts, risks, tin tức; chỉ thay `thesis`; lỗi/timeout/rỗng ⟶ mẫu tất định); `Orchestrator(llm=...)` truyền xuống và gắn nhãn audit `deterministic-quant-v1+<model>`.
+- [x] **Cấu hình** — `get_llm_client()` trong `apps/api/services/agent_service.py` (`mock` ⇒ `None`), `timeout_s = LLM_TIMEOUT_SECONDS + 15`, thêm `llm_think` vào `Settings` + `.env.example`/`.env` (`LLM_THINK=false`), ví dụ `local`/`qwen3.5`/`host.docker.internal:11434`.
+- [x] **API** — `GET /api/v1/agents` trả thêm `llm_model` + `reasoning`.
+- [x] **Test** — `tests/unit/test_llm_client.py` (22 test), `test_smoke` nhận alias `ollama`.
+- [x] **Tài liệu** — `docs/AGENT_ARCHITECTURE_vi.md` §8.1, `docs/api.html`, `docs/modules.html`, `docs/index.html`, `docs/structure.html`, `docs/DEPLOYMENT_vi.md`, `helper/deployment_vi.md`, `helper/resources_vi.md`, `memory-bank/{changelog,tasks,current-state}_vi.md`.
+- [x] **Kiểm chứng trực tiếp** — rebuild image `api` → `docker compose up -d api`; từ host: `POST /api/v1/agents/analyze` `VCB` `succeeded` `latency_ms≈15000` `model=deterministic-quant-v1+qwen3.5`; async `HPG` `succeeded` 12,1 s; bộ test `LLM_PROVIDER=mock MARKET_DATA_SOURCE=memory pytest` → **449 passed, 3 skipped, 1 failed có sẵn**; `ruff` + `mypy` (129 tệp) sạch.
+
+### Ghi chú vận hành (fact đã đo):
+- Ollama máy host đã `OLLAMA_HOST=0.0.0.0` (systemd override) → container qua `host.docker.internal:11434` OK.
+- `think=false` **bắt buộc** với `qwen3.5`: nếu bật, khối suy luận chiếm hết `num_predict` nên `response` rỗng và mất 30–170 s. Với `think=false`: ~12–22 s/luận điểm.
+- `qwen2.5-7b-65k:latest` (~5–11 s) là lựa chọn nhanh hơn nếu cần độ trễ thấp hơn.
+- Lỗi có sẵn ngoài phạm vi: `tests/integration/test_scoring_job::test_api_reader_serves_the_persisted_run` (`0.9999` vs `1.0`).
+
+---
+
+## Task trước: Chuẩn hóa 100% tài liệu tiếng Việt — Xóa bỏ các bản tiếng Anh & Ban hành quy ước tài liệu tiếng Việt
 
 **Trạng thái:** HOÀN THÀNH (2026-09-26)
 **Quy ước bắt buộc mới:** Từ bây giờ khi cập nhật các file markdown của project chỉ sử dụng tiếng Việt và các file tiếng Việt. Toàn bộ các file tiếng Anh tương ứng đã bị xóa bỏ để đảm bảo tính duy nhất và nhất quán của tài liệu.
@@ -83,6 +132,7 @@
   (nhãn `exchange` trong config chỉ mang tính gắn nhãn — `prices` khoá theo `stock_id`).
 - Lỗi tồn tại từ trước, không liên quan task này: `test_smoke.py::test_api_config_loads`
   từ chối `LLM_PROVIDER=ollama` trong `.env` cục bộ (chạy bộ test với `LLM_PROVIDER=mock`).
+  → *Đã hết ở T016 (2026-09-26): allowlist của smoke test nhận thêm `ollama` như alias của `local`.*
 
 
 ## Workstream W1, W1b, W2: đường đọc CSDL, chấm điểm hệ số quant, nạp tin CaféF RSS (2026-09-25)

@@ -15,9 +15,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY pyproject.toml README.md alembic.ini ./
 COPY src ./src
 COPY apps ./apps
+COPY configs ./configs
 COPY database ./database
-# [ml] extra: the worker runs train-model (scikit-learn/xgboost); [dev] keeps
+# [ml] extra: the worker runs train-model (scikit-learn/xgboost); [qdrant] = the
+# Qdrant client only (news chunks are mirrored to the collection); [dev] keeps
 # pytest/ruff/mypy available in this image.
-RUN pip install --upgrade pip && pip install -e ".[dev,ml]"
+RUN pip install --upgrade pip && pip install -e ".[dev,ml,qdrant]"
 
 CMD ["python", "-m", "apps.worker.main"]

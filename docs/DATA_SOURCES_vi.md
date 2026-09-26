@@ -17,6 +17,12 @@
 > Cập nhật 2026-09-25: `yahoo` (EOD) và `cafef` (RSS) đã **kiểm chứng trực tiếp**
 > (`VERIFIED_2026-09-25` trong `configs/sources.yaml`); E2E `fetched=62 written=62 quality=94.88`.
 
+> Cập nhật 2026-09-27: **`ssix_finipro` (SSI FastConnect) đã kiểm chứng trực tiếp**
+> bằng credential consumer live → trở thành nguồn **chính** cho thị trường
+> (`Market/DailyOhlc`: 68 dòng cho FPT,VCB,HPG,ACB · quality 93.74;
+> `Market/DailyIndex`: 34 dòng cho VNINDEX,VN30). Job EOD 15:05 tự chạy chuỗi
+> `ssix_finipro → yahoo → vndirect → tcbs → dsc` (`market_provider_chain`).
+
 ---
 
 # 1. Mục tiêu & Phi mục tiêu
@@ -36,9 +42,9 @@
 - **Không** dựa vào một API không chính thức duy nhất làm nguồn đơn lẻ.
 # 4. Danh mục provider (rút gọn — đủ xem trong `configs/sources.yaml`)
 
-| Nguồn | Vai trò | Trạng thái 2026-09-26 |
+| Nguồn | Vai trò | Trạng thái 2026-09-27 |
 |---|---|---|
-| `ssix_finipro` (SSI FiniPro) | chính thị trường + cơ bản + sự kiện + tin | đã chọn; endpoint chờ kiểm chứng (KI-006), cần token (KI-007) |
+| `ssix_finipro` (SSI FastConnect) | chính thị trường + cơ bản + sự kiện + tin | **kiểm chứng 2026-09-27** (consumer credential live): `Market/AccessToken` (JWT, cache + refresh khi 401), `Market/DailyOhlc` (68 dòng · quality 93.74), `Market/DailyIndex` (34 dòng) — KI-006/KI-007 đã đóng phần thị trường |
 | `yahoo` | dự phòng thị trường — EOD OHLCV mã `.VN` (anonymous) | **kiểm chứng 2026-09-25**: un-adjust tách qua `events=split`, `trading_value` ≈ close×volume, bỏ dòng volume 0 |
 | `vndirect`, `tcbs`, `dsc` | dự phòng thị trường/cơ bản (anonymous, không chính thức) | đã chọn làm dự phòng (vndirect/tcbs unreachable từ host 2026-09-25) |
 | `sbv`, `gso`, `imf_worldbank` | vĩ mô (công khai chính thức) | đã chọn |
@@ -53,8 +59,8 @@
 
 | Miền | Chính | Dự phòng | Ghi chú |
 |---|---|---|---|
-| Thị trường EOD | `ssix_finipro` | `yahoo` → `vndirect` → `tcbs` → `dsc` | `yahoo` đã kiểm chứng 2026-09-25 (chart v8, anonymous) |
-| Cơ bản | `ssix_finipro` | `vndirect` → `vietstock` | cần token FiniPro (KI-007) |
+| Thị trường EOD | `ssix_finipro` | `yahoo` → `vndirect` → `tcbs` → `dsc` | `ssix_finipro` đã kiểm chứng 2026-09-27 (consumer credential); `yahoo` kiểm chứng 2026-09-25 (chart v8, anonymous) |
+| Cơ bản | `ssix_finipro` | `vndirect` → `vietstock` | endpoint cơ bản của SSI còn chờ kiểm chứng (KI-006 phần còn lại) |
 | Vĩ mô | `sbv` / `gso` | `imf_worldbank` (+ `tradingeconomics` nếu có phép) | nguồn công khai chính thức |
 | Sự kiện doanh nghiệp | `ssix_finipro` | `hose` → `cafef` | `hose`/`hnx` chờ đọc cấp phép |
 | Tin tức | `cafef` | `vnexpress` → `vietstock` | CaféF RSS đã kiểm chứng 2026-09-25 (50 bài thật) |
@@ -80,7 +86,8 @@ Theo `docs/SECURITY.md` §2 (không secret trong code/Git/image; chỉ env).
 
 | Mục đích | Biến env (chỉ tên — trống trong `.env.example`) | Provider |
 |---|---|---|
-| Provider chính thị trường/cơ bản | `FINIPRO_ACCESS_TOKEN` | `ssix_finipro` |
+| Provider chính thị trường/cơ bản | `SSI_CONSUMER_ID` + `SSI_CONSUMER_SECRET` (đổi lấy JWT), hoặc `FINIPRO_ACCESS_TOKEN` (token cấp sẵn) | `ssix_finipro` |
+| Base URL SSI FastConnect (tùy chọn) | `SSI_API_URL` (mặc định `https://fc-data.ssi.com.vn`) | `ssix_finipro` |
 | API tin tức/từ khóa trả phí (tùy chọn) | `NEWS_API_KEY` | `newsdata` |
 | Tổng hợp vĩ mô (tùy chọn, trả phí) | `TRADINGECONOMICS_API_KEY` | `tradingeconomics` |
 | Chọn provider dữ liệu thị trường (lặp registry) | `MARKET_DATA_PROVIDER`, `MARKET_DATA_API_KEY` | chung |
@@ -104,11 +111,24 @@ Quy tắc:
 
 Dự phòng **không lặng lẽ**: mỗi lần chuyển ghi vào `audit_logs` để provenance luôn tái lập được.
 
+> **Thực thi lúc chạy (2026-09-27):** job EOD của worker không tự viết lại chuỗi
+> trên mà đọc từ `configs/sources.yaml` qua `market_provider_chain(primary=...)`
+> (`src/data/providers/registry.py`) — nguồn `SCHEDULER_EOD_SOURCE` (mặc định
+> `ssix_finipro`) đứng đầu, sau đó `fallback_chains.market`. Nguyên tắc: nguồn
+> không dựng được (thiếu credential) hoặc trả **0 dòng** thì ghi log WARNING và
+> thử nguồn kế tiếp; hết chuỗi mới báo ERROR. Nhờ vậy một vendor lỗi không làm
+> universe mất điểm, và cấu hình vẫn là nguồn sự thật duy nhất.
+
 ---
 
 # 8. Mục mở / TO VERIFY (§8 bản Anh — chặn việc collector T004)
 
 1. Luồng đăng ký **FiniPro**, cơ chế token và giới hạn tần suất từng call.
+   **Đã giải phần thị trường (2026-09-27):** `Market/AccessToken` nhận
+   `consumerID`/`consumerSecret` và trả JWT (provider cache theo tiến trình, tự
+   xin lại khi gặp 401); `Market/DailyOhlc` + `Market/DailyIndex` đã kiểm chứng
+   (68 + 34 dòng, `VERIFIED_2026-09-27`). Còn chờ: hạn mức tần suất chính thức
+   theo gói và các endpoint cơ bản/sự kiện (`Financial/*`, `CorporateEvents`).
 2. URL endpoint & schema response chính xác cho `vndirect`, `tcbs`, `dsc`
    (API không tài liệu — phải snapshot-test). **Đã giải cho `yahoo` ngày
    2026-09-25** (chart v8 đã kiểm chứng + ghi trong

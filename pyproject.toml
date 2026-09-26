@@ -44,6 +44,13 @@ rag = [
     "qdrant-client>=1.9,<2.0",
     "sentence-transformers>=2.7,<4.0",
 ]
+# Qdrant mirror client only (no torch/transformers): what the api/worker images
+# install so chunks are mirrored to the real collection and `/readyz` reports
+# `qdrant: up`. The pin MUST stay identical to the one in `rag` — guarded by
+# tests/unit/test_deployment_config.py.
+qdrant = [
+    "qdrant-client>=1.9,<2.0",
+]
 agents = [
     "langgraph>=0.2,<1.0",
     "langchain-core>=0.2,<1.0",

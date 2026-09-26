@@ -28,7 +28,7 @@ curl localhost:8000/healthz</pre>
 <table>
 <tr><th>Phương thức</th><th>Đường dẫn</th><th>Mô tả</th></tr>
 <tr><td>GET</td><td><code>/healthz</code></td><td>Sống: <code>{"status":"ok","service":"api","version":"0.1.0"}</code></td></tr>
-<tr><td>GET</td><td><code>/readyz</code></td><td>Sẵn sàng: kèm trạng thái phụ thuộc (database <code>pending</code> · qdrant <code>up</code> / <code>offline-index-ready</code>)</td></tr>
+<tr><td>GET</td><td><code>/readyz</code></td><td>Sẵn sàng: dò <i>thật</i> từng phụ thuộc — <code>database</code> (<code>connected</code> · <code>connected-no-prices</code> · <code>unreachable</code>) · <code>qdrant</code> (<code>up</code> / <code>offline-index-ready</code>) · <code>agents</code> (<code>llm:&lt;model&gt;</code> hoặc <code>offline:&lt;tasks&gt;</code>) · <code>market_source</code> (<code>&lt;chế độ&gt;-&gt;&lt;service&gt;</code>)</td></tr>
 <tr><td>GET</td><td><code>/docs</code> · <code>/redoc</code> · <code>/openapi.json</code></td><td>Tài liệu tương tác và lược đồ OpenAPI</td></tr>
 </table>
 <h2 class="sec">Nhóm <code>/api/v1/market</code></h2>
@@ -62,10 +62,10 @@ curl localhost:8000/healthz</pre>
 <h2 class="sec">Nhóm <code>/api/v1/agents</code> + <code>/api/v1/analysis</code> (T013)</h2>
 <table>
 <tr><th>Phương thức</th><th>Đường dẫn</th><th>Mô tả</th></tr>
-<tr><td>GET</td><td><code>/agents</code></td><td>Lục tác tử (registry): phiên bản, trạng thái, công cụ, schema ra</td></tr>
+<tr><td>GET</td><td><code>/agents</code></td><td>Lục tác tử (registry): phiên bản, trạng thái, công cụ, schema ra + <code>llm_model</code>/<code>reasoning</code> (có đang dùng tầng suy luận LLM hay không)</td></tr>
 <tr><td>GET</td><td><code>/agents/runs</code></td><td>Lịch sử chạy, lọc <code>?agent_id=</code></td></tr>
-<tr><td>GET</td><td><code>/agents/runs/{agent_run_id}</code></td><td>Bản ghi audit đầy đủ: kế hoạch, lời gọi công cụ, latency, output</td></tr>
-<tr><td>POST</td><td><code>/agents/analyze</code></td><td>Analysis Agent: <code>{symbol, user_request?}</code> → <code>InvestmentAnalysis</code> (§23)</td></tr>
+<tr><td>GET</td><td><code>/agents/runs/{agent_run_id}</code></td><td>Bản ghi audit đầy đủ: kế hoạch, lời gọi công cụ, latency, output; <code>model</code> = <code>deterministic-quant-v1</code> hoặc <code>…+&lt;model&gt;</code> khi bật LLM</td></tr>
+<tr><td>POST</td><td><code>/agents/analyze</code></td><td>Analysis Agent: <code>{symbol, user_request?}</code> → <code>InvestmentAnalysis</code> (§23); với <code>LLM_PROVIDER=local</code> thì <code>thesis</code> do Ollama tổng hợp (12–22 s) — không chặn giao diện thì dùng <code>POST /analysis/request</code></td></tr>
 <tr><td>POST</td><td><code>/agents/research</code></td><td>Research Agent: <code>{symbol, query?}</code> → hồ sơ, tin tức, bằng chứng</td></tr>
 <tr><td>POST</td><td><code>/agents/monitor</code></td><td>Monitoring Agent: <code>{symbols[], previous_signals?}</code> → cảnh báo (§42)</td></tr>
 <tr><td>POST</td><td><code>/agents/portfolio</code></td><td>Portfolio Agent: <code>{positions[], risk_budget_annual_vol?}</code> → snapshot rủi ro/độ tập trung</td></tr>

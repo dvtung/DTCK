@@ -26,9 +26,9 @@ cp .env.example .env
 |---|---|---|
 | `POSTGRES_USER/PASSWORD/DB`, `DATABASE_URL` | ✅ | Đổi `change_me` thành mật khẩu thật. ⚠️ **Lệch DSN trong compose:** `api` dùng `…:${POSTGRES_PASSWORD:-change_me}@…`, còn `worker` đang ghi cứng `…:${POSTGRES_PASSWORD:-dtckpassword}@…` — nếu `.env` không đặt `POSTGRES_PASSWORD` thì worker sai mật khẩu. Cách an toàn: đặt `POSTGRES_PASSWORD` rõ trong `.env` (cả hai service cùng đọc một giá trị) |
 | `QDRANT_URL` | ✅ | Mặc định `http://localhost:6333` |
-| `LLM_PROVIDER`, `LLM_API_KEY` | Tùy | `mock` để chạy offline không tốn phí. ⚠️ test smoke từ chối `ollama` trong `.env` local → chạy test với `LLM_PROVIDER=mock` |
+| `LLM_PROVIDER`, `LLM_API_KEY`, `LLM_MODEL`, `LLM_BASE_URL`, `LLM_TIMEOUT_SECONDS`, `LLM_THINK` | Tùy (T016) | `mock` để chạy offline không tốn phí (test không gọi mạng). Đã nối tầng suy luận: `local` + `LLM_MODEL=qwen3.5` + `LLM_BASE_URL=http://host.docker.internal:11434` ⇒ Ollama máy host trả `thesis` tiếng Việt cho Analysis Agent (chi tiết `docs/AGENT_ARCHITECTURE_vi.md` §8.1). `LLM_THINK=false` (mặc định) tắt khối suy luận của model hybrid để giữ độ trễ trong hạn mức §45. Chạy test với `LLM_PROVIDER=mock MARKET_DATA_SOURCE=memory` |
 | `MARKET_DATA_SOURCE` | ✅ (mới) | Chế độ đọc của API: `memory` (mặc định trong code — không cần DB) · `db` (ép đọc TimescaleDB) · `auto` (đọc DB khi bảng `prices` đã có dòng, ngược lại về memory). Compose đã đặt mặc định `auto` cho `api`/`worker` — cần **build lại image** mới có hiệu lực (xem Giai đoạn 3) |
-| `SCHEDULER_*` (10 biến) | Tùy (mới) | Job worker lập lịch: `SCHEDULER_JOBS_ENABLED` (true/false) · tin tức `SCHEDULER_NEWS_SOURCE=cafef` mỗi `SCHEDULER_NEWS_INTERVAL_MINUTES=15` phút · EOD `SCHEDULER_EOD_SOURCE=yahoo` lúc `SCHEDULER_EOD_CRON_HOUR:MINUTE=15:05` T2–T6, cửa sổ nạp lại `SCHEDULER_EOD_LOOKBACK_DAYS=7` · chấm điểm `SCHEDULER_SCORING_CRON_HOUR:MINUTE=15:30` T2–T6 (múi giờ `Asia/Ho_Chi_Minh`) |
+| `SCHEDULER_*` (10 biến) | Tùy (mới) | Job worker lập lịch: `SCHEDULER_JOBS_ENABLED` (true/false) · tin tức `SCHEDULER_NEWS_SOURCE=cafef` mỗi `SCHEDULER_NEWS_INTERVAL_MINUTES=15` phút · EOD `SCHEDULER_EOD_SOURCE=ssix_finipro` lúc `SCHEDULER_EOD_CRON_HOUR:MINUTE=15:05` T2–T6 (nguồn chính SSI, tự chuyển `yahoo → vndirect → tcbs → dsc` khi lỗi/0 dòng), cửa sổ nạp lại `SCHEDULER_EOD_LOOKBACK_DAYS=7` · chấm điểm `SCHEDULER_SCORING_CRON_HOUR:MINUTE=15:30` T2–T6 (múi giờ `Asia/Ho_Chi_Minh`) |
 | `DATA_QUALITY_THRESHOLD` | Tùy | Cổng chất lượng §39, thang 0–100 (mặc định `80.0`) |
 | `NEWS_PROVIDER`, `NEWS_API_KEY` | Cho tin tức thật | ✅ CaféF RSS đã kiểm chứng 2026-09-25 (`cafef`, anonymous, 50 bài đã nạp thử) |
 | `MARKET_DATA_PROVIDER`, `FINIPRO_ACCESS_TOKEN` | Cho dữ liệu thật | ✅ Yahoo EOD đã kiểm chứng 2026-09-25 (anonymous); FiniPro/VNDirect/TCBS vẫn chờ mạng/token (KI-006/007) |
@@ -123,10 +123,19 @@ docker compose logs worker 2>&1 | grep -i "registered job"
 ```bash
 # 13. API health + readyz
 curl http://localhost:8000/healthz     # {"status":"ok",...}
-curl http://localhost:8000/readyz      # kiểm tra dependencies (db, qdrant)
-# readyz báo qdrant "offline-index-ready" khi thiếu qdrant_client — là bình thường (KI-011)
+curl http://localhost:8000/readyz      # dò THẬT từng phụ thuộc
+# Kỳ vọng trên stack đã nạp dữ liệu (2026-09-27):
+#   {"status":"ready",
+#    "market_source":"auto->db",
+#    "dependencies":{"database":"connected","qdrant":"up",
+#                    "agents":"llm:qwen3.5"}}
+# Ý nghĩa (không hardcode):
+#   database  connected | connected-no-prices (CSDL thông nhưng `prices` rỗng) | unreachable
+#   qdrant    up | offline-index-ready (thiếu qdrant_client — index in-memory vẫn chạy, KI-011)
+#   agents    llm:<model> (LLM_PROVIDER=local, T016) | offline:<danh sách task>
+#   market_source  <MARKET_DATA_SOURCE>-><service đang phục vụ: db|memory>
 
-# 14. API hoạt động với dữ liệu seed + memory (lúc này prices còn trống nên auto về memory — đúng)
+# 14. API hoạt động với dữ liệu seed + memory (khi prices còn trống thì auto về memory — đúng)
 curl "http://localhost:8000/api/v1/market/indices?limit=3"
 curl "http://localhost:8000/api/v1/stocks/FPT/ranking"
 
@@ -138,12 +147,22 @@ curl "http://localhost:8000/api/v1/rag/search?query=VNINDEX&top_k=3"
 # Qdrant dashboard → http://localhost:6333/dashboard
 ```
 
-### 3.2. Nạp giá EOD thật (Yahoo) + chấm điểm — bước tiếp theo của bạn
+### 3.2. Nạp giá EOD thật (SSI FastConnect → Yahoo dự phòng) + chấm điểm
 
 ```bash
-# 16. Nạp giá thật (đã kiểm chứng 2026-09-25: fetched=62 written=62 quality=94.88)
+# 16. Nạp giá thật — SSI FastConnect là nguồn CHÍNH (kiểm chứng 2026-09-27:
+#     fetched=68 written=68 quality=93.74 cho FPT,VCB,HPG,ACB 2026-09-01..26).
+#     Cần SSI_CONSUMER_ID + SSI_CONSUMER_SECRET trong .env (hoặc FINIPRO_ACCESS_TOKEN).
 docker compose exec -T worker python -m apps.worker.cli ingest --dataset prices \
-  --source yahoo --symbols FPT,VCB,HPG,ACB --start 2026-09-01 --end 2026-09-25
+  --source ssix_finipro --symbols FPT,VCB,HPG,ACB --start 2026-09-01 --end 2026-09-26
+
+# 16b. Chỉ số qua SSI (Market/DailyIndex — VERIFIED 2026-09-27: written=34)
+docker compose exec -T worker python -m apps.worker.cli ingest --dataset index_prices \
+  --source ssix_finipro --indexes VNINDEX,VN30 --start 2026-09-01 --end 2026-09-26
+
+# 16c. Dự phòng Yahoo khi SSI lỗi/hết hạn ngạch (chuỗi thị trường chạy cùng lệnh)
+docker compose exec -T worker python -m apps.worker.cli ingest --dataset prices \
+  --source yahoo --symbols FPT,VCB,HPG,ACB --start 2026-09-01 --end 2026-09-26
 
 # 17. Chấm điểm trên dữ liệu thật (ghi vào bảng factor_scores)
 docker compose exec -T worker python -m apps.worker.cli compute-scores --lookback 60
@@ -159,8 +178,11 @@ Dashboard trang xếp hạng và "Tin tức & RAG" sẽ hiện dữ liệu thậ
 
 ## Giai đoạn 4: Dữ liệu thị trường
 
-Giá EOD thật chạy qua chuỗi dự phòng thị trường (ưu tiên theo `configs/sources.yaml`):
-`[yahoo (85, VERIFIED_2026-09-25), vndirect (80), tcbs (75), dsc (70)]`.
+Nguồn **chính** là SSI FastConnect (`ssix_finipro`, priority 100, `VERIFIED_2026-09-27`
+với credential consumer live); chuỗi dự phòng lấy từ `configs/sources.yaml`:
+`ssix_finipro → yahoo (85, VERIFIED_2026-09-25) → vndirect (80) → tcbs (75) → dsc (70)`.
+Job EOD 15:05 tự đi hết chuỗi này (`market_provider_chain`): nguồn nào không dựng
+được (thiếu credential) hoặc trả 0 dòng thì ghi log và chuyển nguồn kế tiếp.
 Tin tức qua `cafef` RSS (`VERIFIED_2026-09-25`, đã nạp 50 bài thật 2026-09-24).
 
 **Lựa chọn A — Offline/fixture (mặc định, không cần mạng):**
@@ -182,21 +204,23 @@ docker compose exec -T worker python -m apps.worker.cli ingest --dataset news \
 
 Quy trình ingest chuẩn qua cổng chất lượng:
 
-1. Bắt giá EOD mới nhất của một mã qua chain chính
-2. Dịch mã `.VN`: `FPT.VN`, `VCB.VN`, `HPG.VN`, `ACB.VN`
-3. Chạy lại ingest với `--source ssix_finipro` khi đã có token (hiện tại SSIX/VNDirect/TCBS/DSC vẫn chờ mạng/chứng thực — KI-006/007)
+1. Bắt giá EOD mới nhất của một mã qua chain chính (**SSI FastConnect** trước, Yahoo sau)
+2. Dịch mã `.VN` chỉ cần cho Yahoo: `FPT.VN`, `VCB.VN`, `HPG.VN`, `ACB.VN` (SSI dùng mã gốc `FPT`, `VCB`, …)
+3. Chạy lại ingest với `--source yahoo` khi SSI lỗi/hết hạn ngạch (job 15:05 tự làm việc này)
 4. **Quality gate §39**: batch dưới 80 điểm sẽ bị flag `below_threshold` và command trả exit code 1 — đây là hành vi đúng, không phải lỗi
 
-**Worker scheduler (2026-09-25):** container `worker` (`python -m apps.worker.main`)
+**Worker scheduler (2026-09-25, cập nhật 2026-09-27):** container `worker` (`python -m apps.worker.main`)
 chạy APScheduler blocking với **3 job thật**: tin tức mỗi N phút (`cafef`),
-EOD Mon–Fri 15:05 (`yahoo`, cửa sổ nạp lại 7 ngày), chấm điểm Mon–Fri 15:30
+EOD Mon–Fri 15:05 (`SCHEDULER_EOD_SOURCE=ssix_finipro` + chuỗi dự phòng
+`yahoo → vndirect → tcbs → dsc`, cửa sổ nạp lại 7 ngày), chấm điểm Mon–Fri 15:30
 — múi giờ `Asia/Ho_Chi_Minh`, fail-soft (provider lỗi chỉ ghi log).
 Tắt job bằng `SCHEDULER_JOBS_ENABLED=false` (endpoint `/news/ingest` vẫn dùng được).
 Image cũ chưa có code này → phải `docker compose build api worker` (xem 3.0).
 
 **Đọc DB qua API (2026-09-25, KI-008 đã mở phần đọc):**
 `MARKET_DATA_SOURCE=db|auto` nối toàn bộ đường đọc vào `DbMarketService`
-(13 nhóm bảng thật); mặc định vẫn `memory`; `/readyz` báo `"source"`.
+(13 nhóm bảng thật); mặc định vẫn `memory`; `/readyz` báo `market_source`
+dạng `<chế độ>-><service>` (ví dụ `auto->db`).
 Chiều **ghi** qua API (ví dụ `POST /backtests` ghi vào DB, JWT/RBAC) chưa có.
 
 **Huấn luyện mô hình ML (T014):**
@@ -211,8 +235,8 @@ docker compose exec -T api python -m apps.worker.cli train-model
 ## Giai đoạn 5: Xác thực chất lượng triển khai
 
 ```bash
-# 19. Chạy toàn bộ test suite trong container
-docker compose exec -T api sh -c "LLM_PROVIDER=mock pytest -q"   # kỳ vọng: 422 passed, 3 skipped
+# 19. Chạy toàn bộ test suite (trên máy chủ — thư mục `tests/` không nằm trong image api)
+LLM_PROVIDER=mock MARKET_DATA_SOURCE=memory pytest -q   # kỳ vọng: 432 passed, 3 skipped
 
 # 20. Lint + type check (image API cài kèm dev deps)
 docker compose exec -T api ruff check .
@@ -264,6 +288,9 @@ docker compose exec db pg_dump -U dtck dtck | gzip > backup_$(date +%F).sql.gz
 | `FATAL: password authentication failed for user "dtck"` | `.env` đổi `POSTGRES_PASSWORD` **sau khi** volume DB được khởi tạo — Postgres chỉ đọc biến này ở lần init đầu tiên. Đồng bộ lại: `docker compose exec -T db psql -U dtck -d dtck -c "ALTER USER dtck WITH PASSWORD '<mật-khẩu-trong-.env>'"`, hoặc khôi phục mật khẩu cũ trong `.env`, hoặc `docker compose down -v` (⚠️ mất dữ liệu) |
 | Container `api` timeout khi tới `db` (không phải lỗi xác thực) | Firewall/forwarding của **host** chặn traffic giữa container (không phải lỗi dự án). Kiểm tra: `sudo iptables -S FORWARD`, `sudo nft list ruleset \\| grep -i drop`, `sudo ebtables -L`; sau đó `sudo systemctl restart docker` |
 | `alembic upgrade` lỗi kết nối | DB chưa healthy — đợi `pg_isready`, xem `docker compose logs db` |
-| `readyz` báo qdrant offline | Bình thường khi không có `qdrant_client` — RAG dùng index in-memory (KI-011) |
+| `readyz` báo qdrant `offline-index-ready` | Image thiếu `qdrant-client` — từ 2026-09-27 Dockerfile cài extra `[qdrant]`. Build lại `docker compose build api worker && docker compose up -d --no-deps api worker`; ngoài ra đây vẫn là trạng thái hợp lệ (RAG dùng index in-memory, KI-011) |
+| `readyz` báo database `unreachable` | Sai `DATABASE_URL`/DB chưa healthy (`docker compose ps db`, `docker compose logs db`) |
+| `readyz` báo database `connected-no-prices` | CSDL thông nhưng bảng `prices` rỗng → `auto` phục vụ memory; nạp giá rồi `/readyz` sẽ báo `auto->db` |
+| Ingest `prices` trả `fetched=0 written=0` | Sai khoảng ngày (ví dụ `--start/--end` trùng ngày nghỉ) hoặc symbol/mã chỉ số không đúng; SSI dùng mã gốc (`FPT`), Yahoo cần `.VN` |
 | Ingest trả exit 1 | Quality gate §39 từ chối batch kém chất lượng — xem log `validation issue` |
 | `train-model` lỗi "single class" | KI-012 — fixture tổng hợp chỉ tăng; cần dữ liệu thật |

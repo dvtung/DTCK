@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Vietnam Stock Intelligence Engine — Mô phỏng kiến trúc</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0E1A20; --bg-elev:#132530; --panel:#122129; --border:#22404A;
+  --text:#E7EFF1; --text-muted:#8FA8AF;
+  --quant:#49D6C0; --agent:#E8A33D; --orch:#6C93F2; --danger:#E2584C; --ok:#5FC48A;
+  --mono:'IBM Plex Mono',monospace; --sans:'IBM Plex Sans',sans-serif;
+  --radius:6px;
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    --bg:#F2F6F5; --bg-elev:#FFFFFF; --panel:#FFFFFF; --border:#D6E2E1;
+    --text:#15262A; --text-muted:#587178;
+    --quant:#0E8C7A; --agent:#A8690A; --orch:#3452C4; --danger:#B93A2F; --ok:#2A8A5B;
+  }
+}
+:root[data-theme="light"]{
+  --bg:#F2F6F5; --bg-elev:#FFFFFF; --panel:#FFFFFF; --border:#D6E2E1;
+  --text:#15262A; --text-muted:#587178;
+  --quant:#0E8C7A; --agent:#A8690A; --orch:#3452C4; --danger:#B93A2F; --ok:#2A8A5B;
+}
+*{box-sizing:border-box;}
+html,body{height:100%;}
+body{
+  margin:0; background:var(--bg); color:var(--text); font-family:var(--sans);
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+header{
+  padding:22px clamp(14px,4vw,34px) 16px; border-bottom:1px solid var(--border);
+  padding-top:calc(22px + env(safe-area-inset-top,0px));
+}
+header h1{margin:0 0 4px; font-size:clamp(19px,2.4vw,24px); font-weight:700; letter-spacing:.2px;}
+header p{margin:0; color:var(--text-muted); font-size:13.5px; max-width:760px; line-height:1.5;}
+.status-row{display:flex; gap:8px; flex-wrap:wrap; margin-top:12px;}
+.status-chip{
+  font-family:var(--mono); font-size:11px; padding:4px 9px; border-radius:20px;
+  border:1px solid var(--border); color:var(--text-muted); background:var(--panel);
+}
+.status-chip b{color:var(--ok);}
+
+.controls{
+  display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+  padding:14px clamp(14px,4vw,34px); border-bottom:1px solid var(--border); background:var(--bg-elev);
+  position:sticky; top:0; z-index:5;
+}
+.mode-group{display:flex; gap:6px; background:var(--panel); padding:4px; border-radius:8px; border:1px solid var(--border);}
+.mode-btn{
+  font-family:var(--sans); font-size:12.5px; font-weight:600; padding:7px 12px; border-radius:6px;
+  border:none; background:transparent; color:var(--text-muted); cursor:pointer; transition:.15s;
+}
+.mode-btn.active{background:var(--orch); color:#fff;}
+.mode-btn:not(.active):hover{color:var(--text);}
+.spacer{flex:1;}
+button.run{
+  font-family:var(--sans); font-weight:700; font-size:13px; padding:9px 18px; border-radius:7px;
+  border:1px solid var(--quant); background:var(--quant); color:#06201B; cursor:pointer;
+}
+button.run:disabled{opacity:.45; cursor:not-allowed;}
+button.reset{
+  font-family:var(--sans); font-weight:600; font-size:13px; padding:9px 14px; border-radius:7px;
+  border:1px solid var(--border); background:transparent; color:var(--text-muted); cursor:pointer;
+}
+.scenario-label{font-size:12.5px; color:var(--text-muted); font-family:var(--mono);}
+
+main{
+  display:grid; grid-template-columns:1.5fr 1fr; gap:0;
+  padding:0; max-width:1440px; margin:0 auto;
+}
+@media(max-width:920px){ main{grid-template-columns:1fr;} }
+
+.pipeline-wrap{
+  padding:20px clamp(14px,3vw,26px); max-height:calc(100vh - 130px); overflow-y:auto;
+  border-right:1px solid var(--border);
+}
+@media(max-width:920px){ .pipeline-wrap{max-height:none; border-right:none; border-bottom:1px solid var(--border);} }
+
+.stage{ margin-bottom:6px; position:relative; padding-left:22px; }
+.stage:not(:last-child)::before{
+  content:""; position:absolute; left:8px; top:30px; bottom:-6px; width:2px; background:var(--border);
+}
+.stage-dot{
+  position:absolute; left:2px; top:6px; width:14px; height:14px; border-radius:50%;
+  background:var(--bg-elev); border:2px solid var(--border); transition:.25s;
+}
+.stage.stage-active .stage-dot{ border-color:var(--quant); box-shadow:0 0 0 4px rgba(73,214,192,.18); }
+.stage-head{display:flex; align-items:baseline; gap:8px; margin-bottom:8px;}
+.stage-head h3{margin:0; font-size:13.5px; font-weight:700;}
+.stage-head span{font-size:11px; color:var(--text-muted); font-family:var(--mono);}
+.chips{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:18px;}
+.chip{
+  font-family:var(--mono); font-size:12px; padding:8px 11px; border-radius:var(--radius);
+  border:1px solid var(--border); background:var(--panel); color:var(--text); cursor:pointer;
+  transition:.15s; line-height:1.3; max-width:230px;
+}
+.chip small{display:block; color:var(--text-muted); font-family:var(--sans); font-size:10.5px; margin-top:2px;}
+.chip.inactive{opacity:.32; filter:grayscale(.4);}
+.chip.node-active{
+  border-color:var(--quant); background:rgba(73,214,192,.12); box-shadow:0 0 0 3px rgba(73,214,192,.14);
+}
+.chip[data-group="agent"].node-active{ border-color:var(--agent); background:rgba(232,163,61,.14); box-shadow:0 0 0 3px rgba(232,163,61,.16); }
+.chip[data-group="orch"].node-active{ border-color:var(--orch); background:rgba(108,147,242,.14); box-shadow:0 0 0 3px rgba(108,147,242,.16); }
+.chip[data-group="risk"].node-active{ border-color:var(--danger); background:rgba(226,88,76,.14); box-shadow:0 0 0 3px rgba(226,88,76,.16); }
+.chip:hover:not(.inactive){ border-color:var(--text-muted); }
+
+.side{ padding:20px clamp(14px,3vw,26px); display:flex; flex-direction:column; gap:16px; }
+
+.panel-title{font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--text-muted); margin:0 0 8px;}
+.legend{display:flex; flex-wrap:wrap; gap:10px; font-size:11.5px; color:var(--text-muted);}
+.legend span{display:inline-flex; align-items:center; gap:5px;}
+.legend i{width:9px; height:9px; border-radius:50%; display:inline-block;}
+
+.log-box{
+  background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:12px;
+  max-height:260px; overflow-y:auto; font-family:var(--mono); font-size:12px;
+}
+.log-empty{color:var(--text-muted); font-size:12.5px; font-family:var(--sans);}
+.log-entry{padding:8px 0; border-bottom:1px dashed var(--border);}
+.log-entry:last-child{border-bottom:none;}
+.log-entry .t{color:var(--quant); font-weight:600;}
+.log-entry .a{color:var(--text); font-family:var(--sans); font-size:12.5px; margin-top:3px; line-height:1.5;}
+
+.payload-box{
+  background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:12px;
+  font-family:var(--mono); font-size:11.8px; white-space:pre-wrap; line-height:1.55;
+  max-height:280px; overflow-y:auto; color:var(--text);
+}
+.payload-empty{color:var(--text-muted); font-family:var(--sans); font-size:12.5px;}
+
+.info-box{font-size:12.5px; color:var(--text-muted); line-height:1.6; background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:12px;}
+.info-box b{color:var(--text);}
+
+footer{padding:16px clamp(14px,4vw,34px) calc(20px + env(safe-area-inset-bottom,0px)); color:var(--text-muted); font-size:11.5px; text-align:center;}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Vietnam Stock Intelligence Engine</h1>
+  <p>Mô phỏng luồng dữ liệu và hoạt động của các module — từ nguồn dữ liệu thô tới báo cáo trên dashboard. Chọn một chế độ MVP, bấm "Chạy mô phỏng" để xem từng bước xử lý và dữ liệu thực tế đi qua hệ thống.</p>
+  <div class="status-row">
+    <span class="status-chip">Specification: <b>100%</b></span>
+    <span class="status-chip">Architecture: <b>75%</b></span>
+    <span class="status-chip">Orchestrator (T013): <b>tất định, offline, không LLM</b></span>
+    <span class="status-chip">Agent Layer: <b>TẮT</b> cho tới khi Data+Quant+Backtest đạt baseline</span>
+  </div>
+</header>
+
+<div class="controls">
+  <div class="mode-group" id="modeGroup">
+    <button class="mode-btn active" data-mvp="1">MVP-1 · Quant only</button>
+    <button class="mode-btn" data-mvp="2">MVP-2 · +News/RAG/Agent</button>
+    <button class="mode-btn" data-mvp="3">MVP-3 · +ML/Portfolio</button>
+  </div>
+  <span class="scenario-label" id="scenarioLabel"></span>
+  <div class="spacer"></div>
+  <button class="reset" id="resetBtn">Đặt lại</button>
+  <button class="run" id="runBtn">▶ Chạy mô phỏng</button>
+</div>
+
+<main>
+  <div class="pipeline-wrap" id="pipeline"></div>
+
+  <div class="side">
+    <div>
+      <p class="panel-title">Chú thích</p>
+      <div class="legend">
+        <span><i style="background:var(--quant)"></i>Deterministic / Quant (không LLM)</span>
+        <span><i style="background:var(--agent)"></i>AI Agent / Reasoning (LLM)</span>
+        <span><i style="background:var(--orch)"></i>Orchestrator / điều phối</span>
+        <span><i style="background:var(--danger)"></i>Risk / Guardrail / Audit</span>
+      </div>
+    </div>
+
+    <div>
+      <p class="panel-title">Nhật ký mô phỏng</p>
+      <div class="log-box" id="logBox"><div class="log-empty">Chưa chạy mô phỏng. Bấm "Chạy mô phỏng" để bắt đầu, hoặc bấm vào một module bên trái để xem mô tả.</div></div>
+    </div>
+
+    <div>
+      <p class="panel-title">Dữ liệu / Payload hiện tại</p>
+      <div class="payload-box" id="payloadBox"><span class="payload-empty">Dữ liệu của bước đang chạy (hoặc module vừa chọn) sẽ hiện ở đây.</span></div>
+    </div>
+  </div>
+</main>
+
+<footer>Sơ đồ dựng lại từ SYSTEM_SPECIFICATION.md, AGENT_ARCHITECTURE_vi.md và AI_INVESTMENT_CONCEPT.md — công cụ hỗ trợ nghiên cứu, không phải khuyến nghị đầu tư.</footer>
+
+<script>
+const STAGES = [
+ {id:'s1', title:'1 · Nguồn dữ liệu', sub:'Data Sources', nodes:[
+   {id:'market', label:'Market Data', d:'OHLC, khối lượng, vốn hoá, dòng vốn khối ngoại/tự doanh.', mvp:1, g:'quant'},
+   {id:'financial', label:'Financial Statements', d:'BCTC: doanh thu, LN, tài sản, nợ, dòng tiền.', mvp:1, g:'quant'},
+   {id:'macro', label:'Macro Data', d:'GDP, CPI, lãi suất, tỷ giá, cung tiền.', mvp:1, g:'quant'},
+   {id:'events', label:'Corporate Events', d:'Chia cổ tức, ĐHCĐ, đổi lãnh đạo, phát hành thêm, M&A.', mvp:1, g:'quant'},
+   {id:'news', label:'News', d:'Tin tức, báo cáo phân tích — dùng cho RAG ở MVP-2.', mvp:2, g:'agent'},
+ ]},
+ {id:'s2', title:'2 · Data Ingestion', sub:'Collector / ETL / Scheduler', nodes:[
+   {id:'ingestion', label:'Ingestion Pipeline', d:'Thu thập, validate schema, chuẩn hoá, retry/error handling.', mvp:1, g:'quant'},
+ ]},
+ {id:'s3', title:'3 · Data Platform', sub:'PostgreSQL/TimescaleDB + Qdrant', nodes:[
+   {id:'platform', label:'PostgreSQL / TimescaleDB', d:'Raw / Clean / Curated / Feature Store cho toàn bộ dữ liệu có cấu trúc.', mvp:1, g:'quant'},
+   {id:'docstore', label:'Qdrant Document Store', d:'Lưu embedding tin tức, báo cáo, công bố thông tin cho RAG.', mvp:2, g:'agent'},
+ ]},
+ {id:'s4', title:'4 · Bộ xử lý song song', sub:'Quant / RAG / Regime / ML', nodes:[
+   {id:'quant', label:'Quant Engine', d:'Tính tất định: RSI, MACD, MA, P/E, P/B, ROE, ROA, tăng trưởng, Debt/Equity. LLM không bao giờ chạm vào các phép tính này.', mvp:1, g:'quant'},
+   {id:'rag', label:'RAG Engine', d:'Metadata filter → vector search → keyword search → recency weighting → source reliability → reranking.', mvp:2, g:'agent'},
+   {id:'regime', label:'Market Regime Engine', d:'Phân loại Bull / Sideway / Bear / Crisis từ VNINDEX, breadth, volatility, liquidity, foreign flow, lãi suất.', mvp:3, g:'agent'},
+   {id:'ml', label:'ML Prediction Engine', d:'XGBoost/LightGBM: P(return>ngưỡng), expected return, volatility, drawdown, calibration.', mvp:3, g:'agent'},
+ ]},
+ {id:'s5', title:'5 · Evidence & Backtest', sub:'', nodes:[
+   {id:'backtest', label:'Backtest Engine', d:'Walk-forward, CAGR/Sharpe/Sortino/Max Drawdown/Win Rate, kiểm soát look-ahead & survivorship bias.', mvp:1, g:'quant'},
+   {id:'evidence', label:'Evidence Engine', d:'Ép mọi Claim phải có Evidence → Source → Timestamp → Data Version. Giảm hallucination.', mvp:2, g:'agent'},
+ ]},
+ {id:'s6', title:'6 · Investment Engine', sub:'Scoring + Ranking', nodes:[
+   {id:'investment', label:'Scoring & Ranking', d:'Fundamental 30% · Technical 20% · Momentum 15% · Valuation 15% · Quality 10% · Risk 10% (baseline, hiệu chỉnh bằng backtest).', mvp:1, g:'quant'},
+ ]},
+ {id:'s7', title:'7 · AI Agent Layer', sub:'', nodes:[
+   {id:'research', label:'Research Agent', d:'Tổng hợp hồ sơ công ty, thu thập bằng chứng, nêu sự kiện quan trọng.', mvp:2, g:'agent'},
+   {id:'analysis', label:'Analysis Agent', d:'Gọi Quant Tool + RAG Tool → sinh InvestmentAnalysis: thesis, catalysts, risks, invalidation, confidence, evidence.', mvp:2, g:'agent'},
+   {id:'monitoring', label:'Monitoring Agent', d:'Theo dõi biến động giá/khối lượng/tin/sự kiện → phát cảnh báo khi đổi tín hiệu.', mvp:3, g:'agent'},
+   {id:'portfolio', label:'Portfolio Agent', d:'Position sizing, correlation, sector exposure, risk budget — tách biệt với xếp hạng từng mã.', mvp:3, g:'agent'},
+ ]},
+ {id:'s8', title:'8 · Orchestrator', sub:'', nodes:[
+   {id:'orchestrator', label:'Orchestrator', d:'Điều phối trung tâm: lập kế hoạch, gọi tool theo registry, ghi audit. Hiện tại (T013) tất định — nâng cấp LangGraph/LLM ở Phase-5.', mvp:2, g:'orch'},
+ ]},
+ {id:'s9', title:'9 · Risk / Guardrail', sub:'', nodes:[
+   {id:'guardrail', label:'Validation · Confidence · Audit', d:'Validate schema Pydantic, chặn số liệu bịa, ghi agent_runs/agent_tool_calls, áp guardrail rủi ro.', mvp:1, g:'risk'},
+ ]},
+ {id:'s10', title:'10 · Output', sub:'', nodes:[
+   {id:'dashboard', label:'Dashboard / Report', d:'Bảng xếp hạng, thesis card, evidence — hệ thống không tự đưa ra BUY/SELL.', mvp:1, g:'quant'},
+   {id:'alert', label:'Alert', d:'Cảnh báo khi Monitoring Agent phát hiện thay đổi tín hiệu/regime.', mvp:3, g:'risk'},
+ ]},
+];
+
+const SCENARIOS = {
+ 1:{ title:'Kịch bản: Quét & xếp hạng VN30 cuối ngày — hoàn toàn tất định, không LLM', steps:[
+  {nodes:['market','financial','macro','events'], t:'Thu thập dữ liệu EOD', a:'Lấy giá OHLC, khối lượng, BCTC quý gần nhất, dữ liệu vĩ mô và sự kiện doanh nghiệp cho 30 mã VN30.',
+   data:'universe: VN30 (30 mã)\nas_of_date: 2026-09-25\nsources: market, financial_statements, macro, corporate_events'},
+  {nodes:['ingestion'], t:'Validate & chuẩn hoá', a:'Ingestion Pipeline kiểm tra schema, loại outlier, chuẩn hoá đơn vị trước khi ghi vào Data Platform.',
+   data:'rows_ingested: 30\nrows_rejected: 0\nvalidation: PASSED\njob: eod_scheduler_15h30'},
+  {nodes:['platform'], t:'Lưu vào Data Platform', a:'Ghi dữ liệu đã chuẩn hoá vào PostgreSQL/TimescaleDB, tách theo bảng prices, financial_statements, macro_data, features.',
+   data:'tables: prices, financial_statements, macro_data, features\nstorage: PostgreSQL / TimescaleDB'},
+  {nodes:['quant'], t:'Quant Engine tính factor', a:'Tính tất định các chỉ số kỹ thuật/cơ bản/định giá cho từng mã — ví dụ FPT.',
+   data:'symbol: FPT\nRSI(14): 63.2\nROE: 21.5%\nRevenue YoY: +18.2%\nEPS YoY: +24.1%\nDebt/Equity: 0.42\nPE: 11.8  (Industry PE: 16.3)\nForeign Flow: +125B\nMomentum(20D): +8.4%'},
+  {nodes:['investment'], t:'Scoring & Ranking', a:'Tổng hợp điểm theo trọng số baseline (Fundamental 30%, Technical 20%, Momentum 15%, Valuation 15%, Quality 10%, Risk 10%) và xếp hạng.',
+   data:'RANKING (top 4)\nFPT   score:86  Fund:92 Tech:84 Risk:Low\nVCB   score:83  Fund:90 Tech:77 Risk:Low\nMWG   score:79  Fund:78 Tech:86 Risk:Medium\nHPG   score:72  Fund:71 Tech:76 Risk:High'},
+  {nodes:['backtest'], t:'Backtest kiểm chứng', a:'Backtest Engine kiểm định chiến lược xếp hạng trên dữ liệu lịch sử — walk-forward, có tính phí giao dịch, chống look-ahead bias.',
+   data:'period: 2023-01 → 2026-08\nCAGR: 15.4%\nSharpe: 1.4\nMax Drawdown: -18.2%\nWin Rate: 57%\nlook_ahead_bias: none detected'},
+  {nodes:['guardrail'], t:'Audit', a:'Ghi lại phiên bản dữ liệu, công thức chấm điểm, timestamp — mọi output đã qua validate schema.',
+   data:'audit_id: 20260925-0031\nformula_version: scoring_v1\nagent_runs: n/a (MVP-1 không dùng Agent)'},
+  {nodes:['dashboard'], t:'Hiển thị Dashboard', a:'Bảng xếp hạng được hiển thị cho người dùng. Hệ thống KHÔNG đưa ra khuyến nghị mua/bán — người dùng tự quyết định.',
+   data:'view: Stock Ranking Table\ncolumns: Code, Score, Fundamental, Technical, Risk'},
+ ]},
+ 2:{ title:'Kịch bản: Người dùng hỏi "Phân tích FPT" — thêm News/RAG/Evidence/Agent', steps:[
+  {nodes:['orchestrator'], t:'Orchestrator lập kế hoạch', a:'Orchestrator không tự trả lời — nó dựng kế hoạch 10 bước trước khi gọi bất kỳ tool nào.',
+   data:'PLAN for "Phân tích FPT":\n1. get_stock_price 2. get_fundamentals 3. get_valuation\n4. get_technical 5. get_news 6. get_corporate_events\n7. get_market_regime 8. get_peer_analysis\n9. calculate_risk 10. generate_investment_thesis'},
+  {nodes:['quant','platform'], t:'Tái sử dụng Quant Engine', a:'Gọi lại các số liệu tất định đã có (không tính lại bằng LLM) — LLM sẽ chỉ đọc kết quả này qua tool.',
+   data:'symbol: FPT\nfundamental_score: 92\ntechnical_score: 84\nvaluation_score: 76\nmomentum_score: 88\nrisk_score: 73\noverall_score: 86'},
+  {nodes:['news'], t:'Thu thập tin tức', a:'Lấy tin tức và công bố thông tin liên quan tới FPT trong 30 ngày gần nhất.',
+   data:'query: FPT, days=30\nresults: 14 bài viết, 3 công bố thông tin chính thức'},
+  {nodes:['docstore','rag'], t:'Hybrid Retrieval + Rerank', a:'Không chỉ semantic similarity: lọc theo metadata (ticker=FPT) → vector search + keyword search → ưu tiên tin mới, nguồn tin cậy → rerank.',
+   data:'filter: symbol=FPT\npipeline: metadata_filter → vector_search → keyword_search\n         → recency_weighting → source_reliability → rerank\ntop_evidence: 5 items'},
+  {nodes:['evidence'], t:'Evidence Layer', a:'Mọi luận điểm phải truy vết được Claim → Evidence → Source → Timestamp.',
+   data:'claim: "Lợi nhuận FPT tăng mạnh"\nevidence: Net profit YoY = +21.4%\nsource: Financial Statement Q2/2026\ntimestamp: 2026-08-15'},
+  {nodes:['research','analysis'], t:'Analysis Agent tổng hợp', a:'Analysis Agent (LLM là reasoning layer, không tự tính số) tổng hợp Quant + Evidence thành luận điểm đầu tư có cấu trúc.',
+   data:'tool_calls: get_financials, get_valuation, get_technical,\n            get_news, get_peer_comparison'},
+  {nodes:['analysis'], t:'Sinh InvestmentAnalysis', a:'Output bắt buộc theo schema Pydantic — không phải một đoạn văn tự do.',
+   data:'InvestmentAnalysis{\n  symbol: "FPT", overall_score: 86,\n  thesis: "Tăng trưởng LN ổn định, momentum cải thiện...",\n  catalysts: ["Mở rộng mảng CNTT nước ngoài", ...],\n  risks: ["Định giá không còn rẻ so với lịch sử", ...],\n  invalidation_conditions: ["Biên LN giảm 2 quý liên tiếp"],\n  confidence: 0.71, evidence: [...]\n}'},
+  {nodes:['guardrail'], t:'Guardrail kiểm tra', a:'Validate schema, đối chiếu từng số liệu với Evidence Layer, chặn ngôn từ khẳng định chắc chắn hoặc BUY/SELL cứng; ghi agent_runs + agent_tool_calls.',
+   data:'schema_valid: true\nnumbers_match_evidence: true\nforbidden_language_found: false\nagent_runs: logged (id=ar-88231)'},
+  {nodes:['dashboard'], t:'Hiển thị Investment Thesis', a:'Dashboard hiển thị thesis card kèm bằng chứng, chất xúc tác, rủi ro — không hiển thị khuyến nghị mua/bán.',
+   data:'view: Investment Thesis Card (FPT)\nsections: Thesis · Catalysts · Risks · Evidence · Confidence'},
+ ]},
+ 3:{ title:'Kịch bản: Giám sát danh mục & cảnh báo đổi chiều thị trường', steps:[
+  {nodes:['regime'], t:'Phân loại chế độ thị trường', a:'Market Regime Engine đọc VNINDEX, độ rộng thị trường, biến động, thanh khoản, dòng vốn ngoại, lãi suất, xoay vòng ngành.',
+   data:'VNINDEX momentum: yếu dần\nvolatility: tăng\nforeign_flow: chuyển bán ròng\nregime_classified: Sideway (trước đó: Bull)'},
+  {nodes:['ml'], t:'ML Prediction', a:'XGBoost dự báo xác suất/lợi nhuận kỳ vọng dựa trên feature store, có hiệu chỉnh (calibration).',
+   data:'symbol: FPT\nP(return > 5%, 20D): 0.58\nexpected_return: +5.8%\nmodel: XGBoost v1.4\nfeature_version: feature_2026_09_25_v3'},
+  {nodes:['analysis'], t:'Hiệu chỉnh Confidence', a:'Confidence KHÔNG chỉ dựa vào việc các agent "đồng thuận" — mà kết hợp calibration, hit rate lịch sử, chất lượng dữ liệu, và độ phù hợp với regime hiện tại.',
+   data:'confidence = model_calibration(68%) + data_quality(93%)\n           + agent_agreement(82%) + regime_fit(76%)\n=> blended_confidence: 74%  (giảm do regime chuyển Sideway)'},
+  {nodes:['portfolio'], t:'Portfolio Agent tính tỷ trọng', a:'Position sizing tách biệt với xếp hạng từng mã — cân nhắc tương quan, tỷ trọng ngành, ngân sách rủi ro.',
+   data:'FPT   20%   (giảm từ 25% do regime rủi ro tăng)\nVCB   20%\nMWG   15%\nHPG   10%\nCash  35%   (tăng để hạ beta danh mục)'},
+  {nodes:['monitoring'], t:'Monitoring Agent phát hiện thay đổi', a:'So sánh trạng thái hiện tại với lần chạy trước — phát hiện đổi tín hiệu và đổi regime.',
+   data:'signal_change: Bull → Sideway\ntrigger: market_regime_shift, volatility_spike\nseverity: Medium'},
+  {nodes:['guardrail'], t:'Ghi Prediction Registry', a:'Mọi prediction phải được lưu để sau này đối chiếu với kết quả thực tế (Prediction Registry).',
+   data:'prediction_id: 202609250004\nsymbol: FPT  horizon: 20 trading days\nconfidence: 74%  status: pending_evaluation'},
+  {nodes:['alert','dashboard'], t:'Cảnh báo & cập nhật Dashboard', a:'Hệ thống gửi cảnh báo cho người dùng và cập nhật danh mục trên dashboard — quyết định cuối vẫn thuộc về con người.',
+   data:'alert: "VNINDEX regime chuyển Bull → Sideway.\n        Portfolio Agent đã giảm tỷ trọng cổ phiếu."\nhuman_decision_required: true'},
+ ]},
+};
+
+let currentMvp = 1, running = false;
+const pipelineEl = document.getElementById('pipeline');
+const logBox = document.getElementById('logBox');
+const payloadBox = document.getElementById('payloadBox');
+const scenarioLabel = document.getElementById('scenarioLabel');
+const runBtn = document.getElementById('runBtn');
+
+function renderPipeline(){
+  pipelineEl.innerHTML = '';
+  STAGES.forEach(stage=>{
+    const s = document.createElement('div');
+    s.className='stage'; s.id='stage-'+stage.id;
+    s.innerHTML = `<div class="stage-dot"></div>
+      <div class="stage-head"><h3>${stage.title}</h3><span>${stage.sub}</span></div>
+      <div class="chips"></div>`;
+    const chipsWrap = s.querySelector('.chips');
+    stage.nodes.forEach(n=>{
+      const c = document.createElement('div');
+      c.className='chip'; c.id='node-'+n.id; c.dataset.group=n.g;
+      c.innerHTML = `${n.label}<small>${n.mvp>1?('MVP-'+n.mvp):'MVP-1'}</small>`;
+      c.title = n.d;
+      c.addEventListener('click', ()=>{
+        if(running) return;
+        payloadBox.innerHTML = `<b style="font-family:var(--sans);color:var(--text)">${n.label}</b>\n\n${n.d}`;
+      });
+      chipsWrap.appendChild(c);
+    });
+    pipelineEl.appendChild(s);
+  });
+  applyMvpVisibility();
+}
+
+function applyMvpVisibility(){
+  STAGES.forEach(stage=> stage.nodes.forEach(n=>{
+    const el = document.getElementById('node-'+n.id);
+    if(el) el.classList.toggle('inactive', n.mvp > currentMvp);
+  }));
+  scenarioLabel.textContent = SCENARIOS[currentMvp].title;
+}
+
+document.getElementById('modeGroup').addEventListener('click', e=>{
+  const btn = e.target.closest('.mode-btn');
+  if(!btn || running) return;
+  document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  currentMvp = Number(btn.dataset.mvp);
+  applyMvpVisibility();
+  clearRun();
+});
+
+function clearRun(){
+  document.querySelectorAll('.chip.node-active').forEach(c=>c.classList.remove('node-active'));
+  document.querySelectorAll('.stage.stage-active').forEach(c=>c.classList.remove('stage-active'));
+  logBox.innerHTML = '<div class="log-empty">Chưa chạy mô phỏng. Bấm "Chạy mô phỏng" để bắt đầu, hoặc bấm vào một module bên trái để xem mô tả.</div>';
+  payloadBox.innerHTML = '<span class="payload-empty">Dữ liệu của bước đang chạy (hoặc module vừa chọn) sẽ hiện ở đây.</span>';
+}
+document.getElementById('resetBtn').addEventListener('click', ()=>{ if(!running) clearRun(); });
+
+function delay(ms){ return new Promise(r=>setTimeout(r,ms)); }
+
+async function runScenario(){
+  if(running) return;
+  running = true;
+  runBtn.disabled = true;
+  document.querySelectorAll('.mode-btn').forEach(b=>b.disabled=true);
+  clearRun();
+  logBox.innerHTML = '';
+  const steps = SCENARIOS[currentMvp].steps;
+  for(const step of steps){
+    document.querySelectorAll('.chip.node-active').forEach(c=>c.classList.remove('node-active'));
+    document.querySelectorAll('.stage.stage-active').forEach(c=>c.classList.remove('stage-active'));
+    let stageEl = null;
+    step.nodes.forEach(id=>{
+      const el = document.getElementById('node-'+id);
+      if(el){ el.classList.add('node-active'); stageEl = el.closest('.stage'); stageEl.classList.add('stage-active'); }
+    });
+    if(stageEl) stageEl.scrollIntoView({behavior:'smooth', block:'nearest'});
+
+    const entry = document.createElement('div');
+    entry.className='log-entry';
+    entry.innerHTML = `<div class="t">${step.t}</div><div class="a">${step.a}</div>`;
+    logBox.appendChild(entry);
+    logBox.scrollTop = logBox.scrollHeight;
+
+    payloadBox.textContent = step.data;
+
+    await delay(1900);
+  }
+  running = false;
+  runBtn.disabled = false;
+  document.querySelectorAll('.mode-btn').forEach(b=>b.disabled=false);
+}
+runBtn.addEventListener('click', runScenario);
+
+renderPipeline();
+</script>
+</body>
+</html>

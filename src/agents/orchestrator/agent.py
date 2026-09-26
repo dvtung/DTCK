@@ -25,6 +25,7 @@ from uuid import UUID
 from src.agents.analysis.agent import PLAN as ANALYSIS_PLAN
 from src.agents.analysis.agent import TOOLS as ANALYSIS_TOOLS
 from src.agents.analysis.agent import AnalysisAgent
+from src.agents.llm.client import LLMClient
 from src.agents.monitoring.agent import PLAN as MONITORING_PLAN
 from src.agents.monitoring.agent import (
     SEVERITY_CRITICAL,
@@ -234,11 +235,13 @@ class Orchestrator:
         registry: AgentRegistry | None = None,
         max_attempts: int = 2,
         timeout_s: float | None = 30.0,
+        llm: LLMClient | None = None,
     ) -> None:
         self._tools = tools
         self._audit = audit if audit is not None else AuditTrail()
         self._registry = registry if registry is not None else build_default_registry()
-        self._analysis = AnalysisAgent(tools)
+        self._llm = llm
+        self._analysis = AnalysisAgent(tools, llm=llm)
         self._research = ResearchAgent(tools)
         self._monitoring = MonitoringAgent(tools)
         self._portfolio = PortfolioAgent(tools)
@@ -266,6 +269,23 @@ class Orchestrator:
     @property
     def tools(self) -> ToolCatalog:
         return self._tools
+
+    @property
+    def llm(self) -> LLMClient | None:
+        """LLM client bound to the agents (``None`` = deterministic baseline)."""
+        return self._llm
+
+    @property
+    def model(self) -> str:
+        """Audit label for ``agent_runs.model`` (§13.2).
+
+        Stays ``deterministic-quant-v1`` for the baseline; the LLM model is
+        appended when reasoning synthesis is enabled (ADR-005).
+        """
+        if self._llm is None:
+            return MODEL
+        name = getattr(self._llm, "model", None) or type(self._llm).__name__
+        return f"{MODEL}+{name}"
 
     def plan_for(self, task: str) -> list[str]:
         """§21 plan published by the registry for ``task``."""
@@ -401,7 +421,7 @@ class Orchestrator:
             user_request=user_request or f"{task}: {params}",
             agent_id=spec.agent_id,
             agent_version=spec.version,
-            model=MODEL,
+            model=self.model,
             prompt_version=spec.system_prompt_version,
             plan=list(spec.plan),
         )

@@ -6,6 +6,7 @@ backtests groups, pagination convention, and the 404 error envelope.
 
 from __future__ import annotations
 
+import pytest
 from fastapi.testclient import TestClient
 
 from apps.api.main import app
@@ -22,7 +23,70 @@ class TestSystem:
     def test_readyz(self) -> None:
         r = client.get("/readyz")
         assert r.status_code == 200
-        assert "dependencies" in r.json()
+        body = r.json()
+        assert body["status"] == "ready"
+        assert set(body["dependencies"]) == {"database", "qdrant", "agents"}
+        # Dependencies are probed, not hardcoded — a fresh clone (no DB, no
+        # qdrant_client) must still answer 200 with honest statuses.
+        assert body["dependencies"]["database"] in (
+            "connected",
+            "connected-no-prices",
+            "unreachable",
+        )
+        assert body["dependencies"]["qdrant"] in ("up", "offline-index-ready")
+        assert body["market_source"].startswith(("memory", "auto", "db"))
+
+    def test_readyz_database_probe_is_not_hardcoded(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """KI-008: `database` reflects a real probe (was hardcoded "pending")."""
+        from apps.api import db as api_db
+        from apps.api import main as api_main
+
+        monkeypatch.setattr(api_db, "database_is_ready", lambda **_: False)
+        assert api_main._database_status() == "unreachable"  # noqa: SLF001
+
+        calls: list[bool] = []
+
+        def fake(require_prices: bool = True) -> bool:
+            calls.append(require_prices)
+            return require_prices is False  # socket ok, `prices` empty
+
+        monkeypatch.setattr(api_db, "database_is_ready", fake)
+        assert api_main._database_status() == "connected-no-prices"  # noqa: SLF001
+        assert calls == [False, True]
+
+    def test_readyz_market_source_reports_the_service_in_use(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """KI-008: `market_source` shows the mode *and* the service serving reads."""
+        from apps.api import dependencies
+        from apps.api import main as api_main
+        from apps.api.services.db_market import DbMarketService
+        from apps.api.services.market_data import MarketService
+
+        monkeypatch.setattr(api_main.settings, "market_data_source", "auto")
+
+        monkeypatch.setattr(dependencies, "get_market_service", lambda: MarketService())
+        assert api_main._market_source_status() == "auto->memory"  # noqa: SLF001
+
+        monkeypatch.setattr(dependencies, "get_market_service", DbMarketService)
+        assert api_main._market_source_status() == "auto->db"  # noqa: SLF001
+
+    def test_readyz_agents_reports_the_llm_model_when_wired(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from apps.api import main as api_main
+        from apps.api.services import agent_service
+
+        monkeypatch.setattr(agent_service, "get_llm_client", lambda: None)
+        assert api_main._agents_status().startswith("offline:")  # noqa: SLF001
+
+        class _FakeLLM:
+            model = "qwen3.5"
+
+        monkeypatch.setattr(agent_service, "get_llm_client", lambda: _FakeLLM())
+        assert api_main._agents_status() == "llm:qwen3.5"  # noqa: SLF001
 
 
 # ------------------------------------------------------------ market
@@ -238,8 +302,10 @@ def test_analysis_async_pattern() -> None:
 
 
 def test_readyz_reports_agents() -> None:
+    """`agents` names the reasoning layer that would serve a run (T016)."""
     body = client.get("/readyz").json()
-    assert body["dependencies"]["agents"].startswith("offline:")
+    agents = body["dependencies"]["agents"]
+    assert agents.startswith(("offline:", "llm:")), agents
 def test_auth_rejects_bad_credentials_with_401() -> None:
     """Invalid credentials are an auth failure (401), not a 200 with an error body."""
     r = client.post(
