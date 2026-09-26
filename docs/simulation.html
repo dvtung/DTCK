@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mô phỏng Hệ thống Modules & Luồng Dữ liệu — DTCK</title>
+<link rel="stylesheet" href="style.css">
+<style>
+.sim-container {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 20px;
+  margin: 20px 0;
+}
+@media (max-width: 900px) {
+  .sim-container { grid-template-columns: 1fr; }
+}
+.sim-controls {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  margin-bottom: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+.btn-sim {
+  background: var(--acc);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.btn-sim:hover { background: #1d4ed8; }
+.btn-sim.secondary {
+  background: #e2e8f0;
+  color: var(--ink);
+}
+.btn-sim.secondary:hover { background: #cbd5e1; }
+.btn-sim.active {
+  background: #0ea5e9;
+  color: #fff;
+  box-shadow: 0 0 0 2px #38bdf8;
+}
+.stage-badge {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: #eef2ff;
+  color: #4f46e5;
+  display: inline-block;
+  margin-bottom: 6px;
+}
+.arch-canvas {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+.arch-layer {
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 16px;
+  background: #f8fafc;
+  position: relative;
+}
+.arch-layer-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 10px;
+  display: flex;
+  justify-content: space-between;
+}
+.module-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.mod-node {
+  flex: 1 1 calc(33.333% - 12px);
+  min-width: 170px;
+  background: #fff;
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  position: relative;
+}
+.mod-node:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(37,99,235,0.12);
+  border-color: var(--acc);
+}
+.mod-node.selected {
+  border-color: var(--acc);
+  background: #eff6ff;
+  box-shadow: 0 0 0 2px #93c5fd;
+}
+.mod-node.active-pulse {
+  border-color: #10b981;
+  background: #ecfdf5;
+  box-shadow: 0 0 0 3px #6ee7b7;
+  animation: pulse-border 1.5s infinite;
+}
+@keyframes pulse-border {
+  0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5); }
+  70% { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+}
+.mod-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.mod-icon { font-size: 18px; }
+.mod-title { font-weight: 700; font-size: 13px; color: var(--ink); }
+.mod-code { font-size: 11px; color: var(--muted); font-family: monospace; }
+.mod-desc-short { font-size: 12px; color: var(--muted); line-height: 1.4; margin-top: 4px; }
+.inspector-panel {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 20px;
+  position: sticky;
+  top: 80px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+.inspector-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin-top: 0;
+  margin-bottom: 4px;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.inspector-section {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.inspector-section h4 {
+  margin: 0 0 8px 0;
+  font-size: 13px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.chip {
+  background: #f1f5f9;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-family: monospace;
+}
+.chip.in { background: #dbeafe; color: #1e40af; border-color: #bfdbfe; }
+.chip.out { background: #dcfce7; color: #15803d; border-color: #bbf7d0; }
+.sim-log-box {
+  background: var(--bg);
+  color: #e2e8f0;
+  padding: 14px;
+  border-radius: 8px;
+  font-family: monospace;
+  font-size: 12px;
+  height: 140px;
+  overflow-y: auto;
+  line-height: 1.5;
+  margin-top: 16px;
+}
+.log-line { margin: 2px 0; }
+.log-line.info { color: #38bdf8; }
+.log-line.success { color: #4ade80; }
+.log-line.warn { color: #fbbf24; }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="logo">📈</div>
+  <div>
+    <h1>DTCK — Nền tảng Quyết định Đầu tư AI</h1>
+    <p>Trí tuệ thị trường chứng khoán Việt Nam · tài liệu tĩnh</p>
+  </div>
+  <nav>
+    <a href="index.html">Trang chủ</a>
+    <a href="structure.html">Cấu trúc</a>
+    <a href="status.html">Tiến độ</a>
+    <a href="modules.html">Module</a>
+    <a href="api.html">API</a>
+    <a href="database.html">Cơ sở dữ liệu</a>
+    <a href="pipeline.html">Luồng dữ liệu</a>
+    <a href="simulation.html" class="active">Mô phỏng Hệ thống</a>
+  </nav>
+</header>
+<div class="wrap">
+  <div class="hero">
+    <h2>Mô phỏng Hoạt động & Luồng Dữ liệu giữa các Module</h2>
+    <p>Trực quan hóa kiến trúc tương tác đa tầng của DTCK: từ bước thu thập dữ liệu thô (EOD, RSS, BCTC), chuẩn hóa, tính toán Quant định lượng, nhúng RAG bằng chứng, suy luận Tác tử AI LangGraph cho đến giao diện phục vụ Dashboard và REST API.</p>
+    <div class="badges">
+      <span class="badge">10 Phân hệ chính</span>
+      <span class="badge">Mô phỏng luồng 5 kịch bản tự động</span>
+      <span class="badge">Kiểm tra đầu vào / đầu ra / nhiệm vụ chi tiết</span>
+    </div>
+  </div>
+  <div class="sim-controls">
+    <span style="font-weight: 700; font-size: 13px; color: var(--ink);">Kịch bản mô phỏng luồng:</span>
+    <button class="btn-sim active" id="btn-scen-eod" onclick="runSimulation('eod')">1. Nạp EOD & Chấm điểm Quant</button>
+    <button class="btn-sim secondary" id="btn-scen-news" onclick="runSimulation('news')">2. Nạp Tin tức & Vector RAG</button>
+    <button class="btn-sim secondary" id="btn-scen-agent" onclick="runSimulation('agent')">3. Tác tử AI Phân tích & Lập luận</button>
+    <button class="btn-sim secondary" id="btn-scen-backtest" onclick="runSimulation('backtest')">4. Walk-Forward Backtest</button>
+    <button class="btn-sim secondary" id="btn-scen-api" onclick="runSimulation('api')">5. Phục vụ API & Dashboard</button>
+    <button class="btn-sim" style="margin-left: auto; background: #64748b;" onclick="resetSimulation()">Dừng / Đặt lại</button>
+  </div>
+  <div class="sim-container">
+    <div class="arch-canvas">
+      <h3 style="margin-top:0; margin-bottom: 12px; font-size: 16px;">Sơ đồ Kiến trúc & Phân bố Module DTCK</h3>
+      <p style="font-size: 13px; color: var(--muted); margin-bottom: 16px;">Nhấn vào từng module bên dưới để tra cứu chi tiết công việc, file nguồn, dữ liệu vào (Input), dữ liệu ra (Output) và cơ chế vận hành.</p>
+      <div class="arch-layer" id="layer-ingest">
+        <div class="arch-layer-title">
+          <span>Tầng 1: Thu thập Dữ liệu & Quản lý Chất lượng</span>
+          <span class="stage-badge">Ingestion & Quality</span>
+        </div>
+        <div class="module-row">
+          <div class="mod-node" id="node-data" onclick="selectModule('data')">
+            <div class="mod-header"><span class="mod-icon">📥</span><span class="mod-title">Data Pipeline</span></div>
+            <div class="mod-code">src/data/</div>
+            <div class="mod-desc-short">Thu thập từ Yahoo/CaféF, xác thực 6 chiều chất lượng & chuẩn hóa CSDL.</div>
+          </div>
+          <div class="mod-node" id="node-worker" onclick="selectModule('worker')">
+            <div class="mod-header"><span class="mod-icon">⏱️</span><span class="mod-title">Scheduler Worker</span></div>
+            <div class="mod-code">apps/worker/</div>
+            <div class="mod-desc-short">APScheduler nền: nạp RSS (15m), EOD (15:05) & tính điểm (15:30).</div>
+          </div>
+          <div class="mod-node" id="node-common" onclick="selectModule('common')">
+            <div class="mod-header"><span class="mod-icon">🗄️</span><span class="mod-title">Database Core</span></div>
+            <div class="mod-code">src/common/models/</div>
+            <div class="mod-desc-short">TimescaleDB Hypertable, 38 bảng thực thể, session quản lý giao dịch.</div>
+          </div>
+        </div>
+      </div>
+      <div class="arch-layer" id="layer-quant">
+        <div class="arch-layer-title">
+          <span>Tầng 2: Tài chính Định lượng (Quant) & Máy học (ML)</span>
+          <span class="stage-badge">Quant & ML Engine</span>
+        </div>
+        <div class="module-row">
+          <div class="mod-node" id="node-market" onclick="selectModule('market')">
+            <div class="mod-header"><span class="mod-icon">📐</span><span class="mod-title">Market Quant</span></div>
+            <div class="mod-code">src/market/</div>
+            <div class="mod-desc-short">Tính toán thuần túy: RSI, MACD, ROE, P/E, EV/EBITDA, rủi ro, động lượng.</div>
+          </div>
+          <div class="mod-node" id="node-quant" onclick="selectModule('quant')">
+            <div class="mod-header"><span class="mod-icon">⚖️</span><span class="mod-title">Scoring Engine</span></div>
+            <div class="mod-code">src/quant/</div>
+            <div class="mod-desc-short">Phân rã trọng số 6 hệ số, xếp hạng VN30, tính độ tin cậy và gắn nhãn.</div>
+          </div>
+          <div class="mod-node" id="node-ml" onclick="selectModule('ml')">
+            <div class="mod-header"><span class="mod-icon">🤖</span><span class="mod-title">Machine Learning</span></div>
+            <div class="mod-code">src/ml/</div>
+            <div class="mod-desc-short">LightGBM/XGBoost phân loại xu hướng giá, hiệu chuẩn xác suất Isotonic.</div>
+          </div>
+        </div>
+      </div>
+      <div class="arch-layer" id="layer-agent">
+        <div class="arch-layer-title">
+          <span>Tầng 3: Bằng chứng (Evidence), RAG & Tác tử AI Tự hành</span>
+          <span class="stage-badge">Intelligence Layer</span>
+        </div>
+        <div class="module-row">
+          <div class="mod-node" id="node-rag" onclick="selectModule('rag')">
+            <div class="mod-header"><span class="mod-icon">🔍</span><span class="mod-title">RAG Engine</span></div>
+            <div class="mod-code">src/rag/ & src/evidence/</div>
+            <div class="mod-desc-short">Chunking tin tức, nhúng vector tất định, truy xuất hybrid & xếp hạng RRF.</div>
+          </div>
+          <div class="mod-node" id="node-agents" onclick="selectModule('agents')">
+            <div class="mod-header"><span class="mod-icon">🧠</span><span class="mod-title">LangGraph Agents</span></div>
+            <div class="mod-code">src/agents/</div>
+            <div class="mod-desc-short">4 tác tử (Research, Analysis, Risk, Portfolio) phối hợp có Audit Trail.</div>
+          </div>
+          <div class="mod-node" id="node-backtesting" onclick="selectModule('backtesting')">
+            <div class="mod-header"><span class="mod-icon">⏪</span><span class="mod-title">Backtesting</span></div>
+            <div class="mod-code">src/backtesting/</div>
+            <div class="mod-desc-short">Walk-forward validation, kiểm tra chi phí, trượt giá, tính Sharpe/MaxDD.</div>
+          </div>
+        </div>
+      </div>
+      <div class="arch-layer" id="layer-serving">
+        <div class="arch-layer-title">
+          <span>Tầng 4: Phục vụ Người dùng (Serving & UI)</span>
+          <span class="stage-badge">Presentation & APIs</span>
+        </div>
+        <div class="module-row">
+          <div class="mod-node" id="node-api" onclick="selectModule('api')">
+            <div class="mod-header"><span class="mod-icon">🚀</span><span class="mod-title">FastAPI Server</span></div>
+            <div class="mod-code">apps/api/</div>
+            <div class="mod-desc-short">39 endpoints / 40 operations, quản trị MarketSource (Memory vs TimescaleDB).</div>
+          </div>
+          <div class="mod-node" id="node-dashboard" onclick="selectModule('dashboard')">
+            <div class="mod-header"><span class="mod-icon">📊</span><span class="mod-title">Streamlit UI</span></div>
+            <div class="mod-code">apps/dashboard/</div>
+            <div class="mod-desc-short">Dashboard trực quan: Tổng quan, Xếp hạng, Chi tiết mã, RAG & Sức khỏe.</div>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top: 18px;">
+        <div style="font-size: 13px; font-weight: 700; color: var(--ink); margin-bottom: 6px;">Trạng thái Luồng Dữ liệu (Simulation Console):</div>
+        <div class="sim-log-box" id="sim-log">
+          <div class="log-line info">Hệ thống sẵn sàng. Chọn một kịch bản mô phỏng bên trên hoặc click vào một module để xem chi tiết.</div>
+        </div>
+      </div>
+    </div>
+    <div class="inspector-panel" id="inspector">
+      <div class="inspector-title" id="ins-title">
+        <span>🧩</span> <span>Chi tiết Module</span>
+      </div>
+      <div class="mod-code" id="ins-path" style="font-size: 12px; margin-bottom: 8px;">Chọn module để xem</div>
+      <p id="ins-desc" style="font-size: 13px; color: var(--ink); line-height: 1.5;">
+        Nhấn vào bất kỳ thành phần nào trên sơ đồ bên trái để xem công việc chi tiết, các tệp mã nguồn tương ứng, luồng dữ liệu vào (Input) và dữ liệu ra (Output).
+      </p>
+      <div class="inspector-section">
+        <h4>Công việc thực hiện</h4>
+        <ul id="ins-tasks" style="font-size: 13px; padding-left: 18px; margin: 0; color: var(--ink);">
+          <li>Chưa chọn module</li>
+        </ul>
+      </div>
+      <div class="inspector-section">
+        <h4>Dữ liệu Đầu vào (Inputs)</h4>
+        <div class="chip-list" id="ins-inputs"><span class="chip in">N/A</span></div>
+      </div>
+      <div class="inspector-section">
+        <h4>Dữ liệu Đầu ra (Outputs)</h4>
+        <div class="chip-list" id="ins-outputs"><span class="chip out">N/A</span></div>
+      </div>
+      <div class="inspector-section">
+        <h4>Các tệp mã nguồn chính</h4>
+        <div id="ins-files" style="font-size: 12px; font-family: monospace; color: var(--acc); line-height: 1.6;">-</div>
+      </div>
+    </div>
+  </div>
+  <h2 class="sec">Bảng tổng hợp tương tác luồng dữ liệu</h2>
+  <table>
+    <tr><th>Thứ tự</th><th>Giai đoạn</th><th>Module phát sinh</th><th>Module tiếp nhận</th><th>Hàng hóa luân chuyển</th></tr>
+    <tr><td><b>1</b></td><td>Lập lịch & Thu thập</td><td><code>apps/worker</code></td><td><code>src/data</code></td><td>Tín hiệu kích hoạt cron: Fetch EOD từ Yahoo Finance, RSS CaféF</td></tr>
+    <tr><td><b>2</b></td><td>Kiểm tra & Chuẩn hóa</td><td><code>src/data</code></td><td><code>src/common</code> (TimescaleDB)</td><td>62/62 dòng giá sạch, 50 tin tức phân loại, data_quality_scores</td></tr>
+    <tr><td><b>3</b></td><td>Tính toán Chỉ số Quant</td><td><code>src/common</code></td><td><code>src/market</code></td><td>Dữ liệu chuỗi giá OHLCV & BCTC được nạp vào hàm tính toán thuần túy</td></tr>
+    <tr><td><b>4</b></td><td>Chấm điểm & Xếp hạng</td><td><code>src/market</code></td><td><code>src/quant</code></td><td>Các hệ số (P/E, ROE, RSI, MaxDD...) tổng hợp thành Điểm số & Xếp hạng</td></tr>
+    <tr><td><b>5</b></td><td>Vector Hóa & Bằng chứng</td><td><code>src/data</code></td><td><code>src/rag</code> & <code>src/evidence</code></td><td>Chunking văn bản tin tức, trích xuất thực thể, tạo bằng chứng có kiểm chứng</td></tr>
+    <tr><td><b>6</b></td><td>Hội tụ Quyết định Đầu tư</td><td><code>src/quant</code> + <code>src/rag</code></td><td><code>src/agents</code> (LangGraph)</td><td>Bộ 4 tác tử đọc số liệu quant + văn bản tin tức → tạo Khuyến nghị có Audit Trail</td></tr>
+    <tr><td><b>7</b></td><td>Phục vụ Đọc & Hiển thị</td><td>TimescaleDB / In-Memory</td><td><code>apps/api</code> → <code>apps/dashboard</code></td><td>REST API endpoints cung cấp dữ liệu phân trang cho giao diện Streamlit</td></tr>
+  </table>
+</div>
+<div class="footer">
+  Tài liệu Mô phỏng Hệ thống DTCK · Cập nhật 2026-09-26 · <a href="index.html">Trang chủ</a> · <a href="modules.html">Chi tiết Module</a>
+</div>
+<script>
+var moduleData = {
+  data: {
+    title: "Data Pipeline & Quality Gateway",
+    icon: "📥",
+    path: "src/data/",
+    desc: "Đảm nhận toàn bộ chuỗi thu thập dữ liệu thị trường chứng khoán thô từ bên ngoài (Yahoo Chart API, CaféF RSS feed), tiến hành kiểm tra hợp lệ 6 chiều và chuẩn hóa trước khi ghi vào kho TimescaleDB.",
+    tasks: [
+      "Thu thập dữ liệu nến EOD không điều chỉnh từ Yahoo Chart API (un-adjust qua sự kiện split cổ phiếu).",
+      "Thu thập tin tức tự động từ RSS feeds của CaféF, bóc tách thẻ HTML và chuẩn hóa thời gian RFC822.",
+      "Kiểm tra tính hợp lệ dữ liệu (miền giá trị, tính nhất quán OHLC, không trùng lặp, độ bao phủ chuỗi thời gian).",
+      "Tính toán điểm chất lượng 6 chiều (Completeness, Validity, Consistency, Uniqueness, Freshness, Accuracy).",
+      "Chặn các lô dữ liệu có điểm chất lượng dưới ngưỡng yêu cầu."
+    ],
+    inputs: ["Yahoo Finance API", "CaféF RSS Feed", "configs/sources.yaml", "Mã CK (VN30)"],
+    outputs: ["EODBar records", "NewsItem records", "data_quality_scores", "Bản ghi hợp lệ vào DB"],
+    files: [
+      "src/data/pipelines.py",
+      "src/data/collectors.py",
+      "src/data/validators.py",
+      "src/data/normalizers.py",
+      "src/data/quality.py",
+      "src/data/providers/yahoo.py",
+      "src/data/providers/rss.py"
+    ]
+  },
+  worker: {
+    title: "Scheduler Worker & Jobs",
+    icon: "⏱️",
+    path: "apps/worker/",
+    desc: "Bộ xử lý tác vụ nền sử dụng APScheduler, vận hành theo múi giờ thị trường Việt Nam (Asia/Ho_Chi_Minh). Đảm bảo tự động hóa việc đồng bộ dữ liệu sau giờ đóng cửa phiên giao dịch.",
+    tasks: [
+      "Job Định kỳ 15 phút: Quét và nạp tin tức mới nhất từ RSS CaféF.",
+      "Job Hàng ngày 15:05 (T2-T6): Tự động nạp giá chốt phiên EOD cho danh mục VN30 sau khi sàn đóng cửa.",
+      "Job Hàng ngày 15:30 (T2-T6): Chạy lệnh compute-scores tính toán điểm số tổng hợp và cập nhật bảng xếp hạng.",
+      "Cung cấp giao diện dòng lệnh Worker CLI (apps/worker/cli.py) để chạy thủ công hoặc kiểm tra ngoại tuyến."
+    ],
+    inputs: ["Biến môi trường SCHEDULER_*", "Lịch thị trường ICT", "Cấu hình cron"],
+    outputs: ["Tác vụ kích hoạt Pipeline", "factor_scores đã cập nhật", "Nhật ký tác vụ nền"],
+    files: [
+      "apps/worker/main.py",
+      "apps/worker/cli.py",
+      "apps/worker/jobs.py"
+    ]
+  },
+  common: {
+    title: "Database Models & Migration Core",
+    icon: "🗄️",
+    path: "src/common/models/ & database/",
+    desc: "Lớp lưu trữ quan hệ và chuỗi thời gian. Định nghĩa 38 bảng thực thể bằng SQLAlchemy declarative models và 12 TimescaleDB hypertables, đóng vai trò nguồn chân lý duy nhất (Single Source of Truth).",
+    tasks: [
+      "Định nghĩa cấu trúc ORM cho 13 nhóm thực thể: Cổ phiếu, Giá EOD, Chỉ số, BCTC, Tin tức, Điểm Quant, v.v.",
+      "Quản lý vòng đời migration phiên bản CSDL thông qua Alembic (0001_initial_schema).",
+      "Tối ưu hóa bảng chuỗi thời gian prices, index_prices bằng TimescaleDB hypertable partitioning.",
+      "Quản lý kết nối, engine pooling và transaction session đảm bảo ACID."
+    ],
+    inputs: ["Dữ liệu đã chuẩn hóa từ Data Pipeline", "Alembic Migrations", "Seed Scripts"],
+    outputs: ["38 Bảng CSDL quan hệ", "12 Hypertables TimescaleDB", "Dữ liệu phục vụ truy vấn API"],
+    files: [
+      "src/common/models/market.py",
+      "src/common/models/factors.py",
+      "src/common/models/news.py",
+      "src/common/models/agents.py",
+      "database/migrations/versions/0001_initial_schema.py",
+      "database/seeds/run_all.py"
+    ]
+  },
+  market: {
+    title: "Market Quant & Financial Formulas",
+    icon: "📐",
+    path: "src/market/",
+    desc: "Phân hệ tính toán toán học và tài chính định lượng tất định. Không sử dụng thư viện ngoài phức tạp, thuần túy Python, đảm bảo 100% tái lập được và không có sai số look-ahead.",
+    tasks: [
+      "Chỉ báo kỹ thuật: SMA, EMA, RSI (Wilder smoothing), MACD (12/26/9), Bollinger Bands (20, 2σ), ATR, OBV.",
+      "Hệ số cơ bản: Tăng trưởng doanh thu/EPS, ROE, ROA, D/E, Khả năng trả lãi, Dòng tiền tự do (FCF).",
+      "Định giá cổ phiếu: P/E, P/B, EV/EBITDA, EV/Sales, Tỷ suất cổ tức, PEG.",
+      "Đo lường rủi ro & động lượng: Độ biến động log-return niên hóa, Beta, Max Drawdown trượt."
+    ],
+    inputs: ["Chuỗi giá đóng cửa OHLCV", "Dữ liệu Báo cáo tài chính", "Khối lượng giao dịch"],
+    outputs: ["Các chỉ số Kỹ thuật", "Tỷ số Tài chính Cơ bản", "Thước đo Rủi ro & Động lượng"],
+    files: [
+      "src/market/technical/indicators.py",
+      "src/market/fundamental/factors.py",
+      "src/market/valuation/valuation.py",
+      "src/market/momentum/momentum.py",
+      "src/market/risk/risk.py"
+    ]
+  },
+  quant: {
+    title: "Quant Scoring & Ranking Engine",
+    icon: "⚖️",
+    path: "src/quant/",
+    desc: "Bộ máy chấm điểm đa hệ số tổng hợp. Phân rã đóng góp của từng trụ cột tài chính theo trọng số chuẩn hóa và tạo bảng xếp hạng minh bạch cho toàn bộ danh mục.",
+    tasks: [
+      "Chuẩn hóa dữ liệu theo phân vị phần trăm (Percentile Ranking) để loại bỏ độ lệch phân phối.",
+      "Tổng hợp 6 nhóm hệ số: Cơ bản (30%), Kỹ thuật (20%), Định giá (15%), Động lượng (15%), Chất lượng (10%), Rủi ro (10%).",
+      "Phân rã chi tiết mức độ đóng góp (Score Decomposition) của từng chỉ báo.",
+      "Gắn nhãn tín hiệu đầu tư (POSITIVE, NEUTRAL, NEGATIVE) kèm chỉ số độ tin cậy (Confidence Score)."
+    ],
+    inputs: ["Chỉ số tính toán từ src/market/", "Cấu hình trọng số Quant (§12)"],
+    outputs: ["factor_scores", "Bảng xếp hạng StockRanking", "Giải trình tín hiệu đầu tư"],
+    files: [
+      "src/quant/scoring/engine.py",
+      "src/quant/factors/scoring.py"
+    ]
+  },
+  ml: {
+    title: "Machine Learning Predictor",
+    icon: "🤖",
+    path: "src/ml/",
+    desc: "Module máy học phục vụ dự báo xác suất sinh lời kỳ vọng. Sử dụng mô hình Gradient Boosting (LightGBM/XGBoost) kết hợp hiệu chuẩn xác suất thực tế.",
+    tasks: [
+      "Trích xuất đặc trưng (Feature Engineering) từ các hệ số Quant và kỹ thuật.",
+      "Huấn luyện bộ phân loại nhị phân dự báo khả năng cổ phiếu vượt trội thị trường.",
+      "Hiệu chuẩn xác suất dự báo (Probability Calibration) bằng phương pháp Isotonic Regression / Platt scaling.",
+      "Quản lý lưu trữ và nạp phiên bản mô hình thông qua Model Registry."
+    ],
+    inputs: ["Tập đặc trưng thị trường lịch sử", "Nhãn sinh lời kỳ hạn"],
+    outputs: ["Xác suất vượt trội hiệu chuẩn", "Mô hình đã huấn luyện (.pkl)", "Dự báo API /predictions"],
+    files: [
+      "src/ml/dataset.py",
+      "src/ml/models/trainer.py",
+      "src/ml/calibration.py",
+      "src/ml/registry.py"
+    ]
+  },
+  rag: {
+    title: "RAG & Evidence Engine",
+    icon: "🔍",
+    path: "src/rag/ & src/evidence/",
+    desc: "Hệ thống truy xuất tăng cường sinh tạo (RAG) và xây dựng bằng chứng. Đảm bảo mọi kết luận đầu tư đều phải trích dẫn nguồn tin tức hoặc số liệu có thật.",
+    tasks: [
+      "Cắt lát tài liệu tin tức thành các đoạn văn bản (Chunking) theo cửa sổ trượt và liên kết mã cổ phiếu.",
+      "Tạo vector nhúng tất định (Hash Embedding 128 chiều) phục vụ môi trường nội bộ và tìm kiếm ngữ nghĩa.",
+      "Lưu trữ vector linh hoạt (In-Memory hoặc đồng bộ sang Qdrant Vector DB).",
+      "Truy xuất lai (Hybrid Retrieval): Kết hợp vector tương đồng, so khớp từ khóa và độ tươi mới tin tức.",
+      "Đóng gói đối tượng Evidence chuẩn hóa chứa nguồn chứng minh và điểm độ tin cậy."
+    ],
+    inputs: ["Văn bản tin tức từ CSDL", "Câu hỏi truy vấn người dùng / Agent"],
+    outputs: ["Đoạn văn bản trích dẫn liên quan", "Cấu trúc Evidence có thể kiểm chứng"],
+    files: [
+      "src/rag/chunking.py",
+      "src/rag/embeddings/hash_embed.py",
+      "src/rag/retrieval/retriever.py",
+      "src/rag/retrieval/store.py",
+      "src/evidence/engine.py"
+    ]
+  },
+  agents: {
+    title: "LangGraph Multi-Agent System",
+    icon: "🧠",
+    path: "src/agents/",
+    desc: "Hệ thống cộng tác đa tác tử AI dựa trên đồ thị trạng thái LangGraph. Mỗi tác tử chịu trách nhiệm một khía cạnh nghiệp vụ, phối hợp tạo ra báo cáo khuyến nghị toàn diện.",
+    tasks: [
+      "Research Agent: Tìm kiếm và tóm tắt thông tin vĩ mô, ngành và tin tức liên quan đến mã cổ phiếu.",
+      "Analysis Agent: Đối chiếu số liệu tài chính định lượng, định giá và động lượng giá.",
+      "Risk Agent: Đánh giá độ biến động, sức khỏe đòn bẩy tài chính và nguy cơ thị trường.",
+      "Portfolio Agent: Phối hợp kết quả từ các tác tử để đưa ra hành động (Buy/Hold/Sell) và tỷ trọng khuyến nghị.",
+      "Ghi nhận nhật ký kiểm toán (Audit Trail) đầy đủ mọi suy luận, bước gọi công cụ (Tool Execution)."
+    ],
+    inputs: ["Hồ sơ cổ phiếu", "Điểm số Quant", "Bằng chứng RAG", "Danh mục hiện tại"],
+    outputs: ["Khuyến nghị đầu tư chi tiết", "Nhật ký kiểm toán AuditTrail", "Báo cáo phân tích toàn diện"],
+    files: [
+      "src/agents/orchestrator.py",
+      "src/agents/registry.py",
+      "src/agents/audit.py",
+      "src/agents/tools.py",
+      "src/agents/schemas.py"
+    ]
+  },
+  backtesting: {
+    title: "Walk-Forward Backtesting",
+    icon: "⏪",
+    path: "src/backtesting/",
+    desc: "Bộ công cụ kiểm thử chiến lược trên dữ liệu quá khứ. Ngăn ngừa triệt để thiên lệch nhìn trước (look-ahead bias) và tính toán chi phí thực tế (thuế, phí giao dịch, trượt giá).",
+    tasks: [
+      "Mô phỏng tái cân bằng danh mục theo chu kỳ (hàng tuần, hàng tháng).",
+      "Áp dụng quy tắc chi phí giao dịch và biên an toàn dải không giao dịch (No-trade zone 0.5%).",
+      "Tính toán 11 chỉ số đo lường hiệu quả danh mục: CAGR, Sharpe, Sortino, Max Drawdown, Calmar, Win Rate, Turnover.",
+      "Kiểm thử cuốn chiếu (Walk-forward Analysis) xác nhận độ bền của chiến lược qua nhiều chu kỳ thị trường."
+    ],
+    inputs: ["Chiến lược đầu tư", "Chuỗi giá quá khứ", "Thông số chi phí & trượt giá"],
+    outputs: ["Đường cong vốn (Equity Curve)", "Báo cáo hiệu suất 11 chỉ số", "Nhật ký lệnh giao dịch"],
+    files: [
+      "src/backtesting/engine.py",
+      "src/backtesting/metrics.py",
+      "src/backtesting/walkforward.py",
+      "src/backtesting/models.py"
+    ]
+  },
+  api: {
+    title: "REST API Fast-Serving",
+    icon: "🚀",
+    path: "apps/api/",
+    desc: "Cổng giao tiếp dịch vụ RESTful tốc độ cao của hệ thống. Cung cấp 39 đường dẫn API chuẩn hóa theo chuẩn OpenAPI/Swagger và phân phối dữ liệu cho giao diện người dùng.",
+    tasks: [
+      "Điều phối lớp dịch vụ theo protocol MarketSource (tự động chuyển đổi giữa Bộ nhớ giả lập và TimescaleDB thật).",
+      "Cung cấp 14 nhóm API: Thị trường, Cổ phiếu, Kỹ thuật, Cơ bản, Định giá, RAG, Tác tử, Dự đoán ML, Giám sát.",
+      "Bảo đảm xác thực, kiểm soát tốc độ truy cập và định dạng dữ liệu trả về theo chuẩn phân trang.",
+      "Điểm kiểm tra sức khỏe hệ thống: /healthz và /readyz (báo cáo trạng thái DB, Qdrant và nguồn dữ liệu)."
+    ],
+    inputs: ["HTTP Request từ Client/Dashboard", "TimescaleDB / In-Memory Service"],
+    outputs: ["JSON Response chuẩn hóa", "Tài liệu Swagger UI (/docs)", "Chỉ số hệ thống"],
+    files: [
+      "apps/api/main.py",
+      "apps/api/dependencies.py",
+      "apps/api/services/db_market.py",
+      "apps/api/services/market_data.py",
+      "apps/api/routers/*.py"
+    ]
+  },
+  dashboard: {
+    title: "Streamlit Investment Dashboard",
+    icon: "📊",
+    path: "apps/dashboard/",
+    desc: "Giao diện người dùng trực quan hiện đại được xây dựng trên Streamlit. Tích hợp biểu đồ Plotly tương tác cao, giúp nhà đầu tư theo dõi thị trường và tra cứu khuyến nghị.",
+    tasks: [
+      "Tổng quan thị trường: Chỉ số VN-Index, độ rộng thị trường, top tăng/giảm giá.",
+      "Bộ lọc & Xếp hạng: Lọc cổ phiếu theo đa chỉ tiêu cơ bản/kỹ thuật và xem bảng xếp hạng định lượng.",
+      "Hồ sơ mã chi tiết: Biểu đồ nến tương tác, các chỉ báo kỹ thuật, phân rã đóng góp điểm số.",
+      "Trang Tin tức & RAG: Tra cứu tài liệu, tìm kiếm ngữ nghĩa và xem bằng chứng minh bạch cho từng nhận định."
+    ],
+    inputs: ["REST API /api/v1/* (qua MarketClient)", "Thao tác tương tác từ người dùng"],
+    outputs: ["Giao diện đồ họa Streamlit", "Biểu đồ Plotly tương tác", "Báo cáo phân tích trực quan"],
+    files: [
+      "apps/dashboard/app.py",
+      "apps/dashboard/client.py",
+      "apps/dashboard/components.py"
+    ]
+  }
+};
+
+function selectModule(key) {
+  var data = moduleData[key];
+  if (!data) return;
+  document.querySelectorAll('.mod-node').forEach(function(el) { el.classList.remove('selected'); });
+  var targetNode = document.getElementById('node-' + key);
+  if (targetNode) targetNode.classList.add('selected');
+
+  document.getElementById('ins-title').innerHTML = '<span>' + data.icon + '</span> <span>' + data.title + '</span>';
+  document.getElementById('ins-path').innerText = data.path;
+  document.getElementById('ins-desc').innerText = data.desc;
+
+  var tasksUl = document.getElementById('ins-tasks');
+  tasksUl.innerHTML = '';
+  data.tasks.forEach(function(t) {
+    var li = document.createElement('li');
+    li.innerText = t;
+    tasksUl.appendChild(li);
+  });
+
+  var inDiv = document.getElementById('ins-inputs');
+  inDiv.innerHTML = '';
+  data.inputs.forEach(function(i) {
+    var span = document.createElement('span');
+    span.className = 'chip in';
+    span.innerText = i;
+    inDiv.appendChild(span);
+  });
+
+  var outDiv = document.getElementById('ins-outputs');
+  outDiv.innerHTML = '';
+  data.outputs.forEach(function(o) {
+    var span = document.createElement('span');
+    span.className = 'chip out';
+    span.innerText = o;
+    outDiv.appendChild(span);
+  });
+
+  var filesDiv = document.getElementById('ins-files');
+  filesDiv.innerHTML = data.files.map(function(f) { return '<div>📄 ' + f + '</div>'; }).join('');
+}
+
+function appendLog(text, type) {
+  if (!type) type = 'info';
+  var logBox = document.getElementById('sim-log');
+  var div = document.createElement('div');
+  div.className = 'log-line ' + type;
+  var time = new Date().toLocaleTimeString('vi-VN');
+  div.innerText = '[' + time + '] ' + text;
+  logBox.appendChild(div);
+  logBox.scrollTop = logBox.scrollHeight;
+}
+
+function clearPulses() {
+  document.querySelectorAll('.mod-node').forEach(function(n) { n.classList.remove('active-pulse'); });
+}
+
+function resetSimulation() {
+  clearPulses();
+  document.querySelectorAll('.btn-sim').forEach(function(b) {
+    b.classList.remove('active');
+    if (!b.classList.contains('secondary')) b.classList.add('secondary');
+  });
+  appendLog("Đã dừng mô phỏng và đặt lại trạng thái.", "warn");
+}
+
+function runSimulation(scenario) {
+  resetSimulation();
+  var btn = document.getElementById('btn-scen-' + scenario);
+  if (btn) {
+    btn.classList.remove('secondary');
+    btn.classList.add('active');
+  }
+
+  var flows = {
+    eod: [
+      { node: 'worker', msg: "Worker Scheduler kích hoạt job daily_eod_ingestion (15:05 ICT)", delay: 900 },
+      { node: 'data', msg: "Data Pipeline: Thu thập EOD từ Yahoo Chart Provider (62/62 bar, un-adjust split)", delay: 1200 },
+      { node: 'data', msg: "Kiểm tra 6 chiều chất lượng đạt 94.88 điểm -> Đạt cổng chất lượng!", delay: 1000 },
+      { node: 'common', msg: "TimescaleDB: Ghi dữ liệu sạch vào hypertable 'prices'", delay: 1000 },
+      { node: 'market', msg: "Market Quant: Tự động tính toán RSI, MACD, ROE, P/E cho các mã VN30", delay: 1200 },
+      { node: 'quant', msg: "Scoring Engine: Phân rã 6 hệ số, sinh xếp hạng cổ phiếu vào bảng 'factor_scores'", delay: 1200 },
+      { node: 'api', msg: "FastAPI: Endpoint /api/v1/stocks/ranked sẵn sàng phục vụ dữ liệu mới nhất", delay: 900 }
+    ],
+    news: [
+      { node: 'worker', msg: "Worker Scheduler kích hoạt periodic_news_ingestion (chu kỳ 15 phút)", delay: 900 },
+      { node: 'data', msg: "Data Pipeline: Đọc RSS CaféF, bóc tách 50 tin tức mới nhất", delay: 1100 },
+      { node: 'common', msg: "TimescaleDB: Lưu trữ bản ghi vào bảng 'news' và liên kết 'news_symbols'", delay: 1000 },
+      { node: 'rag', msg: "RAG Engine: Cắt lát văn bản (Chunking) theo cửa sổ trượt và nhúng vector", delay: 1200 },
+      { node: 'rag', msg: "Đồng bộ vector vào MemoryVectorStore / QdrantAdapter, lập chỉ mục hybrid", delay: 1000 },
+      { node: 'api', msg: "FastAPI: Endpoint /api/v1/rag/search và /evidence sẵn sàng trả về bằng chứng", delay: 900 }
+    ],
+    agent: [
+      { node: 'api', msg: "Nhận yêu cầu phân tích toàn diện mã cổ phiếu FPT từ người dùng", delay: 900 },
+      { node: 'agents', msg: "LangGraph Orchestrator: Khởi tạo phiên phân tích, kích hoạt Research Agent", delay: 1100 },
+      { node: 'rag', msg: "Research Agent gọi RAG Engine: Trích xuất các bài báo liên quan đến doanh thu FPT", delay: 1200 },
+      { node: 'quant', msg: "Analysis Agent đọc factor_scores: FPT đạt điểm 82.5 (Tín hiệu: POSITIVE)", delay: 1100 },
+      { node: 'market', msg: "Risk Agent tính toán Beta và độ biến động cuộn: Mức rủi ro trung bình", delay: 1000 },
+      { node: 'agents', msg: "Portfolio Agent hội tụ: Đề xuất tỷ trọng 15% danh mục, ghi nhật ký Audit Trail", delay: 1200 },
+      { node: 'dashboard', msg: "Dashboard hiển thị báo cáo khuyến nghị có đầy đủ dẫn chứng và căn cứ", delay: 900 }
+    ],
+    backtest: [
+      { node: 'api', msg: "Người dùng cấu hình Backtest chiến lược Xếp hạng Định lượng (2024 - 2026)", delay: 900 },
+      { node: 'backtesting', msg: "Backtesting Engine: Khởi tạo cửa sổ kiểm thử cuốn chiếu (Walk-Forward)", delay: 1100 },
+      { node: 'common', msg: "Truy vấn chuỗi giá lịch sử và hệ số factor_scores trong quá khứ", delay: 1000 },
+      { node: 'backtesting', msg: "Mô phỏng tái cân bằng hàng tháng: Áp dụng chi phí giao dịch và trượt giá", delay: 1300 },
+      { node: 'backtesting', msg: "Tính toán 11 chỉ số: CAGR: 24.5%, Sharpe: 1.62, Max Drawdown: -12.4%", delay: 1100 },
+      { node: 'dashboard', msg: "Vẽ biểu đồ Plotly so sánh đường cong vốn chiến lược với VN-Index", delay: 900 }
+    ],
+    api: [
+      { node: 'dashboard', msg: "Người dùng mở trang 'Chi tiết mã cổ phiếu' trên Streamlit Dashboard", delay: 900 },
+      { node: 'api', msg: "MarketClient gửi HTTP GET /api/v1/stocks/FPT/summary", delay: 900 },
+      { node: 'api', msg: "FastAPI Dependency: Chọn nguồn dữ liệu qua MARKET_DATA_SOURCE (Auto/DB)", delay: 1000 },
+      { node: 'common', msg: "DbMarketService đọc dữ liệu tổng hợp trực tiếp từ TimescaleDB", delay: 1000 },
+      { node: 'api', msg: "FastAPI trả JSON phản hồi, bọc trong cấu trúc phân trang chuẩn hóa", delay: 900 },
+      { node: 'dashboard', msg: "Dashboard render biểu đồ nến OHLCV và các bảng hệ số kỹ thuật", delay: 900 }
+    ]
+  };
+
+  var steps = flows[scenario];
+  if (!steps) return;
+
+  appendLog("Bắt đầu mô phỏng kịch bản: [" + scenario.toUpperCase() + "]", 'success');
+  var currentStepIdx = 0;
+
+  function executeStep() {
+    if (currentStepIdx >= steps.length) {
+      clearPulses();
+      appendLog("Hoàn thành kịch bản mô phỏng [" + scenario.toUpperCase() + "]. Tất cả module đã vận hành trơn tru!", 'success');
+      return;
+    }
+
+    var step = steps[currentStepIdx];
+    clearPulses();
+
+    var targetNode = document.getElementById('node-' + step.node);
+    if (targetNode) {
+      targetNode.classList.add('active-pulse');
+      selectModule(step.node);
+    }
+
+    appendLog(step.msg, 'info');
+    currentStepIdx++;
+    setTimeout(executeStep, step.delay);
+  }
+
+  executeStep();
+}
+
+window.addEventListener('DOMContentLoaded', function() {
+  selectModule('data');
+});
+</script>
+</body>
+</html>
