@@ -1,0 +1,50 @@
+# Bộ nhớ dự án — Danh sách công việc (Bản tiếng Việt)
+
+> Thuật ngữ chuyên môn (tên bảng, biến môi trường, lệnh, đường dẫn) giữ nguyên tiếng Anh.
+
+Chú giải: `[ ]` Cần làm · `[~]` Đang làm · `[x]` Hoàn thành · `[!]` Bị chặn
+
+> **Quy tắc thường trực (mọi task):** mọi task thay đổi mã nguồn, lược đồ, cấu hình
+> hoặc hành vi BẮT BUỘC cũng phải cập nhật tài liệu HTML tiếng Việt trong `docs/`
+> (`status.html`, `modules.html` và mọi trang bị ảnh hưởng) trong cùng task,
+> và kiểm chứng lại HTML trước khi đánh dấu hoàn thành.
+> Các trang đã được dời từ `docs/htmldocs/` sang `docs/` ngày 2026-09-25.
+
+---
+
+## Hiện tại
+
+- [x] **T001 — Khung Phase 0 + tài liệu** — cấu trúc repo, bộ tài liệu, memory bank, pyproject/compose/env/README. *(2026-09-06)*
+- [x] **T003 — Migration Alembic (BƯỚC 2 THIẾT KẾ CSDL) + seed** — `src/common/models/` (38 bảng), migration `0001_initial_schema.py` (+ TimescaleDB hypertable), seed idempotent (exchanges/sectors/industries/VN30). Đã kiểm chứng up→down→up + seed với TimescaleDB đang chạy. *(2026-09-13)*
+- [x] **T002 — Thiết kế nguồn dữ liệu + kế hoạch chứng thực (BƯỚC 4)** — `docs/DATA_SOURCES.md` (chọn provider theo miền, chuỗi dự phòng, kế hoạch chứng thực) + `configs/sources.yaml` (registry máy đọc được) + biến provider trong `.env.example` + `tests/unit/test_sources_registry.py`. Endpoint provider đánh dấu `TO VERIFY` cho T004 (chưa có egress mạng để xác nhận). *(2026-09-13)*
+- [x] **T004 — Collector dữ liệu → validator → normalizer → pipeline (Giai đoạn 1)** — gói `src/data/` (collectors, validators, normalizers, pipelines, providers, fixture, quality, records). FixtureProvider cho kiểm thử ngoại tuyến tất định. Worker CLI đã nối. `tests/unit/test_pipeline.py` (38 test). Đã kiểm chứng: ruff sạch, mypy sạch, 82 test pass. *(2026-09-14)*
+- [x] **T005 — Khung chất lượng dữ liệu (chấm điểm + cổng, §39)** — `src/data/quality.py` (chấm điểm 6 chiều: completeness/validity/consistency/uniqueness/freshness/accuracy, trung bình có trọng số và chuẩn hoá lại, cổng ngưỡng). `tests/unit/test_quality.py` (26 test). Đã kiểm chứng: ruff sạch, mypy sạch, 82 test pass. *(2026-09-14)*
+
+## Tồn đọng (theo thứ tự đặc tả §57)
+
+- [x] **T006 — Quant Engine: chỉ báo kỹ thuật (+ unit test giá trị kỳ vọng)** — `src/market/technical/indicators.py` (SMA, EMA, RSI, MACD, Bollinger Bands, ATR, OBV, volume SMA, relative strength). Cài đặt thuần Python tất định. `tests/unit/test_technical_indicators.py` (40 test). Đã kiểm chứng: ruff sạch, mypy sạch, 122 test pass. *(2026-09-14)*
+- [x] **T007 — Quant Engine: hệ số cơ bản, định giá, động lượng, rủi ro + điểm hệ số** — `src/market/fundamental/factors.py`, `src/market/valuation/valuation.py`, `src/market/momentum/momentum.py`, `src/market/risk/risk.py`, `src/quant/factors/scoring.py` (trọng số nền §12 + tổng hợp percentile-rank + xếp hạng). Thuần Python tất định. `tests/unit/test_quant_factors.py` + `test_quant_scoring.py` (18 test). Đã kiểm chứng: ruff sạch, mypy sạch, 140 test pass. *(2026-09-14)*
+- [x] **D1 — Trang tài liệu HTML tĩnh** — `docs/htmldocs/` (index/structure/status/modules/database/pipeline + style.css, nay nằm ở `docs/`). Giới thiệu dự án, bố cục repo, hiện trạng phát triển theo §58, tham chiếu module đầy đủ kèm chữ ký hàm + ví dụ dùng. Mọi trang đã kiểm chứng HTML, liên kết nav đã xác nhận. *(2026-09-14)*
+- [x] **T008 — Scoring engine (trọng số nền §12) + xếp hạng + payload giải thích** — `src/quant/scoring/engine.py` (`FactorContribution`, `ScoreDecomposition`, `StockRanking`, `decompose_score`, `score_universe`, `build_signal_label`, `build_confidence`). Đóng góp theo hệ số với trọng số chuẩn hoá lại, universe đã xếp hạng, nhãn POSITIVE/NEUTRAL/NEGATIVE + độ tin cậy. `tests/unit/test_scoring_engine.py` (11 test). *(2026-09-15)*
+- [x] **T009 — Engine backtesting (walk-forward, chi phí, kiểm soát bias) + chỉ số** — `src/backtesting/` — `models.py`, `metrics.py` (11 chỉ số: total return, CAGR, annualized volatility, Sharpe, Sortino, max drawdown, Calmar, win rate, profit factor, turnover, transaction-cost total + `compute_metrics` tổng hợp), `engine.py` (`run_backtest`/`select_window`/rebalance/close-leg), `walkforward.py`. `tests/unit/test_backtesting.py` (10 test). *(2026-09-15)*
+- [x] **T010 — FastAPI `apps/api` expose `/api/v1/*`** — `main.py` (health/readyz) + 7 router (`market`, `stocks`, `fundamentals`, `technical`, `valuation`, `news`, `backtests`) = 23 đường dẫn / 24 thao tác theo `docs/API_SPECIFICATION.md`; `schemas.py` (21 model Pydantic gồm `Page[T]` generic), `dependencies.py` (`MarketDep`), `services/market_data.py` (service tất định trong bộ nhớ — KI-008), `routers/common.py` (phân trang + phong bì `not_found`). `tests/unit/test_api.py` (14 test). *(2026-09-15)*
+- [x] **T011 — Dashboard Streamlit** — `apps/dashboard/` — `client.py` (HTTP-first + fallback `MarketService` trong tiến trình), `components.py` (định dạng/biến đổi độc lập framework), `app.py` (6 trang: overview/screener/rankings/detail/backtests/health qua Streamlit + plotly). `tests/unit/test_dashboard.py` (34 test). Đã kiểm chứng: ruff sạch, mypy sạch, 209 test pass. *(2026-09-15)*
+- [x] **T012 — Nạp tin tức + RAG + engine bằng chứng (Giai đoạn 4 → MVP-2)** — `src/rag/` (embedding `hash_embed.py`, ingestion `chunking.py`, retrieval `store.py` MemoryVectorStore + QdrantAdapter tuỳ chọn + `retriever.py` hybrid, `reranking/reranker.py`, `service.py` singleton), `src/evidence/engine.py` (`Evidence` + `confidence_for` + `build_evidence` §19), `apps/api/routers/rag.py` (3 endpoint → API tổng 26 đường dẫn / 27 thao tác), `apps/api/services/rag_service.py`, `readyz` thêm trạng thái qdrant. `tests/unit/test_rag_evidence.py` (20) + test_api.py (+3). Đã kiểm chứng: ruff sạch, mypy sạch (102 tệp), 232 test pass. *(2026-09-15)*
+- [x] **T013 — Tác tử LangGraph + orchestrator + audit (Giai đoạn 5)** — `src/agents/` (4 tác tử: Research/Analysis/Monitoring/Portfolio, Orchestrator có retry/timeout/audit, AgentRegistry §41, AuditTrail §31, ToolCatalog), `src/agents/util.py`, `src/agents/schemas.py`; CLI `run-agent` (4 task); 10 endpoint API (`/api/v1/agents/*` + `/api/v1/analysis/*`, mẫu sync + async 202+poll); tất định, ngoại tuyến, không LLM. `tests/unit/test_agents.py` (63 test) + `test_api.py` (+6). Đã kiểm chứng: ruff sạch, mypy sạch, 301 test pass. *(2026-09-16)*
+- [x] **T014 — Dataset ML + huấn luyện + hiệu chuẩn + registry + API dự đoán (Giai đoạn 6)** — **mã nguồn đã xong**; *huấn luyện trên dữ liệu thật vẫn chờ KI-012* (xem mục "Bị chặn" bên dưới). *(2026-09-16)*
+- [x] **MAINT-2026-09-17 — Kiểm toán toàn bộ mã nguồn: sửa lỗi logic/nhất quán** — 16 khiếm khuyết được sửa trong `src/` + `apps/`: kế toán bán một phần trong backtest (toàn bộ nhánh bị ghi nhận khi chỉ bán một phần), thiếu chi phí nhánh thoát trong `transaction_cost`/`turnover`, thiếu chốt Σ trọng số ≤ 1, bán trước mua, dải không giao dịch 0.5%, đánh dấu vốn cuối sau thanh lý; trọng số chuẩn hoá lại trong phân rã điểm (Σ tỉ trọng = 1) + chốt chống trôi YAML; point id ổn định cho Qdrant (`hash()` bị PYTHONHASHSEED ngẫu nhiên hoá); lỗi route dashboard `/stocks/rankings` → `/stocks/ranked` + nhánh `_fallback` chết; auth 401 khi sai thông tin (`compare_digest`); `call()` của tool bị giới hạn theo catalog §22; `get_default_registry()` dùng chung (trainer ↔ serving); khử trùng tin theo lô (trước là quét toàn bảng); lô nạp rỗng bỏ qua CSDL; ép kiểu timestamp naive/aware; lọc ACTIVE trong `resolve_stock_ids`; rò rỉ client `HttpJsonProvider`; `_make_lightgbm` chết được nối qua `ModelTrainer(algorithm=...)` + CLI `--algorithm`; CLI yêu cầu `--symbols` khi nạp `prices`; fixture news gắn mốc 15:00. +17 test. Đã kiểm chứng: ruff sạch, mypy sạch, **342 passed / 1 skipped**. *(2026-09-17)*
+- [x] **D2 — Cột mốc dữ liệu thật (W1–W3 + E2E, 2026-09-24/25)** — đường đọc API trên TimescaleDB (`MARKET_DATA_SOURCE=memory|db|auto` + `DbMarketService` sau protocol sẵn có), worker APScheduler với job news/EOD/scoring, provider Yahoo EOD + CaféF RSS đã kiểm chứng (KI-006/KI-007), job `compute-scores` ghi `factor_scores`, dashboard mở phong bì + trang Tin tức & RAG, 50 bài CaféF thật trong chỉ mục RAG. Đã kiểm chứng: **422 passed, 3 skipped** · ruff · mypy (126 tệp) · nạp trực tiếp FPT/VCB/HPG/ACB `fetched=62 written=62 quality=94.88`.
+- [x] **D3 — Dời + làm mới tài liệu (2026-09-25)** — `docs/htmldocs/` → `docs/` (git mv, liên kết tương đối nguyên vẹn), làm mới `status.html` / `modules.html` / `api.html` / `index.html` / `structure.html`, thêm mục cấu hình qua biến môi trường, cập nhật mọi tham chiếu `docs/htmldocs` trong repo.
+- [x] **D4 — Làm mới hướng dẫn triển khai cho bước 3 (2026-09-26)** — `docs/DEPLOYMENT_vi.md` viết lại theo vị trí hiện tại (bước 3: rebuild → kiểm tra → nạp Yahoo + chấm điểm), bảng biến môi trường có `MARKET_DATA_SOURCE`/`SCHEDULER_*`/cảnh báo lệch DSN, roadmap cập nhật lại trạng thái; `helper/deployment_vi.md` cập nhật khớp theo.
+- [x] **D5 — Chuẩn hóa 100% tài liệu tiếng Việt, xóa bản tiếng Anh & ban hành quy ước tài liệu tiếng Việt (2026-09-26)** — Rà soát toàn bộ tài liệu markdown; tạo các bản tiếng Việt đầy đủ; xóa bỏ 22 file tiếng Anh tương ứng và 2 file bản thảo trùng lặp; chuẩn hóa 100% `README.md` và các README phụ trợ sang tiếng Việt; thiết lập quy tắc: từ nay toàn bộ tài liệu markdown của dự án chỉ sử dụng tiếng Việt và các file tiếng Việt. Đồng thời sửa số liệu API sai "38/39" → **39 đường dẫn / 40 thao tác** (kiểm chứng bằng `app.openapi()`) và bổ sung hàng KI-012 còn thiếu vào `known-issues_vi.md`.
+- [ ] **T015 — Production: auth, monitoring, alert, CI/CD, hardening (Giai đoạn 7)** *(kế tiếp)*
+
+
+---
+
+## Bị chặn cho tới khi baseline Data+Quant+Backtest đạt (đặc tả §57)
+
+> "Không chuyển sang Agent trước khi Data + Quant + Backtest đạt baseline có thể kiểm chứng."
+
+- [!] **T014 — Huấn luyện ML trên dữ liệu thật** — bị chặn bởi **KI-012**: `train-model` hiện hard-code nguồn fixture trong bộ nhớ (giá tăng đơn điệu → 100% nhãn dương → không fit được classifier). **Lối mở:** thêm cờ `--source {memory,db}` cho `train-model` để dùng `DbMarketService` (CSDL đã có nhãn hỗn hợp và `factor_scores`), giữ `memory` làm mặc định để unit test vẫn không cần hạ tầng.
+

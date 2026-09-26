@@ -1,64 +1,64 @@
-# DTCK — AI Investment Research & Decision Intelligence Platform
+# DTCK — Nền tảng Nghiên cứu & Quyết định Đầu tư AI
 
-> **AI does not replace investment judgment. AI increases the speed, consistency, depth and traceability of investment research.**
+> **AI không thay thế nhận định đầu tư. AI gia tăng tốc độ, tính nhất quán, chiều sâu và khả năng truy vết của hoạt động nghiên cứu đầu tư.**
 
-An AI-powered research & decision-support platform for the **Vietnam stock market** (HOSE / HNX / UPCOM), starting with the VN30 universe.
+Nền tảng nghiên cứu & hỗ trợ quyết định ứng dụng AI cho **thị trường chứng khoán Việt Nam** (HOSE / HNX / UPCOM), khởi đầu với danh mục VN30.
 
-**⚠️ Not an auto-trading system.** The platform produces *evidence-backed research, scores, and risk assessment* — a human always makes the investment decision (spec §4.6).
+**⚠️ Không phải hệ thống giao dịch tự động.** Nền tảng tạo ra *nghiên cứu, điểm số và đánh giá rủi ro có bằng chứng xác thực* — con người luôn là người đưa ra quyết định đầu tư cuối cùng (spec §4.6).
 
 ---
 
-## Pipeline
+## Chuỗi xử lý (Pipeline)
 
 ```text
-DATA → QUANT → BACKTEST → ML → RAG → AI AGENT → EVIDENCE → RISK CONTROL → HUMAN
+DỮ LIỆU → QUANT → BACKTEST → ML → RAG → AI AGENT → BẰNG CHỨNG → KIỂM SOÁT RỦI RO → CON NGƯỜI
 ```
 
-Principles (spec §4): **Data First** · **Deterministic Calculation First** (LLM never computes RSI/P/E/ROE/…) · **LLM Is a Reasoning Layer** · **Evidence-Based Reasoning**. Strategies must be **backtested before deployment**.
+Nguyên tắc cốt lõi (spec §4): **Dữ liệu là trên hết** · **Tính toán tất định trước** (LLM không bao giờ tự tính RSI/P/E/ROE/…) · **LLM là tầng suy luận** · **Suy luận dựa trên bằng chứng**. Mọi chiến lược phải được **kiểm nghiệm lịch sử (backtest) trước khi triển khai**.
 
 ---
 
-## Repository layout (spec §35)
+## Cấu trúc thư mục repository (spec §35)
 
 ```text
 apps/          api (FastAPI) · dashboard (Streamlit) · worker (schedulers/ingest)
 src/           data · market · quant · ml · rag · agents · evidence · portfolio · backtesting · common
 database/      alembic migrations + seeds
 tests/         unit · integration · data_quality · agent · e2e
-docs/          architecture & specifications (see below)
-memory-bank/   cross-session project memory (§37)
-helper/        operational guides (deployment, resources)
-notebooks/     research
-configs/       configuration
-scripts/       ops scripts
-offline_package/  offline wheels for air-gapped installs
+docs/          kiến trúc & đặc tả kỹ thuật
+memory-bank/   bộ nhớ dự án xuyên phiên (§37)
+helper/        hướng dẫn vận hành (triển khai, tài nguyên)
+notebooks/     nghiên cứu & thử nghiệm
+configs/       cấu hình hệ thống
+scripts/       script vận hành
+offline_package/  wheel offline cho cài đặt air-gapped
 docker/        Dockerfiles + compose
 ```
 
-## Documentation
+## Tài liệu kỹ thuật
 
-| Doc | Content |
+| Tài liệu | Nội dung |
 |---|---|
-| `docs/SYSTEM_SPECIFICATION.md` | **The spec** (v1.0, 58 sections) — read this first |
-| `docs/AI_INVESTMENT_CONCEPT.md` | Earlier concept draft (Vietnamese) |
-| `docs/ARCHITECTURE.md` | Logical architecture, components, phases, MVP gates |
-| `docs/DATABASE_SCHEMA.md` | Full PostgreSQL/TimescaleDB schema |
-| `docs/DATA_ARCHITECTURE.md` | Data domains, ingestion, quality framework |
-| `docs/QUANT_ENGINE.md` | Deterministic factor & scoring engine |
-| `docs/BACKTESTING.md` | Backtest pipeline, bias prevention, metrics |
-| `docs/ML_ARCHITECTURE.md` | XGBoost/LightGBM pipeline, registry, calibration |
-| `docs/RAG_ARCHITECTURE.md` | Qdrant ingestion + hybrid retrieval + evidence |
-| `docs/AGENT_ARCHITECTURE.md` | LangGraph agents, tools, structured output |
-| `docs/API_SPECIFICATION.md` | REST API groups `/api/v1/*` |
-| `docs/DATA_SOURCES.md` | Data-source design & credentials plan (T002) |
-| `docs/DEPLOYMENT.md` | Setup & deployment |
-| `docs/SECURITY.md` | Secrets, auth, audit, RBAC |
-| `memory-bank/` | Project memory (§37): context, state, decisions, issues, tasks, changelog |
+| `docs/SYSTEM_SPECIFICATION.md` | **Đặc tả hệ thống** (v1.0, 58 mục) — đọc tài liệu này đầu tiên |
+| `docs/AI_INVESTMENT_CONCEPT.md` | Bản thảo khái niệm ban đầu (tiếng Việt) |
+| `docs/ARCHITECTURE_vi.md` | Kiến trúc logic, các thành phần, giai đoạn, tiêu chí MVP |
+| `docs/DATABASE_SCHEMA_vi.md` | Toàn bộ lược đồ CSDL PostgreSQL/TimescaleDB |
+| `docs/DATA_ARCHITECTURE_vi.md` | Miền dữ liệu, luồng nạp, khung chất lượng dữ liệu |
+| `docs/QUANT_ENGINE_vi.md` | Bộ tính toán nhân tố và chấm điểm tất định |
+| `docs/BACKTESTING_vi.md` | Quy trình backtest, phòng tránh thiên kiến, chỉ số đo lường |
+| `docs/ML_ARCHITECTURE_vi.md` | Quy trình XGBoost/LightGBM, registry model, hiệu chuẩn |
+| `docs/RAG_ARCHITECTURE_vi.md` | Nạp Qdrant + truy xuất lai (hybrid) + bằng chứng xác thực |
+| `docs/AGENT_ARCHITECTURE_vi.md` | Agent LangGraph, công cụ, đầu ra có cấu trúc |
+| `docs/API_SPECIFICATION_vi.md` | Nhóm API REST `/api/v1/*` |
+| `docs/DATA_SOURCES_vi.md` | Thiết kế nguồn dữ liệu & kế hoạch chứng thực (T002) |
+| `docs/DEPLOYMENT_vi.md` | Cài đặt & triển khai hệ thống |
+| `docs/SECURITY_vi.md` | Quản lý secret, xác thực, kiểm toán, phân quyền RBAC |
+| `memory-bank/` | Bộ nhớ dự án (§37): ngữ cảnh, hiện trạng, quyết định, vấn đề, công việc, changelog |
 
-## Quick start (MVP)
+## Bắt đầu nhanh (MVP)
 
 ```bash
-cp .env.example .env        # fill real values
+cp .env.example .env        # điền các giá trị thực tế
 docker compose up --build -d
 docker compose exec api alembic upgrade head
 docker compose exec api python -m database.seeds.run_all
@@ -67,21 +67,14 @@ docker compose exec api python -m database.seeds.run_all
 - API docs → http://localhost:8000/docs
 - Dashboard → http://localhost:8501
 
-See `docs/DEPLOYMENT.md` and `helper/deployment.md` for details.
+Xem `docs/DEPLOYMENT_vi.md` và `helper/deployment_vi.md` để biết thêm chi tiết.
 
-## Development roadmap (spec §57)
+## Lộ trình phát triển (spec §57)
 
-**Spec (100%) → Database design → Repo structure → Data sources → Data ingestion → Quant Engine → Backtest → RAG → AI Agent → ML → Portfolio → Production**
+**Đặc tả (100%) → Thiết kế CSDL → Cấu trúc Repo → Nguồn dữ liệu → Nạp dữ liệu → Quant Engine → Backtest → RAG → AI Agent → ML → Danh mục → Vận hành Production**
 
-> **Không chuyển sang Agent trước khi Data + Quant + Backtest đạt baseline có thể kiểm chứng.** (No agent work before a verifiable Data+Quant+Backtest baseline.)
+> **Không chuyển sang Agent trước khi Data + Quant + Backtest đạt baseline có thể kiểm chứng.**
 
-## Status
+## Trạng thái hiện tại
 
-```text
-Specification: ████████████████████ 100%
-Architecture:  ████████████████████ 100%   (docs drafted)
-Database:      ████████████████████ 100%   (schema docs drafted; migrations pending)
-Data/Analysis: ░░░░░░░░░░░░░░░░░░░░   0%   ← next
-```
-
-See `memory-bank/current-state.md` and `memory-bank/tasks.md`.
+Xem `memory-bank/current-state_vi.md` và `memory-bank/tasks_vi.md`.

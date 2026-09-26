@@ -1,21 +1,21 @@
-# DTCK — offline install procedure  (air-gapped environments)
+# DTCK — Quy trình cài đặt offline (Môi trường air-gapped / cô lập mạng)
 
-## How to refresh the offline bundle (run on an internet-connected machine)
+## Cách cập nhật gói offline (chạy trên máy có kết nối internet)
 
 ```bash
 pip download -r requirements.txt -d ./offline_package/wheels
-# pin exact versions for reproducibility:
-# pip freeze > offline_package/requirements-offline.txt   (venv-based)
+# chốt phiên bản chính xác để tái lập:
+# pip freeze > offline_package/requirements-offline.txt   (dựa trên venv)
 ```
 
-## How to install offline
+## Cách cài đặt offline
 
 ```bash
 pip install --no-index --find-links=./offline_package/wheels -r requirements-offline.txt
 ```
 
-## Requirements for this bundle
+## Yêu cầu đối với bộ gói này
 
-- Python 3.12 (matching the Docker base images: `python:3.12-slim`)
-- Building xgboost/lightgbm from wheels is CPU-only by default
-- See `helper/resources.md` for the dependency matrix
+- Python 3.12 (khớp với Docker base image: `python:3.12-slim`)
+- Bản build xgboost/lightgbm từ wheel mặc định chỉ chạy CPU
+- Xem `helper/resources_vi.md` để xem ma trận phiên bản phụ thuộc

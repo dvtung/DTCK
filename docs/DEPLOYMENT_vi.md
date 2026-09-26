@@ -2,7 +2,6 @@
 
 > Phiên bản: 2026-09-26 · nhánh `feat/data-source-design` · commit `7b048c5`
 > Trạng thái: **bạn đang ở bước 3** — kiểm tra API/DB trong container + nạp dữ liệu thật.
-> Bản tiếng Anh rút gọn: `helper/deployment.md` · Tài liệu chính: `docs/DEPLOYMENT.md`
 
 Dựa trên cấu hình thực tế của repo (docker-compose, Alembic, seeds, các KI đã biết).
 

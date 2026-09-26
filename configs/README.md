@@ -1,17 +1,17 @@
 # configs/
 
-Runtime configuration. Secrets NEVER live here (see `.env` / secret store).
+Cấu hình lúc chạy (runtime configuration). Mật mã / secret TUYỆT ĐỐI KHÔNG lưu ở đây (xem `.env` / secret store).
 
-## Files
+## Các tệp cấu hình
 
-- `scoring_weights.yaml` — baseline multi-factor weights (spec §12, versioned).
-- `sources.yaml` — data provider registry (T002; design in `docs/DATA_SOURCES.md`):
-  provider ids, roles, auth model, credential env-var **names** (never values),
-  enabled/priority flags, per-domain selection and fallback chains.
-- Placeholder for future: `universe.yaml` (VN30/VN100 memberships snapshot),
-  `agents.yaml` (agent registry).
+- `scoring_weights.yaml` — trọng số nhân tố cơ sở (spec §12, có đánh số phiên bản).
+- `sources.yaml` — danh mục provider dữ liệu (T002; thiết kế trong `docs/DATA_SOURCES_vi.md`):
+  id của provider, vai trò, mô hình xác thực, **tên** biến môi trường chứa credential (không bao giờ lưu giá trị thật),
+  cờ kích hoạt/độ ưu tiên, lựa chọn theo từng miền dữ liệu và chuỗi dự phòng (fallback).
+- Chỗ giữ chỗ cho tương lai: `universe.yaml` (ảnh chụp danh sách thành viên VN30/VN100),
+  `agents.yaml` (danh mục agent).
 
-## Scoring weights
+## Trọng số chấm điểm
 
-The baseline weights are **assumptions to be validated by backtesting** (§12).
-Changing weights = new `scoring_version`, never an in-place edit of a deployed version.
+Các trọng số cơ sở là **giả định cần được kiểm chứng thông qua kiểm nghiệm lịch sử (backtesting)** (§12).
+Thay đổi trọng số đồng nghĩa với tạo một `scoring_version` mới, không bao giờ sửa trực tiếp phiên bản đã triển khai.

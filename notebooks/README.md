@@ -1,8 +1,8 @@
 # notebooks/
 
-Research & experimentation notebooks (feature exploration, factor studies,
-backtest analysis, calibration experiments).
+Sổ tay nghiên cứu & thử nghiệm (khám phá đặc trưng, nghiên cứu nhân tố quant,
+phân tích kiểm nghiệm backtest, thử nghiệm hiệu chuẩn mô hình).
 
-- `.ipynb_checkpoints/` is git-ignored.
-- Notebooks are **not** part of the shipped application; reproducibility comes
-  from scripts + versioned datasets, not from notebook cells (spec §7.3 artifacts).
+- Thư mục `.ipynb_checkpoints/` đã được cấu hình bỏ qua trong `.gitignore`.
+- Notebook **không** phải là thành phần của mã nguồn phát hành hệ thống; tính tái lập (reproducibility) đến từ
+  các script + tập dữ liệu có phiên bản, không phụ thuộc vào các ô tính của notebook (spec §7.3).
