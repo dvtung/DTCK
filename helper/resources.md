@@ -40,15 +40,22 @@ See the sklearn troubleshooting steps in `helper/deployment.md`.
 | `FINIPRO_ACCESS_TOKEN` | SSI FiniPro primary provider credential (T002) |
 | `VIETSTOCK_API_KEY` | Vietstock VIP data (optional, disabled) |
 | `TRADINGECONOMICS_API_KEY` | macro aggregation (optional, disabled) |
+| `MARKET_DATA_SOURCE` | API read path: `memory` (default, no DB) / `db` (TimescaleDB) / `auto` (DB when `prices` non-empty, else memory); compose defaults to `auto` |
+| `SCHEDULER_JOBS_ENABLED` | `true` = run news/EOD/scoring jobs; `false` = scheduler off, `/news/ingest` still available |
+| `SCHEDULER_NEWS_SOURCE` / `SCHEDULER_NEWS_INTERVAL_MINUTES` | news provider (default `cafef`) + poll interval (default `15` min) |
+| `SCHEDULER_EOD_SOURCE` / `SCHEDULER_EOD_CRON_HOUR` / `SCHEDULER_EOD_CRON_MINUTE` / `SCHEDULER_EOD_LOOKBACK_DAYS` | EOD source (`yahoo`) · Mon–Fri 15:05 ICT (`15`/`5`) · idempotent re-fetch window (`7` days) |
+| `SCHEDULER_SCORING_CRON_HOUR` / `SCHEDULER_SCORING_CRON_MINUTE` | scoring job Mon–Fri 15:30 ICT (`15`/`30`), after the EOD job |
+| `DATA_QUALITY_THRESHOLD` | quality gate 0–100 (`80.0`); batches below are `below_threshold` and unused downstream |
 
 ## Third-party integrations (T002 — see `configs/sources.yaml`, design in `docs/DATA_SOURCES.md`)
 
 | Name (id) | Purpose | Status |
 |---|---|---|
 | `ssix_finipro` (SSI FiniPro) | Primary market + fundamental + events + news | **Selected** (T002); endpoints `TO VERIFY` in T004 |
-| `vndirect`, `tcbs`, `dsc` | Market/fundamental fallbacks (anonymous, unofficial) | Selected as fallbacks |
+| `yahoo` | Market fallback — EOD OHLCV for `.VN` tickers (anonymous) | **Verified 2026-09-25**; split un-adjustment + placeholder-row rules in `YahooChartProvider` |
+| `vndirect`, `tcbs`, `dsc` | Market/fundamental fallbacks (anonymous, unofficial) | Selected as fallbacks (vndirect/tcbs unreachable from host 2026-09-25) |
 | `sbv`, `gso`, `imf_worldbank` | Macro (official public) | Selected |
-| `cafef`, `vnexpress`, `vietstock_news` | Vietnamese news (RSS) | Selected |
+| `cafef`, `vnexpress`, `vietstock_news` | Vietnamese news (RSS) | CaféF **verified 2026-09-25** (`RssNewsProvider` stdlib parse; 50 real articles ingested); others selected |
 | `hose`, `hnx`, `vietstock`, `tradingeconomics`, `newsdata` | Official/licensed/paid extras | **Disabled** until licensing/cost decision |
 
 > All credentials masked; never commit real keys. Egress whitelist required for external APIs.
@@ -58,6 +65,9 @@ See the sklearn troubleshooting steps in `helper/deployment.md`.
 - `python -m database.seeds.run_all` — seed reference data
 - `python -m apps.worker.cli ingest --dataset prices --source fixture --symbols FPT,VCB --start … --end …` — run a collector
   (`--dataset prices` requires `--symbols`; exits `2` instead of reporting an empty ingest as success)
+- `python -m apps.worker.cli ingest --dataset prices --source yahoo --symbols FPT,VCB,HPG,ACB --start 2026-09-01 --end 2026-09-25` — live VN EOD (verified 2026-09-25: fetched=62 written=62 quality=94.88)
+- `python -m apps.worker.cli compute-scores [--lookback 60]` — recompute price-derived factors into `factor_scores`
+- `python -m apps.worker.main scheduler` — start the APScheduler loop (news / EOD / scoring); `SCHEDULER_JOBS_ENABLED=false` disables jobs
 - `python -m apps.worker.cli train-model [--horizon 5] [--algorithm xgboost|lightgbm]` — train + calibrate + register
   (`lightgbm` needs the optional `[ml]` extra; the CLI reports honestly when it is missing)
 - `python -m apps.worker.cli run-agent --task analyze --symbol FPT` — offline agent run
@@ -67,13 +77,13 @@ See the sklearn troubleshooting steps in `helper/deployment.md`.
 - `docker compose exec api alembic upgrade head` — migrate
 - `docker compose exec api pytest` — chạy test trong container
 
-## API (T010)
+## API (T010; 38 paths / 39 ops per `docs/api.html`, 2026-09-25)
 
 - **Framework:** FastAPI 0.115 · endpoint `/api/v1/*`, tiền tố `docs/api/`.
-- **Router:** 7 nhóm (market, stocks, fundamentals, technical, valuation, news, backtests) = 23 đường dẫn · 24 thao tác.
-- **Service:** `MarketService` trong bộ nhớ, tất định (7 mã cơ sở, 60 ngày làm việc) — **chưa nối TimescaleDB** (KI-008). Để chuyển: thay `get_market_service()` trong `apps/api/dependencies.py` bằng repository SQLAlchemy.
+- **Router:** nhóm market, stocks, fundamentals, technical, valuation, news, rag, evidence, backtests, predictions, agents.
+- **Service:** `MarketSource` protocol (`apps/api/services/market_source.py`) — `MarketService` trong bộ nhớ, tất định (mặc định; KI-008 phần đọc đã mở) hoặc `DbMarketService` đọc TimescaleDB khi `MARKET_DATA_SOURCE=db|auto`; `/readyz` báo `"source"`. Để mở rộng: nối repository SQLAlchemy mới vào `DbMarketService`, không đụng router.
 - **Schemas:** 21 lớp Pydantic trong `apps/api/schemas.py`, gồm `Page[T]` generic + `ErrorResponse`.
-- **Kiểm thử:** `pytest tests/unit/test_api.py` — 14 bài (health/readyz, 7 nhóm, phân trang, 404).
+- **Kiểm thử:** `pytest tests/unit/test_api.py` (health/readyz, nhóm router, phân trang, 404) + `tests/unit/test_market_data_source.py` + integration `tests/integration/test_db_market.py`.
 
 ## Dependency update protocol
 

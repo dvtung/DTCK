@@ -52,6 +52,18 @@ class Settings(BaseSettings):
     # Scoring baseline (§12)
     scoring_version: str = "baseline_1.0"
 
+    # Worker / Scheduler settings
+    scheduler_news_interval_minutes: int = 15
+    scheduler_scoring_cron_hour: int = 15
+    scheduler_scoring_cron_minute: int = 30
+    scheduler_news_source: str = "cafef"
+    # Daily EOD price ingestion (feeds the 15:30 scoring job with same-day bars).
+    scheduler_eod_source: str = "yahoo"
+    scheduler_eod_cron_hour: int = 15
+    scheduler_eod_cron_minute: int = 5
+    scheduler_eod_lookback_days: int = 7  # idempotent window: re-fetches recent bars
+    scheduler_jobs_enabled: bool = True
+
     # Data quality gate (§39, T005) — datasets below this overall score are not
     # used downstream (features/signals/backtests).
     data_quality_threshold: float = 80.0

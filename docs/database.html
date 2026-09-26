@@ -35,6 +35,8 @@
 <p>★ = hypertable TimescaleDB (tổng 12). Quy tắc thiết kế: <code>predictions</code> giữ nguyên bảng thường (quy tắc unique-index của Timescale); khóa chính của <code>signals</code> là composite <code>(id, trade_date)</code>; <code>valuation_daily</code> được <b>tính toán</b>, không bao giờ nạp từ ngoài.</p>
 <h2 class="sec">Báo cáo tài chính lưỡng thời (bitemporal)</h2>
 <p><code>financial_statements</code> mang <code>valid_from / valid_to</code> song song với <code>period_end</code>. Điều chỉnh hồi tố được xử lý bằng snapshot-diff: đóng dòng cũ, mở dòng mới — truy vấn as-of luôn an toàn, không nhìn trước tương lai.</p>
+<h2 class="sec">Dữ liệu thật đã nạp (2026-09-25)</h2>
+<div class="sig"><b>prices</b> — nạp qua <code>YahooChartProvider</code>: FPT, VCB, HPG, ACB (2026-09-01 → 2026-09-25) → <b>62 dòng</b>, <code>source=yahoo</code>, giá đã un-adjust chia tách (FPT 03/09 close 72200), chất lượng 94.88 (cổng §39 thông qua). <b>news + news_symbols</b> — 50 bài CaféF RSS thật (2026-09-24). <b>factor_scores</b> — <code>compute-scores --lookback 60</code> trên 4 mã thật.</div>
 <h2 class="sec">Migration &amp; seed — cách chạy</h2>
 <pre># nâng lên head (tạo 38 bảng + 12 hypertable)
 alembic upgrade head
@@ -42,8 +44,12 @@ alembic upgrade head
 alembic current        # -&gt; 0001_initial_schema (head)
 alembic downgrade base &amp;&amp; alembic upgrade head
 # seed lặp lại an toàn
-python -m database.seeds.run_all   # 3 sở, các ngành, 30 mã VN30</pre>
+python -m database.seeds.run_all   # 3 sở, các ngành, 30 mã VN30
+
+# nạp dữ liệu thật (Yahoo — đã kiểm chứng)
+python -m apps.worker.cli ingest --dataset prices --source yahoo \
+  --symbols FPT,VCB,HPG,ACB --start 2026-09-01 --end 2026-09-25</pre>
 </div>
-<div class="footer">Tài liệu DTCK · 2026-09-16 · <a href="index.html">Trang chủ</a></div>
+<div class="footer">Tài liệu DTCK · cập nhật 2026-09-25 · <a href="index.html">Trang chủ</a></div>
 </body>
 </html>

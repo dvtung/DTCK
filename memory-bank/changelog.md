@@ -1,6 +1,15 @@
 # Memory Bank — Changelog
 
-**Last updated:** 2026-09-18 (2)
+**Last updated:** 2026-09-25
+
+## 2026-09-25 — D3: static docs relocation + live-data refresh + env wiring (done)
+
+- `docs/htmldocs/*.html` + `style.css` moved to `docs/` (staged `git mv` renames, history preserved); `style.css` links stay relative (`href="style.css"`), pages cross-link with flat relative hrefs.
+- `status.html` refreshed: live E2E row (`ingest --source yahoo FPT,VCB,HPG,ACB` → fetched=62 written=62 quality=94.88; `compute-scores` → scored=4; 422 passed/3 skipped), new "Cấu hình mới qua biến môi trường" section (`MARKET_DATA_SOURCE`, `SCHEDULER_*`, RAG, quality gate, source settings), KI-006/KI-008/KI-010/KI-011 partial status, 38 paths / 39 ops; Romanian-mixed text in `modules.html` fixed (`rag_doc_rows`).
+- `.env.example` + `docker-compose.yml`: added `MARKET_DATA_SOURCE` (compose `:-auto`, code default stays `memory`) and all 10 `SCHEDULER_*` vars; names verified against `Settings` in `apps/api/config.py` (pydantic-settings `SCHEDULER_` prefix mapping; compose/worker consumption confirmed; containers still need `docker compose build api worker` + recreate to pick them up).
+- `helper/resources.md`: env table + CaféF row + API section + CLI reference (yahoo ingest, `compute-scores`, scheduler) updated to the 2026-09-25 state.
+- Validation: `LLM_PROVIDER=mock pytest` → **422 passed, 3 skipped**; `ruff check .` clean; `mypy` clean (126 files); all 7 HTML pages tag-balanced; internal link check OK.
+- Rename detection kept history for 7/8 pages (`git mv`); `status.html` was heavily rewritten so it stages as delete+add (`git log --follow` still traces it).
 
 ## 2026-09-18 (2) — Phase 2 unblocked from the host (`POSTGRES_PASSWORD` drift)
 

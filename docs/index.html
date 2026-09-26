@@ -28,7 +28,7 @@
       <span class="badge">Python 3.12 · FastAPI · Streamlit</span>
       <span class="badge">TimescaleDB · Qdrant · Redis</span>
       <span class="badge">Tác tử LangGraph · XGBoost / LightGBM</span>
-      <span class="badge">342 kiểm thử đơn vị đạt</span>
+      <span class="badge">422 kiểm thử đạt · ruff + mypy sạch</span>
     </div>
   </div>
   <div class="grid">
@@ -56,13 +56,17 @@
     <tr><td>Hàm quant</td><td>9 kỹ thuật + 12 cơ bản + 11 định giá + 4 động lượng + 6 rủi ro + 4 chấm điểm</td></tr>
     <tr><td>Engine chấm điểm (T008)</td><td>Phân rã đóng góp từng hệ số + nhãn tín hiệu + độ tin cậy; payload giải thích cho mọi mã</td></tr>
     <tr><td>Engine kiểm thử ngược (T009)</td><td>Cuốn chiếu (walk-forward), chi phí giao dịch/trượt giá, 11 chỉ số đo hiệu quả</td></tr>
-    <tr><td>API REST (T010 + T012 + T013)</td><td>9 nhóm <code>/api/v1/*</code> (8 + RAG + agents) · 36 đường dẫn / 37 thao tác · 25 schema Pydantic</td></tr>
-    <tr><td>Bảng điều khiển (T011)</td><td>Tổng quan, bộ lọc, xếp hạng, chi tiết mã, backtests, sức khỏe API · <code>apps/dashboard/</code> + 34 kiểm thử</td></tr>
-    <tr><td>RAG + bằng chứng (T012)</td><td><code>src/rag/</code> (nhúng hash, chunking, kho în bộ nhớ + Qdrant best-effort, truy xuát hibrid, rerank) + <code>src/evidence/</code> (§19) + 3 endpoint API + 23 kiểm thử</td></tr>
-    <tr><td>Kiểm thử đơn vị</td><td>342 bài đạt (pipeline 39 · technical 40 · quality 26 · api 25 · dashboard 34 · scoring 12 · backtest 15 · quant 19 · models 7 · sources 7 · rag+evidence 23 · smoke 4 · agents 64 · ml 16 · t014 API/CLI 11)</td></tr>
-    <tr><td>Tài liệu</td><td>13 đặc tả markdown trong <code>docs/</code></td></tr>
+    <tr><td>API REST (T010 + T012 + T013)</td><td>12 tệp router <code>/api/v1/*</code> (market, stocks, fundamentals, technical, valuation, news, backtests, rag/evidence, agents/analysis, auth, monitoring, predictions) · <b>38 đường dẫn / 39 thao tác</b> (kể cả POST /backtests, không tính /healthz+/readyz+/docs) · 21 schema Pydantic · nguồn đọc chọn bằng <code>MARKET_DATA_SOURCE=memory|db|auto</code></td></tr>
+    <tr><td>Nguồn dữ liệu (T002 + bảo trì)</td><td>16 nhà cung cấp · 11 đang bật · <b>YahooChartProvider</b> (EOD <code>.VN</code> HOSE/HNX/UPCOM) + <b>RssNewsProvider</b> (CaféF RSS) <b>kiểm chứng trực tiếp 2026-09-25</b> · chuỗi dự phòng market <code>[yahoo, vndirect, tcbs, dsc]</code></td></tr>
+    <tr><td>Worker lập lịch (APScheduler)</td><td>3 job, múi giờ <code>Asia/Ho_Chi_Minh</code>: tin tức mỗi 15 phút · EOD Mon–Fri 15:05 · chấm điểm Mon–Fri 15:30 (nhập → chấm → API, idempotent cửa sổ 7 ngày)</td></tr>
+    <tr><td>Nạp dữ liệu thật đã kiểm chứng</td><td><code>ingest --source yahoo</code> → 62/62 dòng, 0 vấn đề, chất lượng 94.88 (cổng thông qua) · FPT 2026-09-03 close 72200 un-adjusted · CaféF 50 bài thật đã lưu <code>news</code> + <code>news_symbols</code></td></tr>
+    <tr><td>Chế độ nguồn dữ liệu của API</td><td><code>MARKET_DATA_SOURCE=memory</code> (mặc định) · <code>db</code> đọc thẳng TimescaleDB qua <code>DbMarketService</code> · <code>auto</code> dùng CSDL khi kết nối được và đã có dòng <code>prices</code>. Cùng một bộ router/kiểm thử cho cả ba chế độ (<code>apps/api/dependencies.py</code>, <code>apps/api/db.py</code>)</td></tr>
+<tr><td>Bảng điều khiển (T011)</td><td>4 trang chính (tổng quan · bộ lọc · xếp hạng · <b>Tin tức &amp; RAG</b>) + trang ngữ cảnh (chi tiết mã, backtests, sức khỏe) · nối API thật (gỡ bao phân trang) · <code>apps/dashboard/</code> + 38 kiểm thử</td></tr>
+    <tr><td>RAG + bằng chứng (T012)</td><td><code>src/rag/</code> (nhúng hash, chunking, kho trong bộ nhớ + Qdrant best-effort, truy xuất hybrid, rerank) + <code>src/evidence/</code> (§19) + 3 endpoint API + 23 kiểm thử</td></tr>
+    <tr><td>Kiểm thử</td><td><b>422 đạt · 3 bỏ qua</b> (unit 407 + integration 18) — pipeline 39 · technical 40 · quality 26 · agents 64 · dashboard 38 · api 25 · market-source 11 · rag+evidence 23 · backtest 15 · yahoo 13 · rss 14 · scheduler 7 · db-market (integration) 14 · ml 18 · scoring 19 · quant 19 · market+deployment+sources+smoke+t014 40 · live (<code>-m live</code>) 2</td></tr>
+    <tr><td>Tài liệu</td><td>15 đặc tả markdown trong <code>docs/</code> + 7 trang HTML tĩnh (site này) — cùng thư mục <code>docs/</code></td></tr>
   </table>
 </div>
-<div class="footer">Tài liệu DTCK · tạo ngày 2026-09-16 · nhánh <code>feat/data-source-design</code> · xem <code>docs/</code> để đọc đặc tả đầy đủ</div>
+<div class="footer">Tài liệu DTCK · cập nhật 2026-09-25 · nhánh <code>feat/data-source-design</code> · xem <code>docs/</code> để đọc đặc tả đầy đủ</div>
 </body>
 </html>

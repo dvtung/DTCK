@@ -59,6 +59,39 @@ class MarketClient:
             return self._svc.get_ranked()
         if key == "/news":
             return self._svc.list_news()
+        if key == "/rag/search":
+            from apps.api.services.rag_service import get_rag_service
+
+            rag = get_rag_service()
+            docs = rag.search(
+                params.get("q", ""),
+                top_k=int(params.get("top_k", 5)),
+                symbol=params.get("symbol") or "",
+                doc_type=params.get("doc_type") or "",
+                source=params.get("source") or "",
+            )
+            items = rag.to_payload(docs)
+            return {
+                "query": params.get("q", ""),
+                "items": items,
+                "total": len(items),
+                "model": rag.model_name,
+            }
+        if key == "/rag/status":
+            from apps.api.services.rag_service import get_rag_service
+
+            return get_rag_service().status()
+        if key == "/evidence":
+            from apps.api.services.rag_service import get_rag_service
+
+            rag = get_rag_service()
+            q = params.get("q", "")
+            evs = rag.evidence_for(
+                q,
+                top_k=int(params.get("top_k", 5)),
+                symbol=params.get("symbol") or "",
+            )
+            return {"query": q, "items": rag.evidence_payload(evs), "total": len(evs)}
         if key == "/backtests":
             return self._svc.list_backtests()
         if key.startswith("/backtests/"):
@@ -89,8 +122,18 @@ class MarketClient:
         raise KeyError(f"Unknown dashboard route: {key}")
 
     # -- high-level accessors ----------------------------------------------
+    @staticmethod
+    def _unwrap_items(data: dict[str, Any] | list[Any]) -> list[dict[str, Any]]:
+        """Normalize either a raw list or a paginated `{items, total, ...}` envelope."""
+        if isinstance(data, list):
+            return data
+        if isinstance(data, dict) and "items" in data and isinstance(data["items"], list):
+            return data["items"]
+        return []
+
     def get_indices(self) -> list[dict[str, Any]]:
-        return self._get("/api/v1/market/indices")  # type: ignore[return-value]
+        res = self._get("/api/v1/market/indices")
+        return self._unwrap_items(res) if isinstance(res, (dict, list)) else []
 
     def get_regime(self) -> dict[str, Any]:
         return self._get("/api/v1/market/regime")  # type: ignore[return-value]
@@ -98,17 +141,32 @@ class MarketClient:
     def get_breadth(self) -> dict[str, Any]:
         return self._get("/api/v1/market/breadth")  # type: ignore[return-value]
 
-    def list_stocks(self) -> list[dict[str, Any]]:
-        return self._get("/api/v1/stocks")  # type: ignore[return-value]
+    def list_stocks(
+        self,
+        exchange: str | None = None,
+        sector: str | None = None,
+        vn30: bool | None = None,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {}
+        if exchange:
+            params["exchange"] = exchange
+        if sector:
+            params["sector"] = sector
+        if vn30 is not None:
+            params["vn30"] = vn30
+        res = self._get("/api/v1/stocks", **params)
+        return self._unwrap_items(res)
 
     def get_ranked(self) -> list[dict[str, Any]]:
-        return self._get("/api/v1/stocks/ranked")  # type: ignore[return-value]
+        res = self._get("/api/v1/stocks/ranked")
+        return self._unwrap_items(res)
 
     def get_stock(self, symbol: str) -> dict[str, Any]:
         return self._get("/api/v1/stocks/{symbol}", symbol=symbol)  # type: ignore[return-value]
 
     def get_prices(self, symbol: str) -> list[dict[str, Any]]:
-        return self._get("/api/v1/stocks/{symbol}/prices", symbol=symbol)  # type: ignore[return-value]
+        res = self._get("/api/v1/stocks/{symbol}/prices", symbol=symbol)
+        return self._unwrap_items(res)
 
     def get_ranking(self, symbol: str) -> dict[str, Any]:
         return self._get("/api/v1/stocks/{symbol}/ranking", symbol=symbol)  # type: ignore[return-value]
@@ -122,19 +180,65 @@ class MarketClient:
     def get_quality(self, symbol: str) -> dict[str, Any]:
         return self._get("/api/v1/fundamentals/{symbol}/quality", symbol=symbol)  # type: ignore[return-value]
 
-    def get_news(self) -> list[dict[str, Any]]:
-        return self._get("/api/v1/news")  # type: ignore[return-value]
+    def get_news(
+        self,
+        symbol: str | None = None,
+        source: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {"limit": limit}
+        if symbol:
+            params["symbol"] = symbol
+        if source:
+            params["source"] = source
+        res = self._get("/api/v1/news", **params)
+        return self._unwrap_items(res)
+
+    def search_rag(
+        self,
+        query: str,
+        symbol: str | None = None,
+        top_k: int = 5,
+        source: str | None = None,
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = {"q": query, "top_k": top_k}
+        if symbol:
+            params["symbol"] = symbol
+        if source:
+            params["source"] = source
+        res = self._get("/api/v1/rag/search", **params)
+        return res if isinstance(res, dict) else {"items": res, "total": len(res)}
+
+    def get_rag_status(self) -> dict[str, Any]:
+        res = self._get("/api/v1/rag/status")
+        return res if isinstance(res, dict) else {}
+
+    def get_evidence(
+        self,
+        query: str,
+        symbol: str | None = None,
+        top_k: int = 5,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {"q": query, "top_k": top_k}
+        if symbol:
+            params["symbol"] = symbol
+        res = self._get("/api/v1/evidence", **params)
+        return self._unwrap_items(res)
 
     def get_backtests(self) -> list[dict[str, Any]]:
-        return self._get("/api/v1/backtests")  # type: ignore[return-value]
+        res = self._get("/api/v1/backtests")
+        return self._unwrap_items(res)
 
     def get_backtest_metrics(self, bt_id: str) -> list[dict[str, Any]]:
-        return self._get(f"/api/v1/backtests/{bt_id}/metrics")  # type: ignore[return-value]
+        res = self._get(f"/api/v1/backtests/{bt_id}/metrics")
+        return self._unwrap_items(res)
 
     def get_backtest_trades(self, bt_id: str) -> list[dict[str, Any]]:
-        return self._get(f"/api/v1/backtests/{bt_id}/trades")  # type: ignore[return-value]
+        res = self._get(f"/api/v1/backtests/{bt_id}/trades")
+        return self._unwrap_items(res)
+
     def get_backtest(self, bt_id: str) -> dict[str, Any]:
         return self._get(f"/api/v1/backtests/{bt_id}")  # type: ignore[return-value]
-    def get_health(self) -> dict[str, Any]:
 
+    def get_health(self) -> dict[str, Any]:
         return self._get("/healthz")  # type: ignore[return-value]

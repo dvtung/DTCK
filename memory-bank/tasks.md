@@ -1,13 +1,14 @@
 # Memory Bank — Tasks
 
-**Last updated:** 2026-09-16
+**Last updated:** 2026-09-25
 
 Legend: `[ ]` To Do · `[~]` In Progress · `[x]` Completed · `[!]` Blocked
 
 > **Standing rule (all tasks):** every task that changes source code, schema,
-> configs, or behavior MUST also update `docs/htmldocs/` (Vietnamese) in the
-> same task — status page, module reference, and any other affected page —
-> and re-validate the HTML before marking the task complete.
+> configs, or behavior MUST also update the Vietnamese HTML docs in `docs/`
+> (`status.html`, `modules.html`, and any other affected page) in the same
+> task, and re-validate the HTML before marking the task complete.
+> The pages moved from `docs/htmldocs/` to `docs/` on 2026-09-25.
 
 ---
 
@@ -35,6 +36,8 @@ Legend: `[ ]` To Do · `[~]` In Progress · `[x]` Completed · `[!]` Blocked
 - [x] **T013 — LangGraph agents + orchestrator + audit (Phase 5)** — `src/agents/` (4 agents: Research/Analysis/Monitoring/Portfolio, Orchestrator with retry/timeout/audit, AgentRegistry §41, AuditTrail §31, ToolCatalog), `src/agents/util.py`, `src/agents/schemas.py`; CLI `run-agent` (4 tasks: analyze/research/monitor/portfolio); 10 API endpoints (`/api/v1/agents/*` + `/api/v1/analysis/*`, sync + async 202+poll pattern); deterministic, offline, no LLM. `tests/unit/test_agents.py` (63 tests) + `test_api.py` (+6 agent API tests). Verified: ruff clean, mypy clean (src/apps only), 301 total tests pass. *(2026-09-16)*
 - [x] **T014 — ML feature dataset + training + calibration + registry + predictions API (Phase 6)** *(2026-09-16; real training pending KI-012)*
 - [x] **MAINT-2026-09-17 — Full codebase audit: logic/consistency fixes** — 16 defects fixed across `src/` + `apps/`: backtest partial-sell accounting (whole leg booked on a trim), missing exit-leg costs in `transaction_cost`/`turnover`, missing Σ weights ≤ 1 guard, sells-before-buys, 0.5% no-trade band, post-liquidation final equity mark; scoring decomposition renormalized weights (Σ share = 1) + YAML drift guard; Qdrant stable point ids (`hash()` was PYTHONHASHSEED-randomized); dashboard client `/stocks/rankings` → `/stocks/ranked` route bug + dead `_fallback` branch; auth 401 on bad credentials (`compare_digest`); tool `call()` whitelisted by the §22 catalog; shared `get_default_registry()` (trainer ↔ serving); news dedup scoped to the batch (was a full-table scan); empty ingest batches skip the DB; naive/aware timestamp coercion; `resolve_stock_ids` ACTIVE filter (was an unused join); `HttpJsonProvider` client leak; dead `_make_lightgbm` wired as `ModelTrainer(algorithm=...)` + CLI `--algorithm`; CLI `--symbols` required for prices ingest; fixture news 15:00 stamp (same-day window fetch). +17 tests. Verified: ruff clean, mypy clean, **342 passed / 1 skipped**. *(2026-09-17)*
+- [x] **D2 — Real-data milestone (W1–W3 + E2E, 2026-09-24/25)** — API read path on TimescaleDB (`MARKET_DATA_SOURCE=memory|db|auto` + `DbMarketService` behind the existing protocol), APScheduler worker with news/EOD/scoring jobs, verified Yahoo EOD + CaféF RSS providers (KI-006/KI-007), `compute-scores` job persisting `factor_scores`, dashboard envelope unwrapping + News & RAG page, 50 real CaféF articles in the RAG index. Verified: **422 passed, 3 skipped** · ruff · mypy (126 files) · live ingest FPT/VCB/HPG/ACB `fetched=62 written=62 quality=94.88`.
+- [x] **D3 — Docs relocation + refresh (2026-09-25)** — `docs/htmldocs/` → `docs/` (git mv, relative links intact), refreshed `status.html` / `modules.html` / `api.html` / `index.html` / `structure.html`, new env-config section, every `docs/htmldocs` reference updated repo-wide.
 - [ ] T015 — Production: auth, monitoring, alerts, CI/CD, hardening (Phase 7) *(next)*
 
 ---

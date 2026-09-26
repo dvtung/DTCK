@@ -149,11 +149,53 @@ def news_rows(news: list[dict[str, Any]], limit: int = 10) -> list[dict[str, Any
     """Format a news list into preview rows."""
     out: list[dict[str, Any]] = []
     for n in news[:limit]:
+        symbols_val = n.get("symbols")
+        if isinstance(symbols_val, list):
+            sym_str = ", ".join(symbols_val)
+        else:
+            sym_str = str(n.get("symbol") or "")
         out.append(
             {
                 "title": n.get("title", ""),
                 "source": n.get("source", ""),
+                "symbols": sym_str,
                 "published": format_date(n.get("published_at")),
+                "url": n.get("url", ""),
+            }
+        )
+    return out
+
+
+def evidence_rows(evidence_items: list[dict[str, Any]], limit: int = 10) -> list[dict[str, Any]]:
+    """Format evidence payload items for dashboard presentation."""
+    out: list[dict[str, Any]] = []
+    for ev in evidence_items[:limit]:
+        out.append(
+            {
+                "symbol": ev.get("symbol", ""),
+                "confidence": round(float(ev.get("confidence") or 0), 2),
+                "source": ev.get("source", ""),
+                "published": format_date(ev.get("published_at")),
+                "snippet": ev.get("snippet", ""),
+                "chunk_id": ev.get("chunk_id", ""),
+            }
+        )
+    return out
+
+
+def rag_doc_rows(docs: list[dict[str, Any]], limit: int = 10) -> list[dict[str, Any]]:
+    """Format RAG search document hits for dashboard presentation."""
+    out: list[dict[str, Any]] = []
+    for d in docs[:limit]:
+        score = d.get("score")
+        pub = d.get("published_at") or d.get("metadata", {}).get("published_at")
+        out.append(
+            {
+                "symbol": d.get("symbol", "") or d.get("metadata", {}).get("symbol", ""),
+                "score": round(float(score), 4) if score is not None else None,
+                "source": d.get("source", "") or d.get("metadata", {}).get("source", ""),
+                "published": format_date(pub),
+                "content": d.get("content", ""),
             }
         )
     return out
@@ -174,4 +216,6 @@ __all__ = [
     "quality_bar_labels",
     "metric_rows",
     "news_rows",
+    "evidence_rows",
+    "rag_doc_rows",
 ]

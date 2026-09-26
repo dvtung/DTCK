@@ -178,15 +178,58 @@ class TestNewsRows:
     def test_basic(self) -> None:
         from datetime import datetime
 
-        news = [{"title": "Tin A", "source": "cafef", "published_at": datetime(2026, 9, 3, 8, 0)}]
+        news = [
+            {
+                "title": "Tin A",
+                "source": "cafef",
+                "symbols": ["FPT", "VCB"],
+                "published_at": datetime(2026, 9, 3, 8, 0),
+            }
+        ]
         rows = c.news_rows(news, limit=5)
         assert rows[0]["title"] == "Tin A"
         assert rows[0]["source"] == "cafef"
+        assert rows[0]["symbols"] == "FPT, VCB"
         assert rows[0]["published"] == "03/09/2026"
 
     def test_limit(self) -> None:
         news = [{"title": f"Tin {i}", "source": "s", "published_at": None} for i in range(20)]
         assert len(c.news_rows(news, limit=5)) == 5
+
+
+class TestEvidenceAndRagRows:
+    def test_evidence_rows_formatting(self) -> None:
+        items = [
+            {
+                "symbol": "FPT",
+                "confidence": 0.854,
+                "source": "cafef",
+                "published_at": "2026-09-03",
+                "snippet": "FPT tăng trưởng doanh thu 20%",
+                "chunk_id": "chunk_001",
+            }
+        ]
+        rows = c.evidence_rows(items)
+        assert len(rows) == 1
+        assert rows[0]["symbol"] == "FPT"
+        assert rows[0]["confidence"] == 0.85
+        assert rows[0]["snippet"] == "FPT tăng trưởng doanh thu 20%"
+
+    def test_rag_doc_rows_formatting(self) -> None:
+        docs = [
+            {
+                "symbol": "VCB",
+                "score": 0.91234,
+                "source": "cafef",
+                "published_at": "2026-09-02",
+                "content": "Nội dung bài viết VCB",
+            }
+        ]
+        rows = c.rag_doc_rows(docs)
+        assert len(rows) == 1
+        assert rows[0]["symbol"] == "VCB"
+        assert rows[0]["score"] == 0.9123
+        assert rows[0]["content"] == "Nội dung bài viết VCB"
 
 
 # ---------------------------------------------------------------------------
@@ -228,3 +271,31 @@ class TestMarketClient:
         metrics = client.get_backtest_metrics("bt-001")
         assert len(metrics) >= 1
         assert metrics[0]["metric_name"] == "total_return"
+
+    def test_unwrap_items_helper(self) -> None:
+        client = MarketClient(base_url="http://nonexistent:9999")
+        # List input
+        assert client._unwrap_items([{"id": 1}]) == [{"id": 1}]
+        # Envelope input
+        assert client._unwrap_items({"items": [{"id": 2}], "total": 1}) == [{"id": 2}]
+        # None or invalid input
+        assert client._unwrap_items({}) == []
+        assert client._unwrap_items("invalid") == []
+
+    def test_get_news_and_rag_fallback(self) -> None:
+        client = MarketClient(base_url="http://nonexistent:9999")
+        news = client.get_news()
+        assert isinstance(news, list)
+        assert len(news) >= 1
+
+        status = client.get_rag_status()
+        assert isinstance(status, dict)
+        assert "model" in status or "chunks" in status or "docs_ingested" in status
+
+        rag_res = client.search_rag("FPT")
+        assert isinstance(rag_res, dict)
+        assert "items" in rag_res
+        assert isinstance(rag_res["items"], list)
+
+        evidence = client.get_evidence("FPT", top_k=2)
+        assert isinstance(evidence, list)

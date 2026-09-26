@@ -17,9 +17,24 @@
 <div class="flow"><span class="step">Nhà cung cấp</span><span class="arrow">→</span><span class="step">collect_*</span><span class="arrow">→</span><span class="step">validate_*</span><span class="arrow">→</span><span class="step">normalize_*</span><span class="arrow">→</span><span class="step">upsert</span><span class="arrow">→</span><span class="step">cổng chất lượng</span></div>
 <p>Điểm vào: <code>ingest_eod / ingest_index / ingest_news</code> trong <code>src/data/pipelines.py</code>. Mỗi hàm trả về <code>IngestResult</code> gồm số dòng, các vấn đề kiểm tra và phán quyết chất lượng. Lô dữ liệu dưới ngưỡng bị gắn cờ <code>below_threshold</code> và không bao giờ dùng cho bước sau.</p>
 <h2 class="sec">Giai đoạn 1 — Nhà cung cấp</h2>
-<p><code>DataProvider</code> ABC (<code>fetch_eod / fetch_index / fetch_news</code>). Các triển khai: <code>FixtureProvider</code> (ngoại tuyến, dòng seed tất định) và <code>HttpJsonProvider</code> (JSON qua HTTP có thể cấu hình với ánh xạ đường dẫn chấm). <code>create_provider(source)</code> phân giải id trong registry; <code>configs/sources.yaml</code> chứa 15 nhà cung cấp (10 đang bật) với lựa chọn theo nghiệp vụ + chuỗi dự phòng.</p>
-<pre>python -m apps.worker.cli ingest --dataset prices --source fixture \
-  --start 2026-09-01 --end 2026-09-05 --symbols FPT,VCB</pre>
+<p><code>DataProvider</code> ABC (<code>fetch_eod / fetch_index / fetch_news</code>). Các triển khai: <code>FixtureProvider</code> (ngoại tuyến, dòng seed tất định), <code>HttpJsonProvider</code> (JSON qua HTTP có thể cấu hình với ánh xạ đường dẫn chấm), <b><code>YahooChartProvider</code></b> (EOD <code>.VN</code> — xem dưới) và <b><code>RssNewsProvider</code></b> (feed RSS/Atom: strip HTML, pubDate RFC822/ISO, ghép mã thật theo ranh giới từ). <code>create_provider(source)</code> phân giải id trong registry; <code>configs/sources.yaml</code> chứa 16 nhà cung cấp (11 đang bật) với lựa chọn theo nghiệp vụ + chuỗi dự phòng.</p>
+<div class="sig"><b>Nguồn EOD đã kiểm chứng (2026-09-25):</b> <code>YahooChartProvider</code> — chart API <code>query1.finance.yahoo.com/v8/finance/chart/{SYM}.VN</code>. Ba hành vi quan trọng được mã hoá: (1) User-Agent mô tả — UA mặc định httpx bị <b>429</b>; (2) OHLCV Yahoo <b>đã adjust chia tách</b> → provider un-adjust qua <code>events=split</code> (FPT 11:10, 2026-09-21); (3) dòng placeholder volume=0/null bị <b>bỏ</b>, không bao giờ bịa. <code>trading_value ≈ close × volume</code> (Yahoo không có trường turnover — xem §8 DATA_SOURCES.md).</div>
+<pre># offline (fixture, mặc định — luôn chạy được)
+python -m apps.worker.cli ingest --dataset prices --source fixture \
+  --start 2026-09-01 --end 2026-09-05 --symbols FPT,VCB
+
+# thật (Yahoo, đã kiểm chứng 2026-09-25: 62/62 dòng, quality 94.88)
+python -m apps.worker.cli ingest --dataset prices --source yahoo \
+  --start 2026-09-01 --end 2026-09-25 --symbols FPT,VCB,HPG,ACB</pre>
+<h2 class="sec">Lập lịch tự động (worker · APScheduler)</h2>
+<p><code>apps/worker/main.py</code> khởi tạo <code>BlockingScheduler</code> múi giờ <code>Asia/Ho_Chi_Minh</code>, bật/tắt qua <code>SCHEDULER_JOBS_ENABLED</code> (mặc định bật):</p>
+<table>
+<tr><th>Job</th><th>Lịch</th><th>Việc làm</th></tr>
+<tr><td><code>periodic_news_ingestion</code></td><td>Interval mỗi 15 phút</td><td>Nạp tin CaféF RSS → kiểm tra → chuẩn hóa → lưu + ghép mã (<code>news</code>/<code>news_symbols</code>)</td></tr>
+<tr><td><code>daily_eod_ingestion</code></td><td>Mon–Fri 15:05</td><td>Nạp EOD <code>--source yahoo</code>, cửa sổ lookback 7 ngày (idempotent — re-fetch gần đây là an toàn)</td></tr>
+<tr><td><code>daily_eod_scoring</code></td><td>Mon–Fri 15:30</td><td><code>compute-scores</code> sau khi EOD xong → bảng xếp hạng luôn mới trước khi API phục</td></tr>
+</table>
+<p>Thứ tự 15:05 → 15:30 đảm bảo chấm điểm luôn chạy trên giá đã chốt của ngày. Chạy nền: <code>python -m apps.worker.main</code> (hoặc <code>docker compose up worker</code>).</p>
 <h2 class="sec">Giai đoạn 2 — Thu thập</h2>
 <p><code>collect_eod(provider, symbols, start, end)</code>, <code>collect_index(...)</code>, <code>collect_news(provider, since)</code> — các wrapper mỏng kiểm tra <code>supports()</code> và trả về bản ghi độc lập nhà cung cấp (<code>EODBar / IndexBar / NewsItem</code>).</p>
 <h2 class="sec">Giai đoạn 3 — Kiểm tra</h2>
@@ -29,6 +44,6 @@
 <h2 class="sec">Giai đoạn 5 — Cổng chất lượng (§39)</h2>
 <p>Sáu chiều — đầy đủ, hợp lệ, nhất quán, duy nhất, tươi mới, chính xác — kết hợp bằng trung bình có trọng số kèm tái chuẩn hóa trên các chiều khả dụng. <code>freshness_score</code> dùng số học Decimal. Kết quả được lưu vào <code>data_quality_scores</code>.</p>
 </div>
-<div class="footer">Tài liệu DTCK · 2026-09-16 · <a href="index.html">Trang chủ</a></div>
+<div class="footer">Tài liệu DTCK · cập nhật 2026-09-25 · <a href="index.html">Trang chủ</a></div>
 </body>
 </html>

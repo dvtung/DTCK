@@ -27,6 +27,39 @@ providers:
     endpoints_status: TO_VERIFY   # confirm in T004 before first run
 
   # --- Market + fundamental fallbacks (anonymous/unofficial) --------------
+  # Yahoo is the only market fallback VERIFIED reachable from the project host
+  # (2026-09-25): v8 chart answers 200 for .VN tickers with a descriptive
+  # User-Agent (default python-httpx UA → 429). Priority 85 puts it first in
+  # the market fallback chain ahead of the currently unreachable candidates.
+  - id: yahoo
+    description: Yahoo Finance chart API — Vietnam listings via .VN suffix (unofficial)
+    roles: [market]
+    auth: none
+    credential_env: ""
+    free: true
+    licensed: false
+    enabled: true
+    priority: 85
+    # 2026-09-25: VERIFIED from the project host for FPT/VCB/HPG/ACB/BSR(.VN)
+    # across HOSE/HNX/UPCOM. Recorded sample: tests/fixtures/yahoo_chart_sample.json.
+    # Caveats (encoded in YahooChartProvider + tested):
+    #   * quote OHLCV is split-adjusted (FPT 11:10 on 2026-09-21) → provider
+    #     un-adjusts via events=split to store raw prints;
+    #   * no turnover field → trading_value = close × volume (approximation);
+    #   * null/zero-volume placeholder rows are dropped, not fabricated;
+    #   * meta.fullExchangeName reports HOSE for every listing → exchange comes
+    #     from config (informational only; prices key on stock_id).
+    endpoints_status: VERIFIED_2026-09-25
+    endpoints:
+      eod:
+        client: yahoo_chart
+        url: "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
+        symbol_suffix: ".VN"
+        interval: "1d"
+        timezone_offset_hours: 7   # Asia/Ho_Chi_Minh (no DST)
+        exchange: HOSE             # default label; see caveat above
+        user_agent: "DTCK/0.1 (+https://github.com/dvtung/DTCK)"
+
   - id: vndirect
     description: VNDirect fininfo public API (unofficial)
     roles: [market, fundamental]
@@ -222,7 +255,7 @@ selection:
   news: cafef
 
 fallback_chains:
-  market: [vndirect, tcbs, dsc]
+  market: [yahoo, vndirect, tcbs, dsc]
   fundamental: [vndirect, vietstock]
   macro: [imf_worldbank, gso, tradingeconomics]
   corporate_events: [hose, cafef]

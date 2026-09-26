@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tiến độ phát triển — DTCK</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+<div class="logo">📈</div>
+<div><h1>DTCK — Nền tảng Quyết định Đầu tư AI</h1><p>Trí tuệ thị trường chứng khoán Việt Nam · tài liệu tĩnh</p></div>
+<nav><a href="index.html">Trang chủ</a><a href="structure.html">Cấu trúc</a><a href="status.html" class="active">Tiến độ</a><a href="modules.html">Module</a><a href="api.html">API</a><a href="database.html">Cơ sở dữ liệu</a><a href="pipeline.html">Luồng dữ liệu</a></nav>
+</header>
+<div class="wrap">
+<h2 class="sec">Tiến độ theo đặc tả §58 (cập nhật 2026-09-25)</h2>
+<table>
+<tr><th>Hạng mục</th><th>Tiến độ</th><th>Trạng thái</th></tr>
+<tr><td>Lập đặc tả</td><td><div class="bar"><div style="width:100%"></div></div>100%</td><td><span class="pill done">Xong</span></td></tr>
+<tr><td>Kiến trúc</td><td><div class="bar"><div style="width:100%"></div></div>100%</td><td><span class="pill done">Xong</span></td></tr>
+<tr><td>Cơ sở dữ liệu</td><td><div class="bar"><div style="width:100%"></div></div>100%</td><td><span class="pill done">T003 xong · đã có dữ liệu thật (Yahoo 62 dòng)</span></td></tr>
+<tr><td>Luồng dữ liệu</td><td><div class="bar"><div style="width:100%"></div></div>100%</td><td><span class="pill done">T004+T005 xong · E2E <code>--source yahoo</code> thông qua cổng chất lượng 94.88</span></td></tr>
+<tr><td>Nguồn dữ liệu thật</td><td><div class="bar"><div style="width:85%"></div></div>85%</td><td><span class="pill prog">Yahoo EOD + CaféF RSS kiểm chứng 2026-09-25 · còn lại chờ chứng thực/điểm cuối</span></td></tr>
+<tr><td>Worker lập lịch</td><td><div class="bar"><div style="width:75%"></div></div>75%</td><td><span class="pill prog">APScheduler 3 job (tin tức 15' · EOD 15:05 · chấm điểm 15:30) · chưa có giám sát/liveness</span></td></tr>
+<tr><td>Engine quant</td><td><div class="bar"><div style="width:100%"></div></div>100%</td><td><span class="pill done">T006+T007+T008 xong · <code>compute-scores</code> đã chạy trên 4 mã thật</span></td></tr>
+<tr><td>Kiểm thử ngược (backtest)</td><td><div class="bar"><div style="width:90%"></div></div>90%</td><td><span class="pill prog">T009 xong · đã có giá thật nhưng mới 1 tháng (KI-009)</span></td></tr>
+<tr><td>API REST</td><td><div class="bar"><div style="width:90%"></div></div>90%</td><td><span class="pill done">T010 xong · đường đọc TimescaleDB thật qua <code>MARKET_DATA_SOURCE=db|auto</code> (mặc định vẫn <code>memory</code>)</span></td></tr>
+<tr><td>RAG / Bằng chứng</td><td><div class="bar"><div style="width:90%"></div></div>90%</td><td><span class="pill prog">T012 xong · 50 bài CaféF thật đã nạp + endpoint đã kiểm chứng · Qdrant best-effort</span></td></tr>
+  <tr><td>Tác tử AI</td><td><div class="bar"><div style="width:95%"></div></div>95%</td><td><span class="pill done">T013 xong · tất định, offline, không LLM</span></td></tr>
+<tr><td>Học máy (ML)</td><td><div class="bar"><div style="width:80%"></div></div>80%</td><td><span class="pill prog">T014 xong · luồng dữ liệu thật đã mở nhưng huấn luyện chờ lịch sử dài (KI-012)</span></td></tr>
+<tr><td>Bảng điều khiển</td><td><div class="bar"><div style="width:95%"></div></div>95%</td><td><span class="pill done">T011 xong · nối API thật (gỡ bao phân trang) + trang Tin tức &amp; RAG</span></td></tr>
+<tr><td>Vận hành thật</td><td><div class="bar"><div style="width:15%"></div></div>15%</td><td><span class="pill prog">đã có scheduler 3 job · còn JWT/RBAC, giám sát, cảnh báo, CI/CD (T015)</span></td></tr>
+</table>
+<h2 class="sec">Các công việc đã hoàn thành</h2>
+<table>
+<tr><th>Mã</th><th>Tên việc</th><th>Kết quả bàn giao</th></tr>
+<tr><td>T001</td><td>Khung Phase-0 + tài liệu</td><td>Cấu trúc kho mã, 13 tài liệu, memory bank (2026-09-06)</td></tr>
+<tr><td>T003</td><td>Migration + seed</td><td>Mô hình 38 bảng, migration 0001 + 12 hypertable, seed</td></tr>
+<tr><td>T002</td><td>Thiết kế nguồn dữ liệu</td><td>DATA_SOURCES.md + sources.yaml (16 nhà cung cấp / 11 bật) + 7 kiểm thử</td></tr>
+<tr><td>T004</td><td>Luồng dữ liệu</td><td>src/data/ + FixtureProvider + CLI worker + 38 kiểm thử</td></tr>
+<tr><td>T005</td><td>Khung chất lượng §39</td><td>Chấm điểm 6 chiều + cổng chất lượng + 26 kiểm thử</td></tr>
+<tr><td>T006</td><td>Các chỉ báo kỹ thuật</td><td>9 chỉ báo + 40 kiểm thử giá trị kỳ vọng</td></tr>
+<tr><td>T007</td><td>Hệ số + chấm điểm</td><td>5 module, 46 hàm + 18 kiểm thử</td></tr>
+<tr><td>T008</td><td>Engine chấm điểm + giải thích</td><td><code>src/quant/scoring/engine.py</code>: phân rã đóng góp, nhãn tín hiệu, độ tin cậy, xếp hạng + 11 kiểm thử</td></tr>
+<tr><td>T009</td><td>Engine kiểm thử ngược</td><td><code>src/backtesting/</code>: cuốn chiếu, chi phí, kiểm soát thiên lệch, 11 chỉ số đo + 10 kiểm thử</td></tr>
+<tr><td>T010</td><td>API REST FastAPI</td><td><code>apps/api/</code>: 8 router, 26 đường dẫn / 27 thao tác, 21 schema, lọc/phân trang, phong bì lỗi + 17 kiểm thử</td></tr>
+<tr><td>T011</td><td>Bảng điều khiển Streamlit</td><td><code>apps/dashboard/</code>: tổng quan, bộ lọc, xếp hạng, chi tiết mã, backtests, sức khỏe API + 34 kiểm thử</td></tr>
+<tr><td>T012</td><td>Tin tức + RAG + bằng chứng</td><td><code>src/rag/</code> (chunking, hash-embedding, kho trong bộ nhớ + adaptor Qdrant, truy xuất hỗn, rerank) + <code>src/evidence/</code> (§19) + 3 endpoint API + 23 kiểm thử</td></tr>
+<tr><td>T013</td><td>Tác tử AI + orchestrator + audit (§20–§24/§31/§41)</td><td><code>src/agents/</code> (research/analysis/monitoring/portfolio + orchestrator + audit + registry + tool catalog), <code>src/agents/util.py</code>; CLI <code>run-agent</code> (4 task); 10 endpoint API (<code>/api/v1/agents/*</code> + <code>/api/v1/analysis/*</code>); tất định, không LLM — <b>70 kiểm thử</b> (63 agent + 7 API)</td></tr>
+<tr><td>T014</td><td>ML: dataset + XGBoost + hiệu chuẩn + registry</td><td><code>src/ml/</code> (feature dataset as-of, huấn luyện tạm-thời, hiệu chuẩn sigmoid, registry vòng đời), <code>/api/v1/predictions</code> (3 endpoint), CLI <code>train-model</code>; chặn rò rỉ mục tiêu + KI-012</td></tr>
+<tr><td>Bảo trì</td><td>Kiểm toán logic + sửa lỗi (2026-09-17)</td><td>Sửa accounting backtest (bán-một-phần ghi sai số lượng, chi phí thiếu leg ra, không chặn tổng trọng số &gt; 1, bán trước mua sau), phân rã chấm điểm chuẩn hóa trọng số (Σ share = 100%), Qdrant point id tất định, dashboard client sai route <code>/stocks/ranked</code>, auth sai thông tin trả 401, whitelist tool §22, registry ML dùng chung, CLI yêu cầu <code>--symbols</code>; +17 kiểm thử</td></tr>
+<tr><td>Bảng điều khiển trực tiếp</td><td>Nối API thật + trang RAG (2026-09-24)</td><td><code>apps/dashboard/client.py</code> gỡ bao phân trang <code>{items,...}</code> cho stocks/news/backtests (vẫn tương thích kho trong bộ nhớ); thêm client RAG (<code>search_rag / get_rag_status / get_evidence</code>); trang mới <b>📰 Tin tức &amp; RAG</b> (tin mới nhất, lọc theo mã/nguồn, truy vấn trích dẫn); +4 kiểm thử → 38</td></tr>
+<tr><td>Lập lịch worker</td><td>APScheduler 3 job (2026-09-24)</td><td><code>apps/worker/main.py</code> <code>BlockingScheduler</code> múi giờ <code>Asia/Ho_Chi_Minh</code>: <code>periodic_news_ingestion</code> (Interval 15') · <code>daily_eod_ingestion</code> (Mon–Fri 15:05, nguồn + cửa sổ lookback 7 ngày) · <code>daily_eod_scoring</code> (Mon–Fri 15:30); cờ <code>SCHEDULER_JOBS_ENABLED</code>; 7 kiểm thử</td></tr>
+<tr><td>Nhà cung cấp RSS</td><td>CaféF RSS thật (2026-09-24)</td><td><code>src/data/providers/rss.py</code> <code>RssNewsProvider</code>: strip HTML, pubDate RFC822/ISO, ghép mã thật theo ranh giới từ (không bịa), fixture <code>tests/fixtures/cafef_rss_sample.xml</code>; nạp 50 bài thật → <code>news</code> + <code>news_symbols</code>; 14 kiểm thử</td></tr>
+<tr><td>Nhà cung cấp EOD</td><td>Yahoo Finance <code>.VN</code> (2026-09-25)</td><td><code>src/data/providers/yahoo_chart.py</code> <code>YahooChartProvider</code> (con <code>HttpJsonProvider</code>): User-Agent mô tả (tránh 429), bỏ dòng placeholder volume=0, un-adjust chia tách qua <code>events=split</code> (FPT 11:10), <code>trading_value ≈ close×volume</code>; wire <code>configs/sources.yaml</code> (priority 85, VERIFIED) + dispatch <code>yahoo_chart</code> + chuỗi dự phòng <code>[yahoo, vndirect, tcbs, dsc]</code>; 13 kiểm thử + 2 live</td></tr>
+<tr><td>Đường đọc CSDL cho API</td><td>Nguồn kép memory|db|auto (2026-09-25)</td><td><code>apps/api/services/market_source.py</code> (protocol) + <code>db_market.py</code> (<code>DbMarketService</code> đọc index_prices, market_regimes, stocks, prices, factor_scores, statements/ratios, valuation_daily, data_quality_scores, news, backtests) + <code>apps/api/db.py</code> (engine/session, <code>pool_pre_ping</code>) + <code>MARKET_DATA_SOURCE</code> trong <code>config.py</code>/<code>dependencies.py</code>/<code>.env.example</code>/<code>docker-compose.yml</code>; 25 kiểm thử mới (11 unit + 14 integration) — hợp đồng router không đổi</td></tr>
+<tr><td>Job chấm điểm</td><td><code>compute-scores</code> → <code>factor_scores</code> (2026-09-25)</td><td><code>src/quant/scoring/job.py</code>: RSI(14) + momentum 63 phiên + risk = −σ(20) từ giá đã lưu, percentile-rank qua <code>src/quant/factors/scoring.py</code>, cơ bản/định giá/chất lượng lưu <code>NULL</code> trung thực, upsert idempotent theo <code>(stock_id, trade_date, scoring_version)</code>; CLI + 11 kiểm thử (7 unit + 4 integration)</td></tr>
+<tr><td>Tài liệu HTML</td><td>Dời <code>docs/htmldocs/</code> → <code>docs/</code> + cập nhật hiện trạng (2026-09-25)</td><td>7 trang HTML + <code>style.css</code> nằm cùng <code>docs/</code> (liên kết tương đối giữ nguyên); bổ sung Yahoo/CaféF đã kiểm chứng, scheduler 3 job, đường đọc CSDL, 38 đường dẫn / 39 thao tác API, 422 kiểm thử; sửa text lẫn tiếng Romania trong trang module</td></tr>
+<tr><td>Nạp E2E thật</td><td>Kiểm chứng đầu-cuối (2026-09-25)</td><td><code>ingest --source yahoo --symbols FPT,VCB,HPG,ACB</code> → <b>fetched=62 written=62 issues=0 quality=94.88</b> (cổng thông qua), giá un-adjusted đúng (FPT 03/09 close 72200, source=yahoo); <code>compute-scores --lookback 60</code> → scored=4; suite <b>422 passed, 3 skipped</b> · ruff · mypy (126 file) sạch</td></tr>
+</table>
+<h2 class="sec" id="config">Cấu hình mới qua biến môi trường</h2>
+<p>Các cấu hình sau đọc từ <code>.env</code> (khai trong <code>.env.example</code>) — <code>apps/api/config.py</code> cho API/worker, <code>src/common/config.py</code> cho <code>Settings.from_source</code> khi chạy pipeline.</p>
+<table>
+<tr><th>Nhóm</th><th>Biến</th><th>Mặc định &amp; ý nghĩa</th></tr>
+<tr><td>Nguồn dữ liệu API</td><td><code>MARKET_DATA_SOURCE</code></td><td><code>memory</code> (mặc định, không cần CSDL) · <code>db</code> (bắt buộc đọc TimescaleDB) · <code>auto</code> (dùng CSDL khi kết nối được và bảng <code>prices</code> đã có dòng, ngược lại về <code>memory</code>)</td></tr>
+<tr><td>Lập lịch</td><td><code>SCHEDULER_JOBS_ENABLED</code> · <code>SCHEDULER_NEWS_SOURCE</code> · <code>SCHEDULER_NEWS_INTERVAL_MINUTES</code></td><td><code>true</code> · <code>cafef</code> · <code>15</code> phút một lần nạp tin tức</td></tr>
+<tr><td>Lập lịch</td><td><code>SCHEDULER_EOD_SOURCE</code> · <code>SCHEDULER_EOD_CRON_HOUR</code> · <code>SCHEDULER_EOD_CRON_MINUTE</code> · <code>SCHEDULER_EOD_LOOKBACK_DAYS</code></td><td><code>yahoo</code> · <code>15</code> · <code>5</code> (Thứ 2–Thứ 6 15:05 ICT) · <code>7</code> ngày nạp lại (giá trị ghi đè lịch sử)</td></tr>
+<tr><td>Lập lịch</td><td><code>SCHEDULER_SCORING_CRON_HOUR</code> · <code>SCHEDULER_SCORING_CRON_MINUTE</code></td><td><code>15</code> · <code>30</code> (Thứ 2–Thứ 6 15:30 ICT, chạy sau job EOD)</td></tr>
+<tr><td>RAG</td><td><code>rag_collection_name</code> · <code>rag_score_threshold</code> · <code>rag_default_top_k</code> · <code>rerank_model</code></td><td>collection truy xuất · ngưỡng điểm lai · số kết quả mặc định · mô hình rerank (danh sách đủ trong <code>apps/api/config.py</code>)</td></tr>
+<tr><td>Chất lượng dữ liệu</td><td><code>DATA_QUALITY_THRESHOLD</code></td><td><code>80.0</code> trên thang 0–100 — lô dưới ngưỡng bị đánh dấu <code>below_threshold</code> và không dùng ở bước sau</td></tr>
+<tr><td>Nguồn dữ liệu</td><td><code>yahoo_adjust_prices</code> · <code>cafef_rss_base_url</code></td><td>mặc định <code>false</code> (trả giá chưa điều chỉnh khớp giá giao dịch) · URL RSS CaféF</td></tr>
+</table>
+<h2 class="sec">Lộ trình (thứ tự theo đặc tả §57)</h2>
+<table>
+<tr><th>Tiếp theo</th><th>Phạm vi</th></tr>
+<tr><td><b>T015</b> — vận hành thật</td><td>JWT + RBAC, giám sát/liveness cho scheduler, cảnh báo chất lượng dữ liệu, CI/CD; backfill lịch sử dài qua Yahoo để mở khóa backtest (KI-009) và huấn luyện ML (KI-012)</td></tr>
+<tr><td>Đóng nốt KI-008/KI-009/KI-012</td><td>Backfill lịch sử nhiều năm qua Yahoo + nạp chỉ số và báo cáo tài chính để <code>auto</code> an toàn làm mặc định, mở khoá backtest có ý nghĩa và huấn luyện ML; thêm chiều ghi (POST /backtests) + JWT/RBAC</td></tr>
+</table>
+<h2 class="sec">Các vấn đề đã biết</h2>
+<table>
+<tr><th>Mã</th><th>Vấn đề</th><th>Ảnh hưởng</th></tr>
+<tr><td>KI-006</td><td>Một số endpoint nhà cung cấp chưa kiểm chứng — <b>đã mở một phần 2026-09-25</b>: Yahoo EOD (chart <code>.VN</code>) và CaféF RSS đã kiểm chứng trực tiếp (<code>endpoints_status: VERIFIED_2026-09-25</code>); các nhà cung cấp còn lại (SSIX, VNDirect, TCBS, …) vẫn chờ mạng/chứng thực</td><td>Nạp thật đã chạy qua Yahoo/CaféF; phần còn lại vẫn dùng fixture</td></tr>
+<tr><td>KI-007</td><td>Chưa có chứng thực (FINIPRO_ACCESS_TOKEN trống)</td><td>Các phương án dự phòng ẩn danh vẫn kiểm thử được</td></tr>
+<tr><td>KI-008</td><td><b>Đã mở phần đọc (2026-09-25):</b> <code>MARKET_DATA_SOURCE=db|auto</code> nối toàn bộ đường đọc của API vào <code>DbMarketService</code> (13 nhóm bảng thật). Còn lại: mặc định vẫn là <code>memory</code>, chiều <i>ghi</i> qua API (ví dụ <code>POST /backtests</code>) chưa có, và các nhóm bảng chưa được job nào ghi (chỉ số, báo cáo tài chính)</td><td>API + dashboard phục vụ dữ liệu thật khi CSDL có dữ liệu; kiểm thử unit vẫn chạy không cần CSDL</td></tr>
+<tr><td>KI-009</td><td>Backtest có dữ liệu thật nhưng mới ~1 tháng (Yahoo từ 2026-09; cần nhiều năm lịch sử + chỉ số + dữ liệu niêm yết)</td><td>Kết quả chiến lược chưa có ý nghĩa cho tới khi backfill đủ lịch sử</td></tr>
+<tr><td>KI-010</td><td>Bảng điều khiển dùng dữ liệu tổng hợp trong bộ nhớ khi API tắt; đã <b>gỡ một phần</b>: client gỡ bao phân trang nên tự dùng payload CSDL thật khi API phục (không đổi mã dashboard)</td><td>Ổn định giao diện; chế độ offline vẫn là fallback tất định</td></tr>
+<tr><td>KI-011</td><td>RAG đã <b>nạp 50 bài CaféF thật</b> (2026-09-24) và kiểm chứng <code>/rag/search</code> + <code>/evidence</code>; <code>qdrant_client</code> không nạp → kho trong bộ nhớ là baseline, adaptor Qdrant best-effort</td><td>Truy xuất kiểm thử trên dữ liệu thật (238 kiểm thử); đổi tới Qdrant = nạp client + chỉ QDRANT_HOST; nguồn tin khác chờ KI-006</td></tr>
+<tr><td>KI-012</td><td>Sinh dữ liệu tổng hợp tăng đơn điệu → 100% nhãn 5 ngày đều dương; không huấn luyện được máy phân loại (từ chối rõ ràng, không giá trị giả)</td><td>Predictor dùng mô hình fallback tất định; luồng Yahoo đã mở nhưng cần lịch sử dài hơn; lệnh <code>train-model</code> báo lỗi trung thực</td></tr>
+</table>
+<h2 class="sec" id="docs">Các tài liệu đặc tả</h2>
+<table>
+<tr><th>Tài liệu</th><th>Nội dung</th></tr>
+<tr><td><code>SYSTEM_SPECIFICATION.md</code></td><td>Đặc tả chủ — mục tiêu, giai đoạn, chấm điểm §12, chất lượng §39</td></tr>
+<tr><td><code>ARCHITECTURE.md</code></td><td>Ranh giới dịch vụ và thiết kế</td></tr>
+<tr><td><code>DATABASE_SCHEMA.md</code></td><td>38 bảng, thiết kế lưỡng thời, hypertable</td></tr>
+<tr><td><code>DATA_ARCHITECTURE.md</code> + <code>DATA_SOURCES.md</code></td><td>Thiết kế nạp dữ liệu; chọn nhà cung cấp + dự phòng</td></tr>
+<tr><td><code>QUANT_ENGINE.md</code></td><td>Công thức chỉ báo/hệ số và trọng số</td></tr>
+<tr><td><code>API_SPECIFICATION.md</code></td><td>Hợp đồng REST cho /api/v1/*</td></tr>
+<tr><td><code>BACKTESTING.md · ML_ARCHITECTURE.md · RAG_ARCHITECTURE.md · AGENT_ARCHITECTURE.md</code></td><td>Thiết kế cho các giai đoạn sắp tới</td></tr>
+<tr><td><code>AI_INVESTMENT_CONCEPT.md · SECURITY.md · DEPLOYMENT.md</code></td><td>Khái niệm, xác thực/kiểm toán, sổ tay vận hành</td></tr>
+</table>
+</div>
+<div class="footer">Tài liệu DTCK · cập nhật 2026-09-25 · <a href="index.html">Trang chủ</a></div>
+</body>
+</html>

@@ -14,11 +14,11 @@
 </header>
 <div class="wrap">
 <h2 class="sec">Tổng quan</h2>
-<p>Dịch vụ REST trong <code>apps/api/</code> triển khai các <b>đường đọc MVP-1</b> của <code>docs/API_SPECIFICATION.md</code>: 9 nhóm (8 + RAG + agents), <b>36 đường dẫn / 37 thao tác</b>. Tiền tố phiên bản <code>/api/v1</code>. Tài liệu tương tác tự sinh tại <code>/docs</code> (Swagger UI) và <code>/redoc</code>.</p>
-<div class="sig"><b>Kiến trúc 3 lớp:</b> router (khai báo hợp đồng HTTP) → service (<code>MarketService</code> giữ nghiệp vụ + dữ liệu) → schema (Pydantic, hợp đồng vào/ra). Router không chứa logic; service hiện là kho <b>trong bộ nhớ, tất định</b> nên API chạy và kiểm thử được mà không cần TimescaleDB (xem KI-008).</div>
-<div class="sig"><b>Đổi sang CSDL thật:</b> thay <code>MarketService</code> bằng repository SQLAlchemy trong <code>apps/api/dependencies.py</code>. Toàn bộ router và test hiện có giữ nguyên — hợp đồng không đổi.</div>
+<p>Dịch vụ REST trong <code>apps/api/</code> triển khai các <b>đường đọc MVP-1</b> của <code>docs/API_SPECIFICATION.md</code>: 14 nhóm đường dẫn (market/stocks/fundamentals/technical/valuation/news/backtests + rag/evidence + agents/analysis + predictions/monitoring/auth), <b>38 đường dẫn / 39 thao tác</b>. Tiền tố phiên bản <code>/api/v1</code>. Tài liệu tương tác tự sinh tại <code>/docs</code> (Swagger UI) và <code>/redoc</code>.</p>
+<div class="sig"><b>Kiến trúc 3 lớp:</b> router (khai báo hợp đồng HTTP) → service (<code>MarketService</code> hoặc <code>DbMarketService</code> giữ nghiệp vụ + dữ liệu) → schema (Pydantic, hợp đồng vào/ra). Router không chứa logic và chỉ phụ thuộc <b>protocol</b> <code>MarketSource</code> (<code>apps/api/services/market_source.py</code>) — đó là lý do cùng một bộ router chạy được với kho trong bộ nhớ (mặc định, tất định, không cần hạ tầng) lẫn TimescaleDB thật.</div>
+<div class="sig"><b>Chế độ nguồn dữ liệu</b> — biến môi trường <code>MARKET_DATA_SOURCE</code> (<code>apps/api/dependencies.py</code>): <code>memory</code> (mặc định) dùng <code>MarketService</code> tất định; <code>db</code> dùng <code>DbMarketService</code> đọc thẳng TimescaleDB; <code>auto</code> chọn CSDL khi <code>SELECT 1</code> thông <i>và</i> bảng <code>prices</code> đã có dữ liệu, ngược lại tự về <code>memory</code>. <b>Hợp đồng router và toàn bộ kiểm thử giữ nguyên ở cả ba chế độ</b>.</div>
 <h2 class="sec">Chạy máy chủ</h2>
-<pre># phát triển (tự nạp lại khi sửa mã)
+<pre># phát triển (tự nạp lại khi sửa mã) — nguồn dữ liệu: memory (mặc định) | db | auto
 uvicorn apps.api.main:app --reload
 
 # trong Docker Compose
@@ -55,7 +55,7 @@ curl localhost:8000/healthz</pre>
 <tr><td><code>/api/v1/valuation</code></td><td><code>{symbol}/summary</code> (P-E/P-B/EV/PEG) · <code>{symbol}/history</code></td></tr>
 <tr><td><code>/api/v1/news</code></td><td><code>""</code> — danh sách tin, lọc <code>?symbol=&amp;source=</code> + phân trang</td></tr>
 <tr><td><code>/api/v1/backtests</code></td><td><code>""</code> (GET danh sách · POST tạo) · <code>{id}</code> · <code>{id}/metrics</code> · <code>{id}/trades</code></td></tr>
-<tr><td><code>/api/v1/rag</code></td><td><code>/search</code> (truy xuát hibrid + rerank, lọc <code>?symbol=&amp;doc_type=&amp;source=</code>, <code>?top_k=</code>) · <code>/status</code> (kích thước chỉ mục + tên model + trạng thái Qdrant)</td></tr>
+<tr><td><code>/api/v1/rag</code></td><td><code>/search</code> (truy xuất hybrid + rerank, lọc <code>?symbol=&amp;doc_type=&amp;source=</code>, <code>?top_k=</code>) · <code>/status</code> (kích thước chỉ mục + tên model + trạng thái Qdrant)</td></tr>
 <tr><td><code>/api/v1/evidence</code></td><td>Bằng chứng §19: <code>GET</code> <code>?q=&amp;symbol=&amp;top_k=</code> → mỗi mục có snippet, nguồn, published_at, chunk_id, confidence</td></tr>
 </table>
 
@@ -76,7 +76,7 @@ curl localhost:8000/healthz</pre>
 <tr><td>GET</td><td><code>/analysis/request/{agent_run_id}</code></td><td>Trạng thái + kết quả của run đã xếp hàng</td></tr>
 <tr><td>GET</td><td><code>/analysis/{symbol}/latest</code></td><td>Phân tích thành công gần nhất cho một mã</td></tr>
 </table>
-<p><b>Lưu ý:</b> <code>POST /api/v1/backtests</code> hiện trả về bản ghi giữ chỗ — phần nối engine thật hoàn tất khi lớp lưu trữ hoạt động (KI-008).</p>
+<p><b>Đường đọc CSDL:</b> ở chế độ <code>db</code>/<code>auto</code>, các nhóm đọc <code>index_prices</code>, <code>market_regimes</code>, <code>stocks</code>, <code>prices</code>, <code>factor_scores</code> (kết quả job <code>compute-scores</code>), <code>financial_statements</code>/<code>financial_ratios</code>, <code>valuation_daily</code>, <code>data_quality_scores</code>, <code>news</code>+<code>news_symbols</code> và <code>backtests</code>/<code>backtest_metrics</code>/<code>backtest_trades</code>; chỉ báo kỹ thuật tính khi đọc, độ rộng thị trường suy ra từ <code>prices</code>. Bảng còn trống → danh sách rỗng hoặc 404 <b>trung thực</b> (không bịa dữ liệu); <code>POST /api/v1/backtests</code> vẫn là bản ghi giữ chỗ cho tới khi engine ghi được xuống CSDL.</p>
 <h2 class="sec">Quy ước phản hồi</h2>
 <div class="sig"><b>Phân trang:</b> mọi đường dẫn dạng danh sách trả <code>{"items": [...], "total": n, "limit": l, "offset": o}</code>. Tham số vào là <code>?limit=20&amp;offset=0</code> (limit tối đa 200).</div>
 <div class="sig"><b>Lỗi:</b> mã không tồn tại trả <code>404</code> kèm phong bì <code>{"error": {"code": "NOT_FOUND", "message": ..., "detail": ...}}</code>. Tham số sai trả <code>422</code> theo định dạng kiểm tra của FastAPI.</div>
@@ -86,9 +86,11 @@ curl 'localhost:8000/api/v1/stocks/FPT/ranking'
 curl 'localhost:8000/api/v1/valuation/FPT/summary'
 curl -i 'localhost:8000/api/v1/stocks/KHONGCO'   # -&gt; 404 + phong bì lỗi</pre>
 <h2 class="sec">Kiểm thử</h2>
-<pre>pytest -q tests/unit/test_api.py     # 23 bài: hệ thống, 7 nhóm, RAG, phân trang, 404</pre>
-<p>Bộ kiểm thử dùng <code>fastapi.testclient.TestClient</code> trên chính đối tượng <code>app</code> — không cần máy chủ đang chạy, không cần CSDL.</p>
+<pre>pytest -q tests/unit/test_api.py             # 25 bài: hệ thống, các nhóm, RAG, phân trang, 404, agents, predictions
+pytest -q tests/unit/test_market_data_source.py  # 11 bài: protocol + chọn nguồn memory/db/auto
+pytest -q tests/integration/test_db_market.py    # 14 bài: đường đọc CSDL thật (tự skip khi không có DATABASE_URL)</pre>
+<p>Bộ kiểm thử dùng <code>fastapi.testclient.TestClient</code> trên chính đối tượng <code>app</code> — không cần máy chủ đang chạy, không cần CSDL. Bảng điều khiển (<code>apps/dashboard</code>) gọi API này trực tiếp qua HTTP (gỡ bao phân trang) với fallback trong tiến trình khi API tắt.</p>
 </div>
-<div class="footer">Tài liệu DTCK · 2026-09-16 · <a href="index.html">Trang chủ</a></div>
+<div class="footer">Tài liệu DTCK · cập nhật 2026-09-25 · <a href="index.html">Trang chủ</a></div>
 </body>
 </html>

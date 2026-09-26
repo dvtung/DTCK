@@ -22,13 +22,16 @@ import streamlit as st
 from apps.dashboard.client import MarketClient
 from apps.dashboard.components import (
     contribution_rows,
+    evidence_rows,
     format_date,
     format_percent,
     format_price,
     indicator_dict,
     metric_rows,
+    news_rows,
     price_dataframe,
     quality_bar_labels,
+    rag_doc_rows,
     ranking_rows,
     signal_label,
 )
@@ -45,7 +48,7 @@ with st.sidebar:
     if st.button("🔄 Làm mới", type="primary"):
         st.cache_data.clear()
     st.divider()
-    st.caption("Tài liệu: docs/DEPLOYMENT.md · docs/htmldocs/api.html")
+    st.caption("Tài liệu: docs/DEPLOYMENT.md · docs/api.html")
 
 
 def _fetch() -> MarketClient:
@@ -256,7 +259,121 @@ def page_backtests() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Page 6 — System Health
+# Page 6 — News & RAG Evidence
+# ---------------------------------------------------------------------------
+def page_news_rag() -> None:
+    st.header("📰 Tin tức & Bằng chứng RAG")
+    c = _fetch()
+
+    tab_news, tab_rag, tab_status = st.tabs(
+        ["Tin tức thị trường", "Truy vấn bằng chứng RAG", "Trạng thái RAG"]
+    )
+
+    with tab_news:
+        st.subheader("Dòng tin tức tài chính đã thu thập")
+        col_sym, col_src, col_lim = st.columns([1, 1, 1])
+        with col_sym:
+            filter_sym = st.text_input(
+                "Lọc theo mã (ví dụ: FPT)", value="", key="news_filter_sym"
+            ).strip().upper()
+        with col_src:
+            filter_src = st.selectbox(
+                "Nguồn tin",
+                options=["Tất cả", "cafef", "fixture"],
+                index=0,
+                key="news_filter_src",
+            )
+        with col_lim:
+            limit_val = st.slider(
+                "Số lượng tin",
+                min_value=5,
+                max_value=100,
+                value=20,
+                step=5,
+                key="news_limit",
+            )
+
+        src_arg = None if filter_src == "Tất cả" else filter_src
+        sym_arg = filter_sym or None
+        news_items = c.get_news(symbol=sym_arg, source=src_arg, limit=limit_val)
+        if news_items:
+            rows = news_rows(news_items, limit=limit_val)
+            ndf = pd.DataFrame(rows)
+            st.dataframe(
+                ndf,
+                column_config={
+                    "title": st.column_config.TextColumn("Tiêu đề", width="medium"),
+                    "symbols": st.column_config.TextColumn("Mã liên quan"),
+                    "source": st.column_config.TextColumn("Nguồn"),
+                    "published": st.column_config.TextColumn("Ngày đăng"),
+                    "url": st.column_config.LinkColumn("Link gốc"),
+                },
+                hide_index=True,
+                use_container_width=True,
+            )
+        else:
+            st.info("Chưa có tin tức nào phù hợp.")
+
+    with tab_rag:
+        st.subheader("Tìm kiếm ngữ nghĩa & Trích xuất bằng chứng")
+        col_q, col_qsym = st.columns([3, 1])
+        with col_q:
+            query = st.text_input(
+                "Truy vấn ngữ nghĩa", value="lợi nhuận tăng trưởng", key="rag_query"
+            )
+        with col_qsym:
+            rag_symbol = st.text_input(
+                "Mã CK (tùy chọn)", value="", key="rag_symbol"
+            ).strip().upper()
+
+        if st.button("🔎 Tìm kiếm bằng chứng", key="btn_rag_search"):
+            st.markdown("### Kết quả bằng chứng (§19 Evidence)")
+            ev_items = c.get_evidence(query=query, symbol=rag_symbol or None, top_k=5)
+            if ev_items:
+                erows = evidence_rows(ev_items)
+                st.dataframe(
+                    pd.DataFrame(erows),
+                    column_config={
+                        "symbol": st.column_config.TextColumn("Mã"),
+                        "confidence": st.column_config.NumberColumn("Độ tin cậy", format="%.2f"),
+                        "source": st.column_config.TextColumn("Nguồn"),
+                        "published": st.column_config.TextColumn("Ngày đăng"),
+                        "snippet": st.column_config.TextColumn(
+                            "Đoạn trích chứng cứ", width="large"
+                        ),
+                        "chunk_id": st.column_config.TextColumn("Chunk ID"),
+                    },
+                    hide_index=True,
+                    use_container_width=True,
+                )
+            else:
+                st.info("Không tìm thấy bằng chứng nào liên quan.")
+
+            st.markdown("### Tài liệu liên quan (Hybrid Search)")
+            rag_res = c.search_rag(query=query, symbol=rag_symbol or None, top_k=5)
+            doc_items = rag_res.get("items", [])
+            if doc_items:
+                drows = rag_doc_rows(doc_items)
+                st.dataframe(
+                    pd.DataFrame(drows),
+                    column_config={
+                        "symbol": st.column_config.TextColumn("Mã"),
+                        "score": st.column_config.NumberColumn("Điểm khớp", format="%.4f"),
+                        "source": st.column_config.TextColumn("Nguồn"),
+                        "published": st.column_config.TextColumn("Ngày đăng"),
+                        "content": st.column_config.TextColumn("Nội dung", width="large"),
+                    },
+                    hide_index=True,
+                    use_container_width=True,
+                )
+
+    with tab_status:
+        st.subheader("Trạng thái RAG Engine")
+        st.json(c.get_rag_status())
+
+
+# ---------------------------------------------------------------------------
+# Page 7 — System Health
 # ---------------------------------------------------------------------------
 def page_health() -> None:
     st.header("🩺 Sức khỏe hệ thống")
@@ -272,6 +389,7 @@ PAGES: dict[str, object] = {
     "📈 Tổng quan": page_market_overview,
     "🔍 Bộ lọc": page_screener,
     "🏆 Xếp hạng": page_rankings,
+    "📰 Tin tức & RAG": page_news_rag,
 }
 
 page = st.sidebar.radio("Điều hướng", list(PAGES.keys()))

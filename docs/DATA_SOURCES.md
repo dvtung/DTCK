@@ -87,7 +87,8 @@ gate (§39), fall back to the next.
 | Provider | id | Access | Licensed | Coverage | Reliability | Status |
 |---|---|---|---|---|---|---|
 | **SSI FiniPro** | `ssix_finipro` | free registration, per-user access | yes (SSI official) | symbols, EOD OHLCV, indices, foreign trading, basic fundamentals & news | high | **⇒ chosen primary** |
-| VNDirect (finfo) | `vndirect` | anonymous public API | no (unofficial) | EOD OHLCV, indices, foreign flow, financials | medium | fallback |
+| Yahoo Finance chart | `yahoo` | anonymous public API | no (unofficial) | EOD OHLCV for `.VN` tickers (HOSE/HNX/UPCOM) | high — **verified 2026-09-25** from project host (descriptive User-Agent required; default httpx UA → 429) | **⇒ first market fallback** |
+| VNDirect (finfo) | `vndirect` | anonymous public API | no (unofficial) | EOD OHLCV, indices, foreign flow, financials | medium — 2026-09-25: DNS resolves to a private address from the project host (unreachable) | fallback |
 | TCBS public API | `tcbs` | anonymous public API | no (unofficial) | EOD quotes, some fundamentals | medium | fallback |
 | DSC GraphData | `dsc` | anonymous public GraphQL | no (unofficial) | market + financial | medium | fallback |
 | HOSE / HNX official | `hose`,`hnx` | listed-data files | required for redistribution | official trading stats, indices | high | enable after licensing |
@@ -189,7 +190,7 @@ Rules:
 
 | If (primary) fails | Then (fallback chain) | Gate |
 |---|---|---|
-| `ssix_finipro` market | `vndirect` → `tcbs` → `dsc` | validation or quality-score gate |
+| `ssix_finipro` market | `yahoo` → `vndirect` → `tcbs` → `dsc` | validation or quality-score gate |
 | `ssix_finipro` fundamentals | `vndirect` → `vietstock` | report_date sanity |
 | `sbv`/`gso` | `imf_worldbank` (+ `tradingeconomics` if licensed) | freshness window |
 | `cafef` | `vnexpress` → `vietstock` | dedup on `(source,title)` |
@@ -203,7 +204,12 @@ is always reproducible.
 
 1. **FiniPro** registration flow, token mechanics, and per-call rate limits.
 2. Exact endpoint URLs & response schemas for `vndirect`, `tcbs`, `dsc`
-   (undocumented APIs — must be snapshot-tested).
+   (undocumented APIs — must be snapshot-tested). **Resolved for `yahoo` on
+   2026-09-25** (v8 chart verified + recorded in
+   `tests/fixtures/yahoo_chart_sample.json`): OHLCV is split-adjusted (the
+   provider un-adjusts via `events=split`), no turnover field exists
+   (`trading_value` = close × volume approximation), zero-volume placeholder
+   rows are dropped, `meta.fullExchangeName` mislabels non-HOSE listings.
 3. Per-symbol coverage of **foreign flow / prop trading** in fallback vendors.
 4. Vietnam suppliers' ability to express **`report_date` (filing date)** and how
    **restatement diffs** look — validates the snapshot-diff design in §4.2.
