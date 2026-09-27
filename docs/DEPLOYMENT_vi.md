@@ -261,6 +261,11 @@ docker compose exec -T api python -m apps.worker.cli train-model --source db
 # Sau đó mọi POST/PUT/PATCH/DELETE dưới /api/v1/ (trừ /auth/login) và
 # GET /metrics cần header: Authorization: Bearer <key>
 
+# JWT / RBAC người dùng (T015b): đặt AUTH_JWT_SECRET trong .env →
+# POST /api/v1/auth/login trả JWT HS256 (access + refresh); POST /backtests
+# chỉ nhận vai trò ANALYST/ADMIN (VIEWER → 403). Middleware ghi nhận cả API key
+# cả JWT hợp lệ; token giả ký → 401 ngay ở tầng middleware.
+
 # Scraping metrics (Prometheus text format, thuần stdlib — không thêm dependency):
 curl -s http://localhost:8000/metrics
 # dtck_http_requests_total · dtck_http_request_duration_seconds (histogram)

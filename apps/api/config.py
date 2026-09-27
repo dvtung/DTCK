@@ -29,6 +29,13 @@ class Settings(BaseSettings):
     # (offline demos and unit tests); production deployments MUST set it.
     api_auth_key: str = ""
 
+    # User JWT (spec §3/§32, T015b): HMAC-SHA256 secret for access/refresh
+    # tokens issued by /api/v1/auth/login. Empty = tokens are demo strings and
+    # role checks fall back to the offline ADMIN identity.
+    auth_jwt_secret: str = ""
+    auth_jwt_ttl_seconds: int = 3600
+    auth_refresh_ttl_seconds: int = 604800
+
     # Database
     database_url: str = "postgresql+psycopg://dtck:change_me@localhost:5432/dtck"
 

@@ -2,16 +2,20 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 
 from apps.api.dependencies import MarketDep
 from apps.api.routers.common import not_found, page_of, paginate_params
 from apps.api.schemas import BacktestMetricOut, BacktestOut, BacktestTradeOut
+from apps.api.security import ANALYST, require_roles
 
 router = APIRouter(prefix="/api/v1/backtests", tags=["backtests"])
+
+# Writing a run is an analyst action (§3 RBAC): VIEWER accounts may read only.
+AnalystDep = Annotated[dict[str, Any], Depends(require_roles(ANALYST, "ADMIN"))]
 
 
 class BacktestCreate(BaseModel):
@@ -35,12 +39,16 @@ def list_backtests(
 
 
 @router.post("", response_model=dict, status_code=201)
-def create_backtest(body: BacktestCreate, service: MarketDep) -> dict[str, Any]:
+def create_backtest(
+    body: BacktestCreate, service: MarketDep, user: AnalystDep
+) -> dict[str, Any]:
     """Create and persist a backtest execution run (§11.1/§16).
 
-    In DB mode (DbMarketService), persists a genuine Backtest record into
-    TimescaleDB. In memory mode, returns a deterministic accepted payload.
+    Requires an ANALYST/ADMIN caller (RBAC §3).  In DB mode (DbMarketService)
+    the run is persisted into TimescaleDB; in memory mode the deterministic
+    accepted payload is returned unchanged.
     """
+    del user  # identity is enforced by the dependency; nothing else needs it
     import uuid
     from datetime import date
     from decimal import Decimal

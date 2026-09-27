@@ -81,13 +81,35 @@ class ApiKeyAuthMiddleware:
                         auth_header = value
                         break
                 presented = auth_header[7:] if auth_header.startswith(b"Bearer ") else b""
-                if not presented or not secrets.compare_digest(
-                    presented, required.encode()
-                ):
+                accepted = bool(presented) and self._is_valid_credential(presented)
+                if not accepted:
                     await _unauthorized(send)
                     return
 
         await self.app(scope, receive, send)
+
+    @staticmethod
+    def _is_valid_credential(presented: bytes) -> bool:
+        """Machine API key (constant-time) **or** a properly signed JWT.
+
+        Both are checked here so a user JWT issued by /auth/login can reach the
+        RBAC-guarded write routes when a machine key is also configured; a
+        forged token fails the signature check at the middleware, before any
+        route without a role dependency could see it (T015b).
+        """
+        from apps.api.config import settings
+        from apps.api.security import decode_token
+
+        machine_key = (settings.api_auth_key or "").strip()
+        if machine_key and secrets.compare_digest(presented, machine_key.encode("utf-8")):
+            return True
+        if settings.auth_jwt_secret:
+            try:
+                decode_token(presented.decode("utf-8", errors="replace"))
+                return True
+            except ValueError:
+                return False
+        return False
 
 
 class MetricsMiddleware:

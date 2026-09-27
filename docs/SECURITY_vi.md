@@ -31,7 +31,9 @@
 # 3. Bảo mật API
 
 - **Xác thực:** JWT (access/refresh) cho người dùng; API key băm cho truy cập lập trình — chỉ lưu `key_hash`, không bao giờ lưu key thô.
+  - *Triển khai (T015b):* `apps/api/security.py` cấp/kiểm JWT HS256 (thư viện chuẩn, không thêm dependency) với TTL `AUTH_JWT_SECRET`; middleware ghi nhận cả API key (`API_AUTH_KEY`) cả JWT hợp lệ; khoá đều để trống ở môi trường demo/unit test (danh tính ADMIN offline có tài liệu). Lưu `key_hash` vào bảng `api_keys` và đối chiếu `users` là việc còn lại.
 - **Phân quyền:** RBAC — `ADMIN`, `ANALYST`, `VIEWER`; ép buộc ở tầng dependency theo route trong FastAPI.
+  - *Triển khai (T015b):* `require_roles(...)` trên `POST /api/v1/backtests` (VIEWER → 403); token giả ký bị middleware chặn trước khi tới route.
 - **Giới hạn tần suất:** theo key/user, chặt hơn với endpoint dùng LLM (§47 kiểm soát chi phí).
 - **Kiểm tra đầu vào:** schema Pydantic ở biên; từ chối field lạ; kiểu strict.
 

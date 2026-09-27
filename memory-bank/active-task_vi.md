@@ -12,9 +12,10 @@
 - [x] **#3 Backfill + sửa lỗi upsert** — `_UPSERT_CHUNK=1000` trong `src/data/pipelines.py` (lỗi 65.535 tham số truy vấn), nạp 14.810 dòng VN30 2 năm, huấn luyện lại trên 14.066 mẫu.
 - [x] **#4 Vận hành** — `scripts/backup_db.sh`, `scripts/health_alert.sh`, `.github/workflows/ci.yml`, `backups/` trong `.gitignore`, mount `./apps` cho container.
 - [x] **#5a Làm tròn** — dồn phần dư vào thành phần lớn nhất (`apps/api/services/ranking_payload.py`).
+- [x] **#5b JWT/RBAC** — `apps/api/security.py` (HS256 stdlib), login cấp JWT thật với `AUTH_JWT_SECRET`, middleware nhận cả API key cả JWT hợp lệ, `POST /backtests` ép ANALYST/ADMIN.
 - [x] **#5c Ghi backtest** — `POST /api/v1/backtests` chèn hàng thật khi DB mode.
-- [x] **Kiểm thử** — 469 unit + 20 integration pass; ruff + mypy sạch.
-- [x] **Tài liệu** — `memory-bank/{tasks,known-issues,changelog,current-state,active-task}_vi.md`, `helper/{resources,deployment}_vi.md`, `docs/DEPLOYMENT_vi.md`.
+- [x] **Kiểm thử** — 491 unit + 20 integration pass; ruff + mypy (133 tệp) sạch.
+- [x] **Tài liệu** — `memory-bank/{tasks,known-issues,changelog,current-state,active-task}_vi.md`, `helper/{resources,deployment}_vi.md`, `docs/{DEPLOYMENT,SECURITY}_vi.md`.
 
 ### Kiểm chứng trực tiếp (fact đã đo, 2026-09-27):
 - `train-model --source db` → `persisted: true`, `roc_auc=0.583` (14.066 hàng); `psql`: `artifact_bytes=64200`, `status=APPROVED`.
