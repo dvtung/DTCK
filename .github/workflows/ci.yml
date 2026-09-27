@@ -1,0 +1,40 @@
+name: DTCK CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, vndocver ]
+  pull_request:
+    branches: [ main, vndocver ]
+
+jobs:
+  quality-gate:
+    name: Code Quality & Static Checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,ml,qdrant]"
+
+      - name: Lint with Ruff
+        run: |
+          ruff check apps src tests database scripts
+
+      - name: Type Check with Mypy
+        run: |
+          mypy apps src
+
+      - name: Run Unit Tests (Offline / Deterministic)
+        env:
+          LLM_PROVIDER: mock
+          MARKET_DATA_SOURCE: memory
+        run: |
+          pytest tests/unit -v --durations=10

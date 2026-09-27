@@ -6,6 +6,10 @@ Route groups registered in include_router below.
 
 from __future__ import annotations
 
+import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
@@ -28,6 +32,32 @@ from apps.api.routers import (
     valuation,
 )
 
+logger = logging.getLogger("dtck.api")
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    """Startup: hydrate the ML model registry from the DB (T015b).
+
+    ``train-model`` mirrors entries into ``model_registry``; without this load
+    the process registry would stay empty and ``/predictions`` would serve the
+    deterministic stub forever.  Fail-soft by design (ADR-001): an unreachable
+    database logs a warning and the API still boots.
+    """
+    try:
+        from apps.api.db import database_is_ready, get_engine
+        from src.ml.registry_store import hydrate_default_registry
+
+        if database_is_ready(require_prices=False):
+            loaded = hydrate_default_registry(get_engine())
+            logger.info("model registry hydration: %d entr(y/ies) loaded", loaded)
+        else:
+            logger.info("model registry hydration skipped (database unreachable)")
+    except Exception as exc:  # noqa: BLE001 — startup must not fail on this
+        logger.warning("model registry hydration failed: %s", exc)
+    yield
+
+
 app = FastAPI(
     title="DTCK AI Investment Platform",
     version="0.1.0",
@@ -37,6 +67,7 @@ app = FastAPI(
     ),
     docs_url="/docs",
     redoc_url="/redoc",
+    lifespan=lifespan,
 )
 
 if settings.cors_origins:
@@ -137,6 +168,23 @@ def _market_source_status() -> str:
         return settings.market_data_source
 
 
+def _models_status() -> str:
+    """Registered serving model (T015b): ``<model_id>@<version>`` or ``stub``.
+
+    Tells operators whether ``/predictions`` runs a model hydrated from the
+    ``model_registry`` table or the deterministic fallback (KI-008).
+    """
+    try:
+        from src.ml.model_registry import get_default_registry
+
+        entry = get_default_registry().latest_approvable("price_direction_xgb")
+        if entry is None:
+            return "stub"
+        return f"{entry.model_id}@{entry.version}"
+    except Exception:  # noqa: BLE001 — probe must never fail the endpoint
+        return "unavailable"
+
+
 @app.get("/readyz", tags=["system"])
 def readyz() -> dict[str, str | dict[str, str]]:
     """Readiness probe — live status of every dependency (best-effort, never 5xx).
@@ -144,6 +192,7 @@ def readyz() -> dict[str, str | dict[str, str]]:
     * ``database`` — real connectivity + whether ``prices`` holds rows (KI-008);
     * ``qdrant`` — mirror reachable (``up``) or in-memory index (``offline-index-ready``, KI-011);
     * ``agents`` — reasoning layer: ``llm:<model>`` (T016) or the deterministic baseline;
+    * ``models`` — serving model hydrated from ``model_registry`` (T015b) or ``stub``;
     * ``market_source`` — ``<configured mode>-><service serving reads>``.
     """
     return {
@@ -153,6 +202,7 @@ def readyz() -> dict[str, str | dict[str, str]]:
             "database": _database_status(),
             "qdrant": _qdrant_status(),
             "agents": _agents_status(),
+            "models": _models_status(),
         },
     }
 

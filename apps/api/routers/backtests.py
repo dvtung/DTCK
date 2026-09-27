@@ -35,9 +35,42 @@ def list_backtests(
 
 
 @router.post("", response_model=dict, status_code=201)
-def create_backtest(body: BacktestCreate) -> dict[str, Any]:
-    # MVP stub: the real engine integration lands with the persistence layer.
-    return {"id": "bt-created", "created": True, "body": body.model_dump()}
+def create_backtest(body: BacktestCreate, service: MarketDep) -> dict[str, Any]:
+    """Create and persist a backtest execution run (§11.1/§16).
+
+    In DB mode (DbMarketService), persists a genuine Backtest record into
+    TimescaleDB. In memory mode, returns a deterministic accepted payload.
+    """
+    import uuid
+    from datetime import date
+    from decimal import Decimal
+
+    from apps.api.services.db_market import DbMarketService
+
+    bt_uuid = uuid.uuid4()
+    bt_id_str = str(bt_uuid)
+
+    if isinstance(service, DbMarketService):
+        from apps.api.db import session_factory
+        from src.common.models.backtest import Backtest
+
+        with session_factory() as session:
+            row = Backtest(
+                id=bt_uuid,
+                strategy_name=body.strategy_name,
+                strategy_version=body.strategy_version,
+                universe=body.universe,
+                start_date=date.fromisoformat(body.start_date),
+                end_date=date.fromisoformat(body.end_date),
+                run_type=body.run_type,
+                transaction_cost_bps=Decimal("15.0"),
+                slippage_bps=Decimal("5.0"),
+                params={},
+            )
+            session.add(row)
+            session.commit()
+
+    return {"id": bt_id_str, "created": True, "body": body.model_dump()}
 
 
 @router.get("/{bt_id}", response_model=BacktestOut)

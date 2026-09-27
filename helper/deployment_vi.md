@@ -57,10 +57,26 @@ Endpoint:
 
 ```bash
 docker compose logs -f api            # theo dõi log API
-LLM_PROVIDER=mock MARKET_DATA_SOURCE=memory pytest -q       # kỳ vọng 442 passed, 3 skipped (chạy trên máy chủ)
+LLM_PROVIDER=mock MARKET_DATA_SOURCE=memory pytest -q       # kỳ vọng 469 passed, 3 skipped (chạy trên máy chủ)
+LLM_PROVIDER=mock MARKET_DATA_SOURCE=db pytest tests/integration -q   # kỳ vọng 20 passed (cần CSDL đang chạy)
+./scripts/backup_db.sh                # sao lưu CSDL (backups/dtck_<timestamp>.sql.gz, giữ 14 ngày)
+./scripts/health_alert.sh             # kiểm tra /healthz + /readyz (dùng cho cron/cảnh báo)
 docker compose down                   # dừng (giữ volume)
 docker compose down -v                # XOÁ volume (phá huỷ — mất dữ liệu!)
 ```
+
+**Vận hành mô hình ML (T015b):** huấn luyện trên CSDL rồi khởi động lại API để nạp registry:
+
+```bash
+docker compose exec -T api python -m apps.worker.cli train-model --source db   # in "persisted": true
+docker compose restart api                                                    # lifespan nạp lại model từ DB
+curl -s localhost:8000/readyz        # kỳ vọng "models":"price_direction_xgb@1.0.0"
+```
+
+**Backfill dữ liệu dài hạn (KI-009 đã đóng):** `ingest --dataset prices --source yahoo --symbols <VN30> --start 2024-09-27 --end 2026-09-27`
+→ đã đo `fetched=14810 written=14810 quality=91.87` (14.816 dòng `prices`, 30 mã). Upsert chia lô 1.000 dòng để tránh giới hạn 65.535 tham số của Postgres.
+
+**CI:** `.github/workflows/ci.yml` chạy `ruff` + `mypy` + `pytest tests/unit` (offline) trên mỗi push/PR.
 
 ## Cấu hình runtime quan trọng (mới 2026-09-25)
 

@@ -25,7 +25,7 @@ class TestSystem:
         assert r.status_code == 200
         body = r.json()
         assert body["status"] == "ready"
-        assert set(body["dependencies"]) == {"database", "qdrant", "agents"}
+        assert set(body["dependencies"]) == {"database", "qdrant", "agents", "models"}
         # Dependencies are probed, not hardcoded — a fresh clone (no DB, no
         # qdrant_client) must still answer 200 with honest statuses.
         assert body["dependencies"]["database"] in (
@@ -306,6 +306,15 @@ def test_readyz_reports_agents() -> None:
     body = client.get("/readyz").json()
     agents = body["dependencies"]["agents"]
     assert agents.startswith(("offline:", "llm:")), agents
+
+
+def test_readyz_reports_models() -> None:
+    """`models` names the serving model or the honest `stub` (T015b)."""
+    body = client.get("/readyz").json()
+    models = body["dependencies"]["models"]
+    assert models in ("stub", "unavailable") or "@1.0.0" in models, models
+
+
 def test_auth_rejects_bad_credentials_with_401() -> None:
     """Invalid credentials are an auth failure (401), not a 200 with an error body."""
     r = client.post(

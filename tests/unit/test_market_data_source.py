@@ -123,9 +123,58 @@ def test_ranking_payload_matches_the_api_contract() -> None:
     }
     assert payload["symbol"] == "FPT"
     assert payload["rank"] == 1 and payload["total"] == 1
-    # Contributions are renormalized over available factors only (Σ share == 1).
+
+
+def test_ranking_payload_contributions_sum_exactly_to_one() -> None:
+    """Rounding must not leave 0.9999 — the residual folds into the largest share.
+
+    Live finding (T015b): worst deviation 1e-4 across the ranked universe when
+    each ``contribution_pct`` was rounded independently.
+    """
+    from src.quant.scoring.engine import FactorContribution, ScoreDecomposition, StockRanking
+
+    thirds = [
+        FactorContribution(
+            factor=name, score=50.0, weight=1 / 3, weighted_score=1 / 3, contribution_pct=1 / 3
+        )
+        for name in ("technical", "momentum", "risk")
+    ]
+    ranking = StockRanking(
+        stock_id="FPT",
+        overall_score=50.0,
+        decomposition=ScoreDecomposition(overall_score=50.0, contributions=thirds),
+        signal="NEUTRAL",
+        confidence=0.5,
+    )
+    payload = to_ranking_payload(ranking, 1, 1)
+    total = sum(c["contribution_pct"] for c in payload["contributions"])
+    assert total == pytest.approx(1.0, abs=1e-9)
+    # Residual landed on exactly one component (the largest share).
+    pcts = sorted(c["contribution_pct"] for c in payload["contributions"])
+    assert pcts[0] == 0.3333 and pcts[-1] == 0.3334
+
+
+def test_ranking_payload_partial_vector_is_untouched() -> None:
+    """Shares that do not sum to 1 before rounding are passed through as-is."""
+    from src.quant.scoring.engine import FactorContribution, ScoreDecomposition, StockRanking
+
+    parts = [
+        FactorContribution(
+            factor=name, score=50.0, weight=0.4, weighted_score=0.4, contribution_pct=0.4
+        )
+        for name in ("technical", "momentum")
+    ]
+    ranking = StockRanking(
+        stock_id="FPT",
+        overall_score=50.0,
+        decomposition=ScoreDecomposition(overall_score=50.0, contributions=parts),
+        signal="NEUTRAL",
+        confidence=0.5,
+    )
+    payload = to_ranking_payload(ranking, 1, 1)
+    assert all(c["contribution_pct"] == 0.4 for c in payload["contributions"])
     share = sum(c["contribution_pct"] or 0.0 for c in payload["contributions"])
-    assert share == pytest.approx(1.0, abs=1e-6)
+    assert share == pytest.approx(0.8, abs=1e-6)
 
 
 def test_ranking_payload_is_identical_for_both_sources() -> None:

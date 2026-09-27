@@ -57,6 +57,12 @@ def _now() -> datetime:
     return datetime.now(tz=UTC)
 
 
+# Postgres caps a statement at 65,535 bind parameters; a full VN30 × 2y batch
+# (14k+ rows × 10 columns) used to blow past it and abort the whole ingest.
+# 1,000 rows × 10 columns = 10k parameters — safely under the limit.
+_UPSERT_CHUNK = 1000
+
+
 def _weekdays(start: date, end: date) -> list[date]:
     """Approximation of trading days for the completeness denominator (§39)."""
     days: list[date] = []
@@ -145,25 +151,24 @@ def ingest_eod(
         result.rows_skipped = len(bars) - len(rows)
 
         if rows:
-            stmt = pg_insert(Price).values(rows)
-            stmt = stmt.on_conflict_do_update(
-                index_elements=[Price.stock_id, Price.trade_date],
-                set_={
-                    "open": stmt.excluded.open,
-                    "high": stmt.excluded.high,
-                    "low": stmt.excluded.low,
-                    "close": stmt.excluded.close,
-                    "volume": stmt.excluded.volume,
-                    "trading_value": stmt.excluded.trading_value,
-                    "source": stmt.excluded.source,
-                    "ingested_at": stmt.excluded.ingested_at,
-                },
-            )
-            # psycopg reports -1 for a multi-row ON CONFLICT upsert (rowcount is
-            # "unknown"), which used to surface as `written=-1`. Report the rows
-            # actually submitted (inserted or updated), which is what operators
-            # read the summary for.
-            conn.execute(stmt)
+            # Chunked upsert: one statement per _UPSERT_CHUNK rows so a 2-year
+            # backfill never exceeds Postgres' 65,535-parameter limit.
+            for chunk_start in range(0, len(rows), _UPSERT_CHUNK):
+                stmt = pg_insert(Price).values(rows[chunk_start : chunk_start + _UPSERT_CHUNK])
+                stmt = stmt.on_conflict_do_update(
+                    index_elements=[Price.stock_id, Price.trade_date],
+                    set_={
+                        "open": stmt.excluded.open,
+                        "high": stmt.excluded.high,
+                        "low": stmt.excluded.low,
+                        "close": stmt.excluded.close,
+                        "volume": stmt.excluded.volume,
+                        "trading_value": stmt.excluded.trading_value,
+                        "source": stmt.excluded.source,
+                        "ingested_at": stmt.excluded.ingested_at,
+                    },
+                )
+                conn.execute(stmt)
             result.rows_written = len(rows)
 
         result.quality = _score_and_persist(
@@ -204,19 +209,20 @@ def ingest_index(
 
     with engine.begin() as conn:
         if rows:
-            stmt = pg_insert(IndexPrice).values(rows)
-            stmt = stmt.on_conflict_do_update(
-                index_elements=[IndexPrice.index_code, IndexPrice.trade_date],
-                set_={
-                    "open": stmt.excluded.open,
-                    "high": stmt.excluded.high,
-                    "low": stmt.excluded.low,
-                    "close": stmt.excluded.close,
-                    "volume": stmt.excluded.volume,
-                    "trading_value": stmt.excluded.trading_value,
-                },
-            )
-            conn.execute(stmt)
+            for chunk_start in range(0, len(rows), _UPSERT_CHUNK):
+                stmt = pg_insert(IndexPrice).values(rows[chunk_start : chunk_start + _UPSERT_CHUNK])
+                stmt = stmt.on_conflict_do_update(
+                    index_elements=[IndexPrice.index_code, IndexPrice.trade_date],
+                    set_={
+                        "open": stmt.excluded.open,
+                        "high": stmt.excluded.high,
+                        "low": stmt.excluded.low,
+                        "close": stmt.excluded.close,
+                        "volume": stmt.excluded.volume,
+                        "trading_value": stmt.excluded.trading_value,
+                    },
+                )
+                conn.execute(stmt)
             # See ingest_eod: multi-row upserts report rowcount=-1 under psycopg.
             result.rows_written = len(rows)
 

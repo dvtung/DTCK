@@ -2,6 +2,31 @@
 
 > Thuật ngữ chuyên môn (tên bảng, biến môi trường, lệnh, đường dẫn) giữ nguyên tiếng Anh.
 
+## Task: T015b — Bền vững hoá ML registry, backfill dữ liệu 2 năm, vận hành tự động & hoàn thiện API
+
+**Trạng thái:** HOÀN THÀNH (2026-09-27)
+**Mục tiêu:** (2) model đã huấn luyện phải sống sót qua tiến trình và được API phục vụ thật; (3) nạp lịch sử đủ dài để backtest/ML có ý nghĩa; (4) sao lưu + CI + cảnh báo; (5) sửa lỗi làm tròn payload điểm và nối chiều ghi `POST /backtests` vào CSDL.
+
+### Các công việc đã thực hiện:
+- [x] **#2 Registry bền vững** — migration `0002_model_registry_artifact` (`artifact BYTEA`, `target`, `horizon_days`; chu kỳ huấn luyện nullable), `src/ml/registry_store.py` (`save_entry`/`load_entries`/`hydrate_default_registry`), CLI lưu sau khi fit, API `lifespan` nạp lúc khởi động, `/readyz.models`.
+- [x] **#3 Backfill + sửa lỗi upsert** — `_UPSERT_CHUNK=1000` trong `src/data/pipelines.py` (lỗi 65.535 tham số truy vấn), nạp 14.810 dòng VN30 2 năm, huấn luyện lại trên 14.066 mẫu.
+- [x] **#4 Vận hành** — `scripts/backup_db.sh`, `scripts/health_alert.sh`, `.github/workflows/ci.yml`, `backups/` trong `.gitignore`, mount `./apps` cho container.
+- [x] **#5a Làm tròn** — dồn phần dư vào thành phần lớn nhất (`apps/api/services/ranking_payload.py`).
+- [x] **#5c Ghi backtest** — `POST /api/v1/backtests` chèn hàng thật khi DB mode.
+- [x] **Kiểm thử** — 469 unit + 20 integration pass; ruff + mypy sạch.
+- [x] **Tài liệu** — `memory-bank/{tasks,known-issues,changelog,current-state,active-task}_vi.md`, `helper/{resources,deployment}_vi.md`, `docs/DEPLOYMENT_vi.md`.
+
+### Kiểm chứng trực tiếp (fact đã đo, 2026-09-27):
+- `train-model --source db` → `persisted: true`, `roc_auc=0.583` (14.066 hàng); `psql`: `artifact_bytes=64200`, `status=APPROVED`.
+- `curl /readyz` → `{"market_source":"auto->db","dependencies":{"database":"connected","qdrant":"up","agents":"llm:qwen3.5","models":"price_direction_xgb@1.0.0"}}`.
+- `GET /api/v1/predictions/VCB` → 200 với model đã huấn luyện (`probability_positive=0.5025`) thay vì stub.
+- Backfill: `prices` = 14.816 dòng, 30 mã, 2024-09-27 → 2026-09-25; 8 cảnh báo OHLC trên TPB.
+- `scripts/backup_db.sh` → `backups/dtck_20260927_110245.sql.gz` (345 KB); `scripts/health_alert.sh` → OK (DB=connected).
+- Làm tròn đóng góp: sai lệch tối đa **1e-4 → 0.0**.
+- `POST /api/v1/backtests` (DB mode) → 201 + hàng trong `backtests`.
+
+---
+
 ## Task: T015a — Production hardening: API-key auth + `/metrics` + `train-model --source db`
 
 **Trạng thái:** HOÀN THÀNH (2026-09-27)

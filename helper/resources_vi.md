@@ -73,8 +73,11 @@ Xem các bước xử lý sklearn trong `helper/deployment_vi.md`.
 - `python -m apps.worker.cli ingest --dataset prices --source yahoo --symbols FPT,VCB,HPG,ACB --start 2026-09-01 --end 2026-09-25` — EOD dự phòng qua Yahoo (đã kiểm chứng 2026-09-25: fetched=62 written=62 quality=94.88)
 - `python -m apps.worker.cli compute-scores [--lookback 60]` — tính lại các hệ số từ giá vào `factor_scores`
 - `python -m apps.worker.main scheduler` — chạy vòng APScheduler (news / EOD / scoring); `SCHEDULER_JOBS_ENABLED=false` để tắt job
-- `python -m apps.worker.cli train-model [--horizon 5] [--algorithm xgboost|lightgbm]` — huấn luyện + hiệu chuẩn + đăng ký
+- `python -m apps.worker.cli train-model [--horizon 5] [--source memory|db] [--algorithm xgboost|lightgbm]` — huấn luyện + hiệu chuẩn + đăng ký; **`--source db` ghi artifact vào bảng `model_registry`** (T015b) và in `"persisted": true`
   (`lightgbm` cần extra `[ml]` tuỳ chọn; CLI báo trung thực khi thiếu)
+- `python -m apps.worker.cli ingest --dataset prices --source yahoo --symbols <30 mã VN30> --start 2024-09-27 --end 2026-09-27` — backfill 2 năm (đã kiểm chứng 2026-09-27: fetched=14810 written=14810 quality=91.87; upsert chia lô 1.000 dòng để tránh giới hạn 65.535 tham số của Postgres)
+- `./scripts/backup_db.sh` — sao lưu `pg_dump` + gzip vào `backups/` (mặc định giữ 14 ngày; `BACKUP_DIR`/`RETENTION_DAYS` ghi đè)
+- `./scripts/health_alert.sh` — kiểm tra `/healthz` + `/readyz` (dùng cho cron/cảnh báo; thoát mã ≠ 0 khi có sự cố)
 - `python -m apps.worker.cli run-agent --task analyze --symbol FPT` — chạy tác tử ngoại tuyến
 - `uvicorn apps.api.main:app --reload` — **chạy API REST phát triển** (cổng 8000)
 - `python -m apps.api.main` — chạy API bằng `python -m`
@@ -87,7 +90,9 @@ Xem các bước xử lý sklearn trong `helper/deployment_vi.md`.
 - **Framework:** FastAPI 0.115 · endpoint `/api/v1/*`, tiền tố `docs/api.html`.
 - **Router:** 12 tệp — nhóm market, stocks, fundamentals, technical, valuation, news, backtests, rag/evidence, agents/analysis, predictions, monitoring, auth.
 - **Service:** protocol `MarketSource` (`apps/api/services/market_source.py`) — `MarketService` trong bộ nhớ, tất định (mặc định; KI-008 phần đọc đã mở) hoặc `DbMarketService` đọc TimescaleDB khi `MARKET_DATA_SOURCE=db|auto`; `/readyz` trả `market_source` dạng `<chế độ>-><service>`. Để mở rộng: nối repository SQLAlchemy mới vào `DbMarketService`, không đụng router.
-- **Probe sẵn sàng:** `/healthz` (liveness tĩnh) và `/readyz` dò thật — `database` (`connected`/`connected-no-prices`/`unreachable`), `qdrant` (`up`/`offline-index-ready`), `agents` (`llm:<model>`/`offline:<tasks>`), `market_source`; probe luôn trả 200 (không 5xx). Prebuilt image đã cài extra `[qdrant]` (client Qdrant, không có torch) để mirror `dtck_docs` chạy thật.
+- **Probe sẵn sàng:** `/healthz` (liveness tĩnh) và `/readyz` dò thật — `database` (`connected`/`connected-no-prices`/`unreachable`), `qdrant` (`up`/`offline-index-ready`), `agents` (`llm:<model>`/`offline:<tasks>`), `models` (`<model_id>@<version>` nạp từ `model_registry`, hoặc `stub`), `market_source`; probe luôn trả 200 (không 5xx). Prebuilt image đã cài extra `[qdrant]` (client Qdrant, không có torch) để mirror `dtck_docs` chạy thật.
+- **Registry mô hình (T015b):** `train-model --source db` lưu pickled `ModelEntry` vào `model_registry.artifact`; API nạp lại qua `lifespan` (`src/ml/registry_store.py`) nên `/predictions` phục vụ model thật thay vì stub. Bảng có `target`/`horizon_days`; chu kỳ huấn luyện để NULL (không bịa theo §31).
+- **Chiều ghi Backtest (T015b):** `POST /api/v1/backtests` chèn bản ghi vào `backtests` khi chạy DB mode (chi phí mặc định 15/5 bps); `GET /backtests*` phục vụ lại đúng bản ghi đó.
 - **Schemas:** 21 lớp Pydantic trong `apps/api/schemas.py`, gồm `Page[T]` generic + `ErrorResponse`.
 - **Kiểm thử:** `pytest tests/unit/test_api.py` (health/readyz, nhóm router, phân trang, 404) + `tests/unit/test_market_data_source.py` + integration `tests/integration/test_db_market.py`.
 - **Kiểm chứng số liệu (2026-09-26):** con số lấy từ `app.openapi()` — 39 đường dẫn / 40 thao tác trên `/api/v1/*`; cộng `/healthz` + `/readyz` thành 41 đường dẫn / 42 thao tác. Các ghi chú cũ "38 đường dẫn / 39 thao tác" là đếm thiếu một đường dẫn.

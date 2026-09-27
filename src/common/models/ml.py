@@ -11,6 +11,7 @@ from sqlalchemy import (
     Date,
     ForeignKey,
     Integer,
+    LargeBinary,
     Numeric,
     PrimaryKeyConstraint,
     Text,
@@ -31,8 +32,10 @@ class ModelRegistry(TimestampMixin, Base):
     version: Mapped[str] = mapped_column(Text, nullable=False)
     training_data_version: Mapped[str] = mapped_column(Text, nullable=False)
     feature_version: Mapped[str] = mapped_column(Text, nullable=False)
-    training_period_start: Mapped[date] = mapped_column(Date, nullable=False)
-    training_period_end: Mapped[date] = mapped_column(Date, nullable=False)
+    # Nullable since migration 0002: the trainer has no window metadata and
+    # fabricated dates would violate §31 (honest reporting).
+    training_period_start: Mapped[date | None] = mapped_column(Date, nullable=True)
+    training_period_end: Mapped[date | None] = mapped_column(Date, nullable=True)
     validation_period_start: Mapped[date | None] = mapped_column(Date, nullable=True)
     validation_period_end: Mapped[date | None] = mapped_column(Date, nullable=True)
     test_period_start: Mapped[date | None] = mapped_column(Date, nullable=True)
@@ -43,6 +46,12 @@ class ModelRegistry(TimestampMixin, Base):
     status: Mapped[str] = mapped_column(
         Text, nullable=False, server_default="EXPERIMENTAL"
     )
+    # Serving artifact + target contract (migration 0002): the pickled
+    # ModelEntry (estimator/calibrator/scaler) lets the API hydrate its
+    # process registry from the DB at startup (T015b).
+    target: Mapped[str | None] = mapped_column(Text, nullable=True)
+    horizon_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    artifact: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
 
 
 class Prediction(TimestampMixin, Base):

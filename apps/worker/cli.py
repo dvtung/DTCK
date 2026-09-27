@@ -191,6 +191,19 @@ def train_model(args: argparse.Namespace) -> int:
     except ValueError as exc:
         logger.error("training rejected: %s", exc)
         return 1
+
+    # Mirror into the model_registry table so the API can hydrate it at startup
+    # (T015b) — without this the model dies with this process and /predictions
+    # keeps serving the deterministic stub.
+    persisted = False
+    try:
+        from src.ml.registry_store import save_entry
+
+        save_entry(entry, _engine())
+        persisted = True
+    except Exception as exc:  # noqa: BLE001 — training itself succeeded; report honestly
+        logger.warning("model trained but NOT persisted to the registry table: %s", exc)
+
     logger.info("registered %s v%s (%s)", entry.model_id, entry.version, entry.status)
     print(
         json.dumps(
@@ -200,6 +213,7 @@ def train_model(args: argparse.Namespace) -> int:
                 "status": entry.status,
                 "metrics": entry.metrics,
                 "feature_version": entry.feature_version,
+                "persisted": persisted,
             },
             ensure_ascii=False,
             indent=2,

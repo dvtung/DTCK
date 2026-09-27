@@ -221,7 +221,25 @@ Image cũ chưa có code này → phải `docker compose build api worker` (xem 
 `MARKET_DATA_SOURCE=db|auto` nối toàn bộ đường đọc vào `DbMarketService`
 (13 nhóm bảng thật); mặc định vẫn `memory`; `/readyz` báo `market_source`
 dạng `<chế độ>-><service>` (ví dụ `auto->db`).
-Chiều **ghi** qua API (ví dụ `POST /backtests` ghi vào DB, JWT/RBAC) chưa có.
+Chiều **ghi** qua API: `POST /backtests` đã ghi vào DB (T015b); JWT/RBAC vẫn chưa có.
+
+**Vòng đời mô hình ML:** `train-model --source db` → ghi artifact vào `model_registry`
+→ `docker compose restart api` (lifespan nạp registry) → `/readyz` báo `models:<model>@<version>`
+→ `GET /api/v1/predictions/<symbol>` phục vụ model thật (không còn stub).
+
+**Sao lưu, cảnh báo & CI (T015b, 2026-09-27):**
+
+```bash
+./scripts/backup_db.sh      # pg_dump + gzip → backups/dtck_<timestamp>.sql.gz (giữ 14 ngày)
+./scripts/health_alert.sh   # kiểm tra /healthz + /readyz; dùng cho cron (thoát mã ≠ 0 khi có sự cố)
+# CI: .github/workflows/ci.yml (ruff + mypy + pytest tests/unit, không cần hạ tầng)
+```
+
+**Backtest ghi CSDL:** `POST /api/v1/backtests` (DB mode) tạo bản ghi thật trong `backtests`;
+`GET /api/v1/backtests/{id}` đọc lại đúng bản ghi đó.
+
+**Backfill dài hạn (KI-009 đã đóng):** đã nạp 2 năm cho VN30 — `prices` = 14.816 dòng
+(2024-09-27 → 2026-09-25), quality 91.87; huấn luyện lại trên 14.066 mẫu thật (`roc_auc=0.583`).
 
 **Huấn luyện mô hình ML (T014, KI-012 đã đóng 2026-09-27):**
 
@@ -230,8 +248,8 @@ Chiều **ghi** qua API (ví dụ `POST /backtests` ghi vào DB, JWT/RBAC) chưa
 # trung thực (100% nhãn 5 ngày dương) — hữu ích cho test offline.
 docker compose exec -T api python -m apps.worker.cli train-model
 
-# Huấn luyện thật trên dữ liệu TimescaleDB (nhãn hỗn hợp):
-# đã kiểm chứng 2026-09-27 — 616 hàng, roc_auc=0.702, model APPROVED.
+# Huấn luyện thật trên dữ liệu TimescaleDB (nhãn hỗn hợp) + lưu vào registry (T015b):
+# đã kiểm chứng 2026-09-27 — 14.066 hàng, roc_auc=0.583, "persisted": true.
 docker compose exec -T api python -m apps.worker.cli train-model --source db
 ```
 
@@ -254,11 +272,12 @@ curl -s http://localhost:8000/metrics
 
 ```bash
 # 19. Chạy toàn bộ test suite (trên máy chủ — thư mục `tests/` không nằm trong image api)
-LLM_PROVIDER=mock MARKET_DATA_SOURCE=memory pytest -q   # kỳ vọng: 432 passed, 3 skipped
+LLM_PROVIDER=mock MARKET_DATA_SOURCE=memory pytest -q   # kỳ vọng: 469 passed, 3 skipped
+LLM_PROVIDER=mock MARKET_DATA_SOURCE=db pytest tests/integration -q  # kỳ vọng: 20 passed (CSDL đang chạy)
 
 # 20. Lint + type check (image API cài kèm dev deps)
 docker compose exec -T api ruff check .
-docker compose exec -T api mypy            # kỳ vọng: 126 files, no issues
+docker compose exec -T api mypy apps src    # kỳ vọng: 132 tệp, no issues
 
 # 21. Xem dashboard (http://localhost:8501) — có trang "Tin tức & RAG" mới
 ```
