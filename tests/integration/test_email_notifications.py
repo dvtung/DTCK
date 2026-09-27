@@ -9,6 +9,7 @@ from typing import Any
 
 import pytest
 
+from apps.api.db import session_factory
 from apps.api.services.market_data import MarketService
 from src.notifications.service import NotificationService
 
@@ -116,12 +117,28 @@ def test_dispatch_report_sends_via_mocked_smtp(
             delivered.append(str(msg["To"]))
 
     monkeypatch.setattr("smtplib.SMTP", _FakeSMTP)
-    service.save_smtp_config(sender_email="sender@gmail.com", sender_password="pw")
-    res = service.dispatch_report(MarketService(), recipients=["dispatch@dtck.local"])
-    assert res["success"] is True
-    assert res["sent"] == 1
-    assert delivered == ["dispatch@dtck.local"]
-    logs = service.get_logs(limit=5)
-    assert any(
-        r["recipient_email"] == "dispatch@dtck.local" and r["status"] == "SUCCESS" for r in logs
-    )
+    try:
+        service.save_smtp_config(sender_email="sender@gmail.com", sender_password="pw")
+        res = service.dispatch_report(MarketService(), recipients=["dispatch@dtck.local"])
+        assert res["success"] is True
+        assert res["sent"] == 1
+        assert delivered == ["dispatch@dtck.local"]
+        logs = service.get_logs(limit=5)
+        assert any(
+            r["recipient_email"] == "dispatch@dtck.local" and r["status"] == "SUCCESS"
+            for r in logs
+        )
+    finally:
+        # Never leave a fake SMTP account behind: other suites assert the
+        # "not configured" path and a leftover row would make them flaky.
+        _clear_smtp_configs()
+
+
+def _clear_smtp_configs() -> None:
+    from sqlalchemy import delete
+
+    from src.common.models.notifications import EmailSmtpConfig
+
+    with session_factory() as session:
+        session.execute(delete(EmailSmtpConfig))
+        session.commit()

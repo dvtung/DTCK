@@ -417,8 +417,15 @@ def test_notifications_invalid_email_returns_422() -> None:
     assert r.status_code == 422
 
 
-def test_notifications_send_test_offline_graceful_error() -> None:
-    """Without SMTP config, send-test reports an honest error without crashing."""
+def test_notifications_send_test_offline_graceful_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Without SMTP config, send-test reports an honest error without crashing.
+
+    ``get_mailer`` is forced to ``None`` so the assertion stays deterministic even
+    when a developer machine has a real SMTP configuration saved in the database.
+    """
+    from src.notifications.service import NotificationService
+
+    monkeypatch.setattr(NotificationService, "get_mailer", lambda self: None)
     r = client.post(
         "/api/v1/notifications/send-test",
         json={"recipient_email": "test@example.com"},
