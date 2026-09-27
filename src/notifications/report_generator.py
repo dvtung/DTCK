@@ -86,7 +86,7 @@ def generate_market_overview_html(
     gainers_rows = []
     decliners_rows = []
     if movers:
-        for g in (movers.get("gainers") or [])[:5]:
+        for g in (movers.get("gainers") or [])[:10]:
             chg = float(g.get("change_pct", 0))
             vs_ma = g.get("price_vs_sma20")
             vs_ma_str = f"{float(vs_ma):+.1f}%" if vs_ma is not None else "—"
@@ -97,7 +97,7 @@ def generate_market_overview_html(
                 f'<td style="padding:5px;text-align:right;color:#15803d;font-weight:bold;">{chg:+.2f}%</td>'
                 f'<td style="padding:5px;text-align:right;">{vs_ma_str}</td></tr>'
             )
-        for d in (movers.get("decliners") or [])[:5]:
+        for d in (movers.get("decliners") or [])[:10]:
             chg = float(d.get("change_pct", 0))
             vs_ma = d.get("price_vs_sma20")
             vs_ma_str = f"{float(vs_ma):+.1f}%" if vs_ma is not None else "—"
@@ -199,7 +199,7 @@ def _render_template(
           <td style="width:49%;vertical-align:top;">
             <table style="width:100%;border-collapse:collapse;border:1px solid #e2e8f0;">
               <thead style="background:#f0fdf4;font-size:11px;color:#166534;">
-                <tr><th style="padding:4px;">Top Tăng</th><th style="padding:4px;text-align:right;">Giá</th><th style="padding:4px;text-align:right;">%1D</th><th style="padding:4px;text-align:right;">vs MA20</th></tr>
+                <tr><th style="padding:4px;">Top 10 Tăng</th><th style="padding:4px;text-align:right;">Giá</th><th style="padding:4px;text-align:right;">%1D</th><th style="padding:4px;text-align:right;">vs MA20</th></tr>
               </thead>
               <tbody>{gainers}</tbody>
             </table>
@@ -208,7 +208,7 @@ def _render_template(
           <td style="width:49%;vertical-align:top;">
             <table style="width:100%;border-collapse:collapse;border:1px solid #e2e8f0;">
               <thead style="background:#fef2f2;font-size:11px;color:#991b1b;">
-                <tr><th style="padding:4px;">Top Giảm</th><th style="padding:4px;text-align:right;">Giá</th><th style="padding:4px;text-align:right;">%1D</th><th style="padding:4px;text-align:right;">vs MA20</th></tr>
+                <tr><th style="padding:4px;">Top 10 Giảm</th><th style="padding:4px;text-align:right;">Giá</th><th style="padding:4px;text-align:right;">%1D</th><th style="padding:4px;text-align:right;">vs MA20</th></tr>
               </thead>
               <tbody>{decliners}</tbody>
             </table>
