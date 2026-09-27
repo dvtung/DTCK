@@ -25,6 +25,7 @@ from apps.api.routers import (
     market,
     monitoring,
     news,
+    notifications,
     predictions,
     rag,
     stocks,
@@ -96,6 +97,7 @@ for _router in (
     agents.router,
     auth.router,
     monitoring.router,
+    notifications.router,
     predictions.router,
 ):
     app.include_router(_router)

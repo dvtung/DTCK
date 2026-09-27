@@ -125,6 +125,35 @@ def scheduled_scoring_job() -> None:
         logger.exception("Scheduled scoring job failed: %s", exc)
 
 
+def scheduled_email_report(period_label: str = "sáng") -> None:
+    """Send automated market overview email report to active subscribers."""
+    from apps.api.dependencies import get_market_service
+    from src.notifications.service import NotificationService
+
+    logger.info("Executing scheduled email report (%s)", period_label)
+    try:
+        notif_svc = NotificationService()
+        sched = notif_svc.get_schedule_config()
+        if not sched.get("is_enabled", True):
+            logger.info("Email report schedule is currently disabled — skipping")
+            return
+
+        m_svc = get_market_service()
+        subject = (
+            f"[DTCK] Báo Cáo Tổng Quan Thị Trường Phiên {period_label.title()}"
+            f" — {datetime.now(UTC).strftime('%d/%m/%Y')}"
+        )
+        res = notif_svc.dispatch_report(m_svc, subject=subject)
+        logger.info(
+            "Scheduled email report (%s) finished: sent=%s/%s",
+            period_label,
+            res.get("sent", 0),
+            res.get("total", 0),
+        )
+    except Exception as exc:
+        logger.exception("Scheduled email report (%s) failed: %s", period_label, exc)
+
+
 def _build_scheduler() -> BlockingScheduler:
     scheduler = BlockingScheduler(timezone="Asia/Ho_Chi_Minh")
     logger.info("Worker scheduler initialized (timezone=Asia/Ho_Chi_Minh)")
@@ -195,6 +224,44 @@ def _build_scheduler() -> BlockingScheduler:
             "Registered job 'daily_eod_scoring' cron Mon-Fri %02d:%02d Asia/Ho_Chi_Minh",
             settings.scheduler_scoring_cron_hour,
             settings.scheduler_scoring_cron_minute,
+        )
+
+        # 4. Daily Morning Email Report (Mon-Fri 08:00 Asia/Ho_Chi_Minh)
+        scheduler.add_job(
+            lambda: scheduled_email_report("sáng"),
+            trigger=CronTrigger(
+                day_of_week="mon-fri",
+                hour=8,
+                minute=0,
+                timezone="Asia/Ho_Chi_Minh",
+            ),
+            id="daily_morning_email_report",
+            name="Daily Morning Market Email Report",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
+        logger.info(
+            "Registered job 'daily_morning_email_report' cron Mon-Fri 08:00 Asia/Ho_Chi_Minh"
+        )
+
+        # 5. Daily Afternoon Email Report (Mon-Fri 15:30 Asia/Ho_Chi_Minh)
+        scheduler.add_job(
+            lambda: scheduled_email_report("chiều"),
+            trigger=CronTrigger(
+                day_of_week="mon-fri",
+                hour=15,
+                minute=30,
+                timezone="Asia/Ho_Chi_Minh",
+            ),
+            id="daily_afternoon_email_report",
+            name="Daily Afternoon Market Email Report",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
+        logger.info(
+            "Registered job 'daily_afternoon_email_report' cron Mon-Fri 15:30 Asia/Ho_Chi_Minh"
         )
 
     return scheduler

@@ -16,6 +16,7 @@ from src.common.models import (  # noqa: F401  (register tables on metadata)
     macro,
     market,
     ml,
+    notifications,
     portfolio,
     quant,
     reference,
@@ -40,6 +41,12 @@ from src.common.models.market import (
     ValuationDaily,
 )
 from src.common.models.ml import ModelRegistry, Prediction, PredictionEvaluation
+from src.common.models.notifications import (
+    EmailRecipient,
+    EmailScheduleConfig,
+    EmailSendLog,
+    EmailSmtpConfig,
+)
 from src.common.models.portfolio import Portfolio, PortfolioPosition, PortfolioSnapshot
 from src.common.models.quant import FactorScore, Feature, MarketRegime, Signal
 from src.common.models.reference import Exchange, Industry, Sector, Stock
@@ -86,4 +93,8 @@ __all__ = [
     "DataQualityScore",
     "User",
     "ApiKey",
+    "EmailRecipient",
+    "EmailSmtpConfig",
+    "EmailScheduleConfig",
+    "EmailSendLog",
 ]

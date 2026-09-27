@@ -52,6 +52,10 @@ EXPECTED_TABLES = {
     "data_quality_scores",
     "users",
     "api_keys",
+    "email_recipients",
+    "email_smtp_configs",
+    "email_schedule_configs",
+    "email_send_logs",
 }
 
 

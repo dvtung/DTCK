@@ -4,6 +4,29 @@
 
 **Cập nhật lần cuối:** 2026-09-27
 
+## 2026-09-27 — T018: Module gửi email tự động (Gmail SMTP) & Trang quản trị dashboard
+
+- **Module Email Notifications** (`src/notifications/`):
+  - `report_generator.py`: render bản tin email HTML chuẩn responsive, đẹp mắt dựa trên nội dung Tổng quan (KPI chỉ số, Độ rộng, Chế độ thị trường, Top 5 Tăng/Giảm so với MA20, Bảng đánh giá & dự đoán VN30 kèm P(tăng 5D) từ model ML XGBoost và disclaimer §3).
+  - `smtp_mailer.py`: gửi thư qua Gmail SMTP bằng thư viện chuẩn Python `smtplib` + `email.mime` (hỗ trợ STARTTLS port 587 và SSL port 465, xử lý lỗi xác thực App Password rõ ràng).
+  - `service.py`: quản lý người nhận (`email_recipients`), tài khoản gửi (`email_smtp_configs`), lịch gửi (`email_schedule_configs`), nhật ký (`email_send_logs`), tự động lấy dữ liệu thị trường và điều phối gửi thư.
+- **CSDL Migration Alembic** `0003_email_notifications`:
+  - 4 bảng mới: `email_recipients`, `email_smtp_configs`, `email_schedule_configs`, `email_send_logs`.
+- **API Endpoints** (`apps/api/routers/notifications.py`):
+  - CRUD danh sách email nhận: `GET/POST /api/v1/notifications/recipients`, `PATCH/DELETE /api/v1/notifications/recipients/{id}`.
+  - Cấu hình SMTP: `GET/POST /api/v1/notifications/smtp` (bảo mật: không bao giờ để lộ mật khẩu trong response).
+  - Cấu hình lịch gửi: `GET/POST /api/v1/notifications/schedule`.
+  - Gửi thử & xem trước: `POST /api/v1/notifications/send-test`, `GET /api/v1/notifications/preview-html`.
+  - Nhật ký gửi: `GET /api/v1/notifications/logs`.
+- **Lập lịch tự động (Worker APScheduler)** (`apps/worker/main.py`):
+  - Đăng ký 2 cron job tự động: `daily_morning_email_report` (Mon-Fri 08:00 Asia/Ho_Chi_Minh) và `daily_afternoon_email_report` (Mon-Fri 15:30 Asia/Ho_Chi_Minh).
+- **Giao diện Quản trị Dashboard Streamlit** (`apps/dashboard/app.py`):
+  - Thêm trang **"📧 Quản lý Email"** gồm 5 tab: 🚀 Gửi thử & Xem trước (xem trước HTML trực tiếp, nút gửi thử ngay), 👥 Quản lý người nhận (thêm/xóa), ⚙️ Cấu hình Gmail SMTP (Server, Port, Email, App Password, TLS), ⏰ Cài đặt lịch gửi (giờ/phút sáng & chiều, bật/tắt), 📋 Nhật ký gửi.
+- **Kiểm thử**:
+  - `tests/unit/test_email_notifications.py` (7 tests: render HTML, STARTTLS, SSL, báo lỗi auth), `tests/integration/test_email_notifications.py` (8 tests: persistence DB, CRUD, send log, mock dispatch), `tests/unit/test_api.py` (+4 tests API notifications), `tests/unit/test_worker_scheduler.py` (đã cập nhật 5 jobs).
+  - Kết quả: **521 unit tests passed**, **28 integration tests passed**, `ruff` và `mypy` (138 source files) hoàn toàn sạch.
+
+
 ## 2026-09-27 — T016: VN100 + 3 sàn, nến VNINDEX, bảng tăng/giảm MA20/MA50, đăng nhập JWT
 
 - **Universe VN100 & đa sàn thật** — provider SSI mới `fetch_index_components` (`Market/IndexComponents`, `pageSize=1000`) lấy đúng **100 mã VN100** + **30 mã HNX30** chính thức; seed `stocks` (cờ `is_vn100`, tên công ty từ `Market/SecuritiesDetails`) → DB hiện **HOSE 100 · HNX 30 · UPCOM 8** (UPCOM chọn lọc qua `DailyOhlc`). Nạp lại **~67k bars / 2 năm** cho 108 mã chưa có giá; `compute-scores` chấm **137 mã**; **train-model --source db** trên 63,436 dòng → `roc_auc=0.565` APPROVED (v1.0.0).

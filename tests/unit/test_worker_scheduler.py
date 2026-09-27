@@ -20,6 +20,8 @@ def test_worker_scheduler_registers_jobs() -> None:
     assert "periodic_news_ingestion" in job_ids
     assert "daily_eod_ingestion" in job_ids
     assert "daily_eod_scoring" in job_ids
+    assert "daily_morning_email_report" in job_ids
+    assert "daily_afternoon_email_report" in job_ids
 
 
 def test_eod_ingestion_is_scheduled_before_scoring() -> None:

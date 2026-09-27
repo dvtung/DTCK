@@ -85,6 +85,10 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "B", "UP"]
 
+[tool.ruff.lint.per-file-ignores]
+# HTML email template: attribute-heavy markup lines stay readable un-wrapped.
+"src/notifications/report_generator.py" = ["E501"]
+
 [tool.mypy]
 python_version = "3.12"
 strict = true

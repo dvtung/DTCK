@@ -168,6 +168,24 @@ class MarketClient:
                 symbol=params.get("symbol") or "",
             )
             return {"query": q, "items": rag.evidence_payload(evs), "total": len(evs)}
+        if key == "/notifications/recipients":
+            return []
+        if key == "/notifications/smtp":
+            return {}
+        if key == "/notifications/schedule":
+            return {
+                "morning_hour": 8,
+                "morning_minute": 0,
+                "afternoon_hour": 15,
+                "afternoon_minute": 30,
+                "days_of_week": "mon-fri",
+                "is_enabled": True,
+            }
+        if key == "/notifications/logs":
+            return []
+        if key == "/notifications/preview-html":
+            return {"html": "<h1>Preview fallback</h1>"}
+
         if key == "/backtests":
             return self._svc.list_backtests()
         if key.startswith("/backtests/"):
@@ -396,3 +414,82 @@ class MarketClient:
         except Exception:
             return ""
 
+    # --- Email notifications ---
+    def get_email_recipients(self) -> list[dict[str, Any]]:
+        res = self._get("/api/v1/notifications/recipients")
+        return self._unwrap_items(res) if isinstance(res, (dict, list)) else []
+
+    def add_email_recipient(self, email: str, name: str | None = None) -> dict[str, Any]:
+        try:
+            resp = httpx.post(
+                f"{self.base_url}/api/v1/notifications/recipients",
+                json={"email": email, "name": name},
+                headers=self._headers(),
+                timeout=self._timeout,
+            )
+            return resp.json() if resp.status_code in (200, 201) else {"error": resp.text}
+        except Exception as exc:
+            return {"error": str(exc)}
+
+    def delete_email_recipient(self, recipient_id: str) -> dict[str, Any]:
+        try:
+            resp = httpx.delete(
+                f"{self.base_url}/api/v1/notifications/recipients/{recipient_id}",
+                headers=self._headers(),
+                timeout=self._timeout,
+            )
+            return resp.json() if resp.status_code == 200 else {"error": resp.text}
+        except Exception as exc:
+            return {"error": str(exc)}
+
+    def get_email_smtp(self) -> dict[str, Any]:
+        res = self._get("/api/v1/notifications/smtp")
+        return res if isinstance(res, dict) else {}
+
+    def save_email_smtp(self, payload: dict[str, Any]) -> dict[str, Any]:
+        try:
+            resp = httpx.post(
+                f"{self.base_url}/api/v1/notifications/smtp",
+                json=payload,
+                headers=self._headers(),
+                timeout=self._timeout,
+            )
+            return resp.json() if resp.status_code == 200 else {"error": resp.text}
+        except Exception as exc:
+            return {"error": str(exc)}
+
+    def get_email_schedule(self) -> dict[str, Any]:
+        res = self._get("/api/v1/notifications/schedule")
+        return res if isinstance(res, dict) else {}
+
+    def save_email_schedule(self, payload: dict[str, Any]) -> dict[str, Any]:
+        try:
+            resp = httpx.post(
+                f"{self.base_url}/api/v1/notifications/schedule",
+                json=payload,
+                headers=self._headers(),
+                timeout=self._timeout,
+            )
+            return resp.json() if resp.status_code == 200 else {"error": resp.text}
+        except Exception as exc:
+            return {"error": str(exc)}
+
+    def send_test_email(self, recipient_email: str) -> dict[str, Any]:
+        try:
+            resp = httpx.post(
+                f"{self.base_url}/api/v1/notifications/send-test",
+                json={"recipient_email": recipient_email},
+                headers=self._headers(),
+                timeout=30.0,
+            )
+            return resp.json() if resp.status_code == 200 else {"error": resp.text}
+        except Exception as exc:
+            return {"error": str(exc)}
+
+    def get_email_preview_html(self) -> str:
+        res = self._get("/api/v1/notifications/preview-html")
+        return res.get("html", "") if isinstance(res, dict) else ""
+
+    def get_email_logs(self) -> list[dict[str, Any]]:
+        res = self._get("/api/v1/notifications/logs")
+        return self._unwrap_items(res) if isinstance(res, (dict, list)) else []

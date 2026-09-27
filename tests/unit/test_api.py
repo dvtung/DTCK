@@ -384,3 +384,47 @@ def test_auth_wrong_password_for_known_email_is_401() -> None:
     )
     assert r.status_code == 401
 
+
+
+
+# ------------------------------------------------------------ notifications (T018)
+def test_notifications_read_endpoints_open() -> None:
+    """Read endpoints for schedule/smtp/logs answer 200 without credentials."""
+    for path in (
+        "/api/v1/notifications/recipients",
+        "/api/v1/notifications/schedule",
+        "/api/v1/notifications/smtp",
+        "/api/v1/notifications/logs",
+        "/api/v1/notifications/preview-html",
+    ):
+        r = client.get(path)
+        assert r.status_code == 200, f"{path} returned {r.status_code}"
+
+
+def test_notifications_preview_html_returns_rendered_content() -> None:
+    r = client.get("/api/v1/notifications/preview-html")
+    assert r.status_code == 200
+    html = r.json().get("html", "")
+    assert "<!DOCTYPE html>" in html
+    assert "DTCK" in html
+
+
+def test_notifications_invalid_email_returns_422() -> None:
+    r = client.post(
+        "/api/v1/notifications/recipients",
+        json={"email": "not-an-email"},
+    )
+    assert r.status_code == 422
+
+
+def test_notifications_send_test_offline_graceful_error() -> None:
+    """Without SMTP config, send-test reports an honest error without crashing."""
+    r = client.post(
+        "/api/v1/notifications/send-test",
+        json={"recipient_email": "test@example.com"},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body.get("success") is False
+    assert "SMTP" in body.get("error", "") or "Cấu hình" in body.get("error", "")
+

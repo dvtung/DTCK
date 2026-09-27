@@ -44,9 +44,7 @@ from apps.dashboard.components import (
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-st.set_page_config(
-    page_title="DTCK — AI Investment Platform", page_icon="📊", layout="wide"
-)
+st.set_page_config(page_title="DTCK — AI Investment Platform", page_icon="📊", layout="wide")
 
 st.markdown(
     """
@@ -116,6 +114,7 @@ PAGE_NAMES = (
     "🧭 Chi tiết mã",
     "🧪 Backtest",
     "📰 Tin tức & RAG",
+    "📧 Quản lý Email",
     "🩺 Sức khỏe",
 )
 
@@ -218,9 +217,7 @@ def _decision_hint(signal: str, probability: float | None) -> str:
 
 def page_market_overview() -> None:
     st.header("📈 Tổng quan thị trường & dự đoán VN30")
-    st.caption(
-        "Đánh giá định lượng (§12), dự đoán ML (§26) và mức độ bằng chứng dữ liệu (§39)."
-    )
+    st.caption("Đánh giá định lượng (§12), dự đoán ML (§26) và mức độ bằng chứng dữ liệu (§39).")
     c = client
     indices = c.get_indices()
     breadth = c.get_breadth()
@@ -342,6 +339,7 @@ def page_market_overview() -> None:
     gainers = movers.get("gainers") or []
     decliners = movers.get("decliners") or []
     if gainers or decliners:
+
         def _mover_rows(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
             return [
                 {
@@ -469,8 +467,10 @@ def page_market_overview() -> None:
         top = [r for r in ranked if r.get("overall_score") is not None][:10]
         if top:
             colors = [
-                "#16a34a" if r.get("signal") == "POSITIVE"
-                else "#dc2626" if r.get("signal") == "NEGATIVE"
+                "#16a34a"
+                if r.get("signal") == "POSITIVE"
+                else "#dc2626"
+                if r.get("signal") == "NEGATIVE"
                 else "#64748b"
                 for r in top
             ]
@@ -508,9 +508,11 @@ def page_screener() -> None:
 
     c1, c2 = st.columns([2, 1])
     with c1:
-        query = st.text_input(
-            "Tìm theo mã / tên công ty", value="", key="screener_query"
-        ).strip().upper()
+        query = (
+            st.text_input("Tìm theo mã / tên công ty", value="", key="screener_query")
+            .strip()
+            .upper()
+        )
     with c2:
         exchanges = sorted({str(s.get("exchange") or "?") for s in stocks})
         picked = st.multiselect("Sàn", options=exchanges, default=exchanges)
@@ -573,14 +575,14 @@ def page_rankings() -> None:
                     x=[r["symbol"] for r in top],
                     y=[float(r["overall_score"] or 0) for r in top],
                     marker_color=[
-                        "#16a34a" if r.get("signal") == "POSITIVE"
-                        else "#dc2626" if r.get("signal") == "NEGATIVE"
+                        "#16a34a"
+                        if r.get("signal") == "POSITIVE"
+                        else "#dc2626"
+                        if r.get("signal") == "NEGATIVE"
                         else "#64748b"
                         for r in top
                     ],
-                    text=[
-                        f"{float(r['overall_score'] or 0):.1f}" for r in top
-                    ],
+                    text=[f"{float(r['overall_score'] or 0):.1f}" for r in top],
                     textposition="outside",
                 )
             )
@@ -597,10 +599,7 @@ def page_rankings() -> None:
         st.metric("Số mã hiển thị", str(len(filtered)))
         counts = by_signal.value_counts().to_dict()
         st.write(
-            {
-                signal_label(k): int(v)
-                for k, v in sorted(counts.items(), key=lambda kv: -kv[1])
-            }
+            {signal_label(k): int(v) for k, v in sorted(counts.items(), key=lambda kv: -kv[1])}
         )
 
     st.dataframe(
@@ -668,13 +667,9 @@ def page_stock_detail(symbol: str = "FPT") -> None:
         prob = float(pred["probability_positive"])
         p_cols = st.columns(4)
         p_cols[0].metric("P(tăng 5D)", f"{prob:.3f}")
-        p_cols[1].metric(
-            "Lợi nhuận kỳ vọng", f"{float(pred.get('expected_return') or 0):.4f}"
-        )
+        p_cols[1].metric("Lợi nhuận kỳ vọng", f"{float(pred.get('expected_return') or 0):.4f}")
         p_cols[2].metric("Độ tin cậy", f"{float(pred.get('confidence') or 0):.0%}")
-        p_cols[3].metric(
-            "Model", f"{pred.get('model_id')}@{pred.get('model_version')}"
-        )
+        p_cols[3].metric("Model", f"{pred.get('model_id')}@{pred.get('model_version')}")
         st.progress(min(max(prob, 0.0), 1.0), text=f"Xác suất tăng: {prob:.1%}")
     else:
         st.info("Chưa có dự đoán ML cho mã này (cần model APPROVED trong registry).")
@@ -774,8 +769,7 @@ def page_stock_detail(symbol: str = "FPT") -> None:
         if inds:
             st.subheader("Chỉ báo Kỹ thuật")
             ind_rows = [
-                {"Chỉ báo": k.upper(), "Giá trị": v}
-                for k, v in indicator_dict(inds).items()
+                {"Chỉ báo": k.upper(), "Giá trị": v} for k, v in indicator_dict(inds).items()
             ]
             st.dataframe(
                 pd.DataFrame(ind_rows),
@@ -914,9 +908,7 @@ def page_backtests() -> None:
         str(b["id"]): f"{b.get('strategy_name', '?')} · {b.get('start_date')} → {b.get('end_date')}"
         for b in backtests
     }
-    selected = st.selectbox(
-        "Chọn lượt chạy", options=ids, format_func=lambda x: labels.get(x, x)
-    )
+    selected = st.selectbox("Chọn lượt chạy", options=ids, format_func=lambda x: labels.get(x, x))
     detail = c.get_backtest(selected)
     if detail:
         st.subheader(str(detail.get("strategy_name", "Chiến lược")))
@@ -959,9 +951,11 @@ def page_news_rag() -> None:
         st.subheader("Dòng tin tức tài chính đã thu thập")
         col_sym, col_src, col_lim = st.columns([1, 1, 1])
         with col_sym:
-            filter_sym = st.text_input(
-                "Lọc theo mã (ví dụ: FPT)", value="", key="news_filter_sym"
-            ).strip().upper()
+            filter_sym = (
+                st.text_input("Lọc theo mã (ví dụ: FPT)", value="", key="news_filter_sym")
+                .strip()
+                .upper()
+            )
         with col_src:
             filter_src = st.selectbox(
                 "Nguồn tin",
@@ -1008,9 +1002,9 @@ def page_news_rag() -> None:
                 "Truy vấn ngữ nghĩa", value="lợi nhuận tăng trưởng", key="rag_query"
             )
         with col_qsym:
-            rag_symbol = st.text_input(
-                "Mã CK (tùy chọn)", value="", key="rag_symbol"
-            ).strip().upper()
+            rag_symbol = (
+                st.text_input("Mã CK (tùy chọn)", value="", key="rag_symbol").strip().upper()
+            )
 
         if st.button("🔎 Tìm kiếm bằng chứng", key="btn_rag_search"):
             st.markdown("### Kết quả bằng chứng (§19 Evidence)")
@@ -1087,8 +1081,7 @@ def page_health() -> None:
                 "Thành phần": name,
                 "Trạng thái": str(state),
                 "Đánh giá": "🟢 OK"
-                if str(state)
-                not in ("unreachable", "unavailable", "offline-index-ready", "stub")
+                if str(state) not in ("unreachable", "unavailable", "offline-index-ready", "stub")
                 else "🟡 dự phòng",
             }
             for name, state in deps.items()
@@ -1109,9 +1102,7 @@ def page_health() -> None:
             if line.startswith("dtck_http_requests_total")
         ]
         agent_runs = [
-            line
-            for line in metrics_text.splitlines()
-            if line.startswith("dtck_agent_runs_total{")
+            line for line in metrics_text.splitlines() if line.startswith("dtck_agent_runs_total{")
         ]
         if requests:
             rows = []
@@ -1140,6 +1131,233 @@ def page_health() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Page 8 — Email Notification Management
+# ---------------------------------------------------------------------------
+def page_email_notifications() -> None:
+    st.header("📧 Quản lý Gửi Email Báo Cáo Tự Động")
+    st.caption(
+        "Tự động gửi báo cáo thị trường vào lúc 08:00 sáng & 15:30 chiều "
+        "(Thứ 2 - Thứ 6) qua Gmail SMTP."
+    )
+    c = client
+
+    tab_send, tab_recipients, tab_smtp, tab_schedule, tab_logs = st.tabs(
+        [
+            "🚀 Gửi thử & Xem trước",
+            "👥 Người nhận",
+            "⚙️ Tài khoản Gmail SMTP",
+            "⏰ Lịch gửi",
+            "📋 Nhật ký gửi",
+        ]
+    )
+
+    with tab_send:
+        st.subheader("Gửi Thử Nghiệm Báo Cáo Thị Trường")
+        col_t1, col_t2 = st.columns([3, 1])
+        with col_t1:
+            test_target = st.text_input(
+                "Email người nhận thử nghiệm", value="user@example.com", key="test_target_email"
+            )
+        with col_t2:
+            st.write("")
+            st.write("")
+            btn_send_test = st.button("📤 Gửi Thử Ngay", type="primary", key="btn_send_test_email")
+
+        if btn_send_test:
+            if not test_target or "@" not in test_target:
+                st.error("Vui lòng nhập địa chỉ email hợp lệ.")
+            else:
+                with st.spinner(f"Đang gửi email thử nghiệm đến {test_target} qua SMTP..."):
+                    res = c.send_test_email(test_target)
+                if res.get("success"):
+                    st.success(f"✅ Đã gửi email thành công đến {test_target}!")
+                else:
+                    st.error(f"❌ Gửi email thất bại: {res.get('error') or res}")
+
+        st.divider()
+        st.subheader("Bản xem trước nội dung Email HTML")
+        preview_html = c.get_email_preview_html()
+        if preview_html:
+            with st.expander("👁️ Xem trước giao diện email (HTML Preview)", expanded=True):
+                st.components.v1.html(preview_html, height=650, scrolling=True)
+        else:
+            st.info("Chưa tải được bản xem trước.")
+
+    with tab_recipients:
+        st.subheader("Danh sách Email Nhận Báo Cáo Hằng Ngày")
+        recs = c.get_email_recipients()
+
+        with st.form("add_recipient_form", clear_on_submit=True):
+            ar1, ar2, ar3 = st.columns([3, 2, 1])
+            with ar1:
+                new_em = st.text_input("Địa chỉ email mới", placeholder="investor@example.com")
+            with ar2:
+                new_nm = st.text_input("Họ tên (tuỳ chọn)", placeholder="Nguyễn Văn A")
+            with ar3:
+                st.write("")
+                st.write("")
+                sub_rec = st.form_submit_button("➕ Thêm", type="primary")
+
+            if sub_rec:
+                if not new_em or "@" not in new_em:
+                    st.error("Email không hợp lệ.")
+                else:
+                    add_res = c.add_email_recipient(new_em, new_nm or None)
+                    if add_res.get("error"):
+                        st.error(f"Lỗi thêm email: {add_res['error']}")
+                    else:
+                        st.success(f"Đã thêm {new_em} vào danh sách nhận báo cáo.")
+                        st.rerun()
+
+        if recs:
+            st.write(f"Hiện có **{len(recs)}** email trong danh sách:")
+            for r in recs:
+                rc1, rc2, rc3, rc4 = st.columns([3, 2, 2, 1])
+                rc1.write(f"✉️ **{r['email']}**")
+                rc2.write(r.get("name") or "—")
+                rc3.write("🟢 Đang nhận" if r.get("is_active") else "⚪ Đã tắt")
+                if rc4.button("Xóa", key=f"del_{r['id']}"):
+                    c.delete_email_recipient(r["id"])
+                    st.rerun()
+        else:
+            st.info("Chưa có email nào trong danh sách. Hãy thêm email ở trên.")
+
+    with tab_smtp:
+        st.subheader("Cấu Hình Tài Khoản Gửi Gmail SMTP")
+        st.caption("Khuyên dùng Gmail với Mật khẩu ứng dụng (App Password 16 ký tự).")
+        smtp_cfg = c.get_email_smtp()
+
+        with st.form("smtp_config_form"):
+            s1, s2 = st.columns(2)
+            with s1:
+                server = st.text_input(
+                    "SMTP Server", value=smtp_cfg.get("smtp_server") or "smtp.gmail.com"
+                )
+                port = st.number_input(
+                    "SMTP Port", value=int(smtp_cfg.get("smtp_port") or 587), step=1
+                )
+                sender = st.text_input(
+                    "Gmail người gửi",
+                    value=smtp_cfg.get("sender_email") or "",
+                    placeholder="your-email@gmail.com",
+                )
+            with s2:
+                sender_title = st.text_input(
+                    "Tên hiển thị người gửi",
+                    value=smtp_cfg.get("sender_name") or "DTCK Market Intel",
+                )
+                pwd = st.text_input(
+                    "Mật khẩu ứng dụng Gmail (App Password)",
+                    type="password",
+                    placeholder="16 ký tự app password",
+                )
+                tls = st.checkbox(
+                    "Sử dụng TLS (STARTTLS port 587)", value=bool(smtp_cfg.get("use_tls", True))
+                )
+
+            st.caption("🔒 Mật khẩu được mã hóa và lưu trữ an toàn trong PostgreSQL.")
+            save_smtp_btn = st.form_submit_button("💾 Lưu Cấu Hình SMTP", type="primary")
+
+            if save_smtp_btn:
+                if not sender:
+                    st.error("Vui lòng nhập Email người gửi.")
+                elif not pwd and not smtp_cfg.get("is_configured"):
+                    st.error("Vui lòng nhập mật khẩu ứng dụng Gmail.")
+                else:
+                    payload = {
+                        "smtp_server": server,
+                        "smtp_port": int(port),
+                        "sender_email": sender,
+                        "sender_password": pwd,
+                        "sender_name": sender_title,
+                        "use_tls": tls,
+                        "use_ssl": False,
+                    }
+                    res_s = c.save_email_smtp(payload)
+                    if res_s.get("error"):
+                        st.error(f"Lưu thất bại: {res_s['error']}")
+                    else:
+                        st.success("✅ Đã lưu cấu hình tài khoản gửi SMTP thành công.")
+                        st.rerun()
+
+    with tab_schedule:
+        st.subheader("Cấu Hình Lịch Gửi Tự Động")
+        sched_cfg = c.get_email_schedule()
+
+        with st.form("schedule_config_form"):
+            sc1, sc2 = st.columns(2)
+            with sc1:
+                st.markdown("**Phiên Sáng (Trước giờ mở cửa)**")
+                m_h = st.slider(
+                    "Giờ gửi sáng",
+                    min_value=6,
+                    max_value=11,
+                    value=int(sched_cfg.get("morning_hour", 8)),
+                )
+                m_m = st.selectbox(
+                    "Phút gửi sáng",
+                    options=[0, 15, 30, 45],
+                    index=[0, 15, 30, 45].index(int(sched_cfg.get("morning_minute", 0))),
+                )
+            with sc2:
+                st.markdown("**Phiên Chiều (Sau giờ đóng cửa & chấm điểm)**")
+                a_h = st.slider(
+                    "Giờ gửi chiều",
+                    min_value=14,
+                    max_value=18,
+                    value=int(sched_cfg.get("afternoon_hour", 15)),
+                )
+                a_m = st.selectbox(
+                    "Phút gửi chiều",
+                    options=[0, 15, 30, 45],
+                    index=[0, 15, 30, 45].index(int(sched_cfg.get("afternoon_minute", 30))),
+                )
+
+            st.divider()
+            enable_sched = st.checkbox(
+                "Bật tự động gửi báo cáo theo lịch", value=bool(sched_cfg.get("is_enabled", True))
+            )
+            st.caption("Lịch gửi: Thứ 2 đến Thứ 6 (Mon-Fri) múi giờ Việt Nam (Asia/Ho_Chi_Minh).")
+            save_sc_btn = st.form_submit_button("💾 Lưu Lịch Gửi", type="primary")
+
+            if save_sc_btn:
+                sc_payload = {
+                    "morning_hour": int(m_h),
+                    "morning_minute": int(m_m),
+                    "afternoon_hour": int(a_h),
+                    "afternoon_minute": int(a_m),
+                    "days_of_week": "mon-fri",
+                    "is_enabled": enable_sched,
+                }
+                sc_res = c.save_email_schedule(sc_payload)
+                if sc_res.get("error"):
+                    st.error(f"Lưu thất bại: {sc_res['error']}")
+                else:
+                    st.success("✅ Đã lưu lịch gửi tự động thành công.")
+                    st.rerun()
+
+    with tab_logs:
+        st.subheader("Nhật Ký Các Lượt Gửi Email")
+        logs = c.get_email_logs()
+        if logs:
+            ldf = pd.DataFrame(logs)
+            st.dataframe(
+                ldf,
+                column_config={
+                    "recipient_email": st.column_config.TextColumn("Người nhận"),
+                    "subject": st.column_config.TextColumn("Tiêu đề"),
+                    "status": st.column_config.TextColumn("Trạng thái"),
+                    "sent_at": st.column_config.TextColumn("Thời gian gửi"),
+                    "error_message": st.column_config.TextColumn("Chi tiết lỗi"),
+                },
+                hide_index=True,
+                width="stretch",
+            )
+        else:
+            st.info("Chưa có lịch sử gửi email nào.")
+
+
+# ---------------------------------------------------------------------------
 # Navigation
 # ---------------------------------------------------------------------------
 PAGES: dict[str, Callable[[], None]] = {
@@ -1151,6 +1369,7 @@ PAGES: dict[str, Callable[[], None]] = {
     ),
     "🧪 Backtest": page_backtests,
     "📰 Tin tức & RAG": page_news_rag,
+    "📧 Quản lý Email": page_email_notifications,
     "🩺 Sức khỏe": page_health,
 }
 
@@ -1158,11 +1377,11 @@ PAGES[page]()
 
 st.markdown(
     '<div class="dtck-foot">'
-    f'Nguồn dữ liệu: <b>{ready.get("market_source", "?")}</b>'
-    f' · CSDL: <b>{ready.get("dependencies", {}).get("database", "?")}</b>'
-    f' · Model: <b>{ready.get("dependencies", {}).get("models", "?")}</b>'
-    f' · Tác tử: <b>{ready.get("dependencies", {}).get("agents", "?")}</b>'
-    ' · DTCK hỗ trợ quyết định cho con người — không đưa lời khuyên đầu tư (§3).'
-    '</div>',
+    f"Nguồn dữ liệu: <b>{ready.get('market_source', '?')}</b>"
+    f" · CSDL: <b>{ready.get('dependencies', {}).get('database', '?')}</b>"
+    f" · Model: <b>{ready.get('dependencies', {}).get('models', '?')}</b>"
+    f" · Tác tử: <b>{ready.get('dependencies', {}).get('agents', '?')}</b>"
+    " · DTCK hỗ trợ quyết định cho con người — không đưa lời khuyên đầu tư (§3)."
+    "</div>",
     unsafe_allow_html=True,
 )

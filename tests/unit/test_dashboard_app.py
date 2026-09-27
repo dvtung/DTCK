@@ -21,6 +21,7 @@ PAGES = (
     "🧭 Chi tiết mã",
     "🧪 Backtest",
     "📰 Tin tức & RAG",
+    "📧 Quản lý Email",
     "🩺 Sức khỏe",
 )
 
