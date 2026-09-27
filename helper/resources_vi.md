@@ -44,6 +44,7 @@ Xem các bước xử lý sklearn trong `helper/deployment_vi.md`.
 | `TRADINGECONOMICS_API_KEY` | tổng hợp vĩ mô (tuỳ chọn, đang tắt) |
 | `MARKET_DATA_SOURCE` | đường đọc API: `memory` (mặc định, không CSDL) / `db` (TimescaleDB) / `auto` (dùng CSDL khi `prices` có dòng, ngược lại memory); compose mặc định `auto` |
 | `SCHEDULER_JOBS_ENABLED` | `true` = chạy job news/EOD/scoring; `false` = tắt scheduler, `/news/ingest` vẫn dùng được |
+| `API_AUTH_KEY` | (T015) khi đặt, mọi POST/PUT/PATCH/DELETE dưới `/api/v1/` (trừ `/auth/login`) và `GET /metrics` yêu cầu `Authorization: Bearer <key>`; để trống = tắt (demo/unit test) |
 | `SCHEDULER_NEWS_SOURCE` / `SCHEDULER_NEWS_INTERVAL_MINUTES` | provider tin (mặc định `cafef`) + chu kỳ (mặc định `15` phút) |
 | `SCHEDULER_EOD_SOURCE` / `SCHEDULER_EOD_CRON_HOUR` / `SCHEDULER_EOD_CRON_MINUTE` / `SCHEDULER_EOD_LOOKBACK_DAYS` | nguồn EOD **chính** (mặc định `ssix_finipro`; job tự chuyển `yahoo → vndirect → tcbs → dsc`) · Thứ 2–6 15:05 ICT (`15`/`5`) · cửa sổ nạp lại idempotent (`7` ngày) |
 | `SCHEDULER_SCORING_CRON_HOUR` / `SCHEDULER_SCORING_CRON_MINUTE` | job chấm điểm Thứ 2–6 15:30 ICT (`15`/`30`), sau job EOD |

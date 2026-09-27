@@ -24,6 +24,11 @@ class Settings(BaseSettings):
     api_port: int = 8000
     log_level: str = "INFO"
 
+    # API-key auth (spec §32, T015): when set, every POST/PUT/PATCH/DELETE
+    # under /api/v1/ requires `Authorization: Bearer <key>`. Empty = disabled
+    # (offline demos and unit tests); production deployments MUST set it.
+    api_auth_key: str = ""
+
     # Database
     database_url: str = "postgresql+psycopg://dtck:change_me@localhost:5432/dtck"
 

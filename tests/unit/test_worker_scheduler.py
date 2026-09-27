@@ -134,6 +134,34 @@ def test_scheduled_eod_ingestion_falls_back_when_the_primary_is_unusable(
 @patch("src.data.providers.create_provider")
 @patch("apps.worker.main.get_engine")
 @patch("apps.worker.cli._active_symbols")
+def test_scheduled_eod_ingestion_falls_back_when_fetch_itself_raises(
+    mock_symbols, mock_engine, mock_create_provider, mock_ingest_eod,  # type: ignore[no-untyped-def]
+    monkeypatch,  # type: ignore[no-untyped-def]
+) -> None:
+    """Credentials are checked lazily: SSI builds fine but raises at token
+    time inside ``ingest_eod`` — the chain must still reach Yahoo (bug found
+    live during T015 hardening)."""
+    from apps.api.config import settings
+
+    monkeypatch.setattr(settings, "scheduler_eod_source", "ssix_finipro")
+    mock_symbols.return_value = {"FPT"}
+    mock_create_provider.side_effect = [MagicMock(), MagicMock()]
+    mock_ingest_eod.side_effect = [
+        ValueError("missing SSI_CONSUMER_ID or SSI_CONSUMER_SECRET"),
+        IngestResult(dataset="prices", source="yahoo", rows_fetched=3, rows_written=3),
+    ]
+
+    scheduled_eod_ingestion()
+
+    attempted = [c.args[0] for c in mock_create_provider.call_args_list]
+    assert attempted == ["ssix_finipro", "yahoo"]
+    assert mock_ingest_eod.call_count == 2
+
+
+@patch("src.data.pipelines.ingest_eod")
+@patch("src.data.providers.create_provider")
+@patch("apps.worker.main.get_engine")
+@patch("apps.worker.cli._active_symbols")
 def test_scheduled_eod_ingestion_falls_back_when_the_primary_returns_no_rows(
     mock_symbols, mock_engine, mock_create_provider, mock_ingest_eod,  # type: ignore[no-untyped-def]
     monkeypatch,  # type: ignore[no-untyped-def]

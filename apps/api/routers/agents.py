@@ -11,6 +11,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 
+from apps.api import metrics as app_metrics
 from apps.api.routers.common import not_found
 from apps.api.schemas import (
     AgentRunAcceptedOut,
@@ -28,6 +29,19 @@ AgentDep = Annotated[Orchestrator, Depends(get_orchestrator)]
 router = APIRouter(tags=["agents"])
 
 UNKNOWN_SYMBOL_MARKER = "unknown symbol"
+
+
+def _observe_run(task: str, run: AgentRunRecord) -> None:
+    """Export agent execution time/status to /metrics (spec §46)."""
+    app_metrics.record_agent_run(
+        task=task, status=run.status, duration_seconds=run.latency_ms / 1000.0
+    )
+
+
+def _execute_observed(orch: Orchestrator, run_id: UUID) -> None:
+    """Background-task entry point that also exports the run to /metrics."""
+    run = orch.execute_deferred(run_id)
+    _observe_run("analyze", run)
 
 
 def _run_error(run: AgentRunRecord) -> HTTPException:
@@ -95,6 +109,7 @@ def get_run(agent_run_id: UUID, orch: AgentDep) -> dict[str, Any]:
 def analyze(payload: AnalysisRequest, orch: AgentDep) -> dict[str, Any]:
     """Analysis Agent (§20.2) → structured ``InvestmentAnalysis`` (§23)."""
     run = orch.analyze(payload.symbol, user_request=payload.user_request)
+    _observe_run("analyze", run)
     if run.status != "succeeded":
         raise _run_error(run)
     return _ok(run, "analysis")
@@ -106,6 +121,7 @@ def research(payload: ResearchRequest, orch: AgentDep) -> dict[str, Any]:
     run = orch.research(
         payload.symbol, query=payload.query or "", user_request=payload.user_request
     )
+    _observe_run("research", run)
     if run.status != "succeeded":
         raise _run_error(run)
     return _ok(run, "brief")
@@ -119,6 +135,7 @@ def monitor(payload: MonitorRequest, orch: AgentDep) -> dict[str, Any]:
         previous_signals=payload.previous_signals,
         user_request=payload.user_request,
     )
+    _observe_run("monitor", run)
     if run.status != "succeeded":
         raise _run_error(run)
     return _ok(run, "report")
@@ -133,6 +150,7 @@ def portfolio(payload: PortfolioRequest, orch: AgentDep) -> dict[str, Any]:
         risk_budget_annual_vol=payload.risk_budget_annual_vol,
         user_request=payload.user_request,
     )
+    _observe_run("portfolio", run)
     if run.status != "succeeded":
         raise _run_error(run)
     return _ok(run, "snapshot")
@@ -151,7 +169,7 @@ def request_analysis(
     run = orch.submit(
         TASK_ANALYZE, {"symbol": payload.symbol}, user_request=payload.user_request
     )
-    background.add_task(orch.execute_deferred, run.agent_run_id)
+    background.add_task(_execute_observed, orch, run.agent_run_id)
     return {"agent_run_id": run.agent_run_id, "status": run.status}
 
 

@@ -8,8 +8,11 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import PlainTextResponse
 
+from apps.api import metrics as app_metrics
 from apps.api.config import settings
+from apps.api.middleware import ApiKeyAuthMiddleware, MetricsMiddleware
 from apps.api.routers import (
     agents,
     auth,
@@ -44,6 +47,11 @@ if settings.cors_origins:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+# Order matters: Starlette wraps the last-added middleware outermost, so the
+# metrics layer sits above auth and also counts rejected requests (spec §46).
+app.add_middleware(ApiKeyAuthMiddleware)
+app.add_middleware(MetricsMiddleware)
 
 for _router in (
     market.router,
@@ -147,6 +155,16 @@ def readyz() -> dict[str, str | dict[str, str]]:
             "agents": _agents_status(),
         },
     }
+
+
+@app.get("/metrics", response_class=PlainTextResponse, tags=["system"])
+def prometheus_metrics() -> str:
+    """Prometheus scrape endpoint (spec §46): request latency + agent runs.
+
+    Text exposition format 0.04, generated in-process (no third-party
+    client library). Gated by ``API_AUTH_KEY`` when a key is configured.
+    """
+    return app_metrics.render()
 
 
 def run() -> None:

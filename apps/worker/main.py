@@ -85,17 +85,19 @@ def scheduled_eod_ingestion() -> None:
         for provider_id in chain:
             try:
                 provider = create_provider(provider_id)
+                result = ingest_eod(
+                    engine,
+                    provider,
+                    symbols,
+                    start=start,
+                    end=end,
+                    threshold=settings.data_quality_threshold,
+                )
             except Exception as exc:  # noqa: BLE001 — try the next source instead
-                logger.warning("EOD source '%s' unavailable: %s", provider_id, exc)
+                # Credentials are checked lazily (e.g. SSI at token time), so a
+                # provider can build fine and fail only on the first request.
+                logger.warning("EOD source '%s' failed: %s", provider_id, exc)
                 continue
-            result = ingest_eod(
-                engine,
-                provider,
-                symbols,
-                start=start,
-                end=end,
-                threshold=settings.data_quality_threshold,
-            )
             if result.rows_fetched:
                 logger.info("Scheduled EOD ingestion finished: %s", result.summary())
                 return

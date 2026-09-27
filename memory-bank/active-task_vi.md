@@ -2,6 +2,34 @@
 
 > Thuật ngữ chuyên môn (tên bảng, biến môi trường, lệnh, đường dẫn) giữ nguyên tiếng Anh.
 
+## Task: T015a — Production hardening: API-key auth + `/metrics` + `train-model --source db`
+
+**Trạng thái:** HOÀN THÀNH (2026-09-27)
+**Mục tiêu:** (a) cổng API-key cho endpoint thay đổi trạng thái & `/metrics` (§32); (b) endpoint Prometheus `/metrics` cho độ trễ request + thời gian chạy agent (§46); (c) mở khóa huấn luyện ML thật (`train-model --source db`, đóng KI-012).
+
+### Các công việc đã thực hiện:
+- [x] **API-key auth** — `apps/api/middleware.py::ApiKeyAuthMiddleware` (ASGI): khi `API_AUTH_KEY` đặt, mọi POST/PUT/PATCH/DELETE dưới `/api/v1/` (trừ `/auth/login`) + `GET /metrics` cần `Authorization: Bearer <key>` (`secrets.compare_digest`); sai → 401 phong bì §2.1 + `WWW-Authenticate`. Key rỗng = tắt (mặc định — demo/test không đổi). Nối: `api_auth_key` (`apps/api/config.py`), `docker-compose.yml`, `.env`, `.env.example`.
+- [x] **`/metrics` thuần stdlib** — `apps/api/metrics.py` (Prometheus text 0.04, thread-safe, histogram 11 bucket): `dtck_http_requests_total`, `dtck_http_request_duration_seconds`, `dtck_agent_runs_total`, `dtck_agent_duration_seconds`. `MetricsMiddleware` gắn nhãn **route template** (không lộ path thô); agent sync + async ghi qua `_observe_run`/`_execute_observed` (`apps/api/routers/agents.py`); endpoint `GET /metrics` (`apps/api/main.py`). Không thêm dependency `prometheus_client`.
+- [x] **`train-model --source {memory,db}`** — `apps/worker/cli.py::_train_market_service` + cờ `--source` (mặc định `memory`); `db` → `DbMarketService`. **Đóng KI-012.**
+- [x] **Sửa fallback EOD (bug live tìm thấy)** — SSI kiểm tra credential trễ lúc lấy token → `ingest_eod` ném ngoài `try` hủy cả chuỗi dự phòng; nay toàn bộ gọi nằm trong `try` của vòng lặp nguồn (`apps/worker/main.py`).
+- [x] **Kiểm thử (+17)** — `tests/unit/test_t015_hardening.py` (16) + `test_worker_scheduler.py` (1: fallback khi fetch ném lỗi). ⇒ **459 passed, 3 skipped**; ruff sạch; mypy 131 tệp sạch.
+- [x] **Tài liệu** — `docs/DEPLOYMENT_vi.md`, `helper/resources_vi.md`, `memory-bank/{changelog,tasks,known-issues,current-state}_vi.md`.
+
+### Kiểm chứng trực tiếp (fact đã đo, 2026-09-27):
+- Auth (với `API_AUTH_KEY=live-test-key`): POST không key **401** · key sai **401** · key đúng **200** · GET `/api/v1/stocks/ranked` **200** · `/auth/login` **200** · `/metrics` không key **401** / có key **200** · `/healthz` **200**.
+- `POST /api/v1/agents/analyze VCB` (Ollama `qwen3.5` thật) → `succeeded`, `latency_ms=14186`; `/metrics` ghi `dtck_agent_runs_total{status="succeeded",task="analyze"} 1`.
+- `train-model --source db` → 616 hàng, `roc_auc=0.702256`, `brier=0.225`, `price_direction_xgb v1.0.0 APPROVED`.
+- Job EOD (sau sửa): `ssix_finipro failed: missing SSI_CONSUMER_ID…` → **yahoo `fetched=147 written=147 quality=92.78`**.
+- Job scoring: `factor_scores` = 4 dòng `baseline_1.0`, as-of 2026-09-25. Job news: `fetched=1 skipped=1 quality=95.38`.
+- `curl /readyz` → `{"market_source":"auto->db", "database":"connected","qdrant":"up","agents":"llm:qwen3.5"}`.
+
+### Ghi chú vận hành:
+- **`.env` từng bị reset về bản sao `.env.example` (00:44)** — đã khôi phục cấu hình không secret (`MARKET_DATA_SOURCE=auto`, Ollama `local`/`qwen3.5`/`host.docker.internal:11434`); **`SSI_CONSUMER_ID`/`SSI_CONSUMER_SECRET` phải được nhập lại** — EOD đang tự dự phòng Yahoo nên hệ thống vẫn chạy.
+- Shell máy chủ export `MARKET_DATA_SOURCE=memory` (override `.env` khi compose nội suy) — khi `docker compose up` cần truyền `MARKET_DATA_SOURCE=auto` tường minh.
+- Bật khóa bằng cách đặt `API_AUTH_KEY` trong `.env` rồi `docker compose up -d --force-recreate api`.
+
+---
+
 ## Task: T017 — SSI FastConnect là nguồn chính (Yahoo dự phòng) + `/readyz` báo đúng thực tế
 
 **Trạng thái:** HOÀN THÀNH (2026-09-27)

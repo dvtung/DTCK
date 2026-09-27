@@ -223,12 +223,30 @@ Image cũ chưa có code này → phải `docker compose build api worker` (xem 
 dạng `<chế độ>-><service>` (ví dụ `auto->db`).
 Chiều **ghi** qua API (ví dụ `POST /backtests` ghi vào DB, JWT/RBAC) chưa có.
 
-**Huấn luyện mô hình ML (T014):**
+**Huấn luyện mô hình ML (T014, KI-012 đã đóng 2026-09-27):**
 
 ```bash
-# Lệnh CLI train-model — trên fixture tổng hợp hiện tại sẽ từ chối
-# một cách trung thực vì 100% nhãn 5 ngày đều dương (KI-012)
+# Mặc định --source memory: fixture tổng hợp chỉ tăng → trainer từ chối
+# trung thực (100% nhãn 5 ngày dương) — hữu ích cho test offline.
 docker compose exec -T api python -m apps.worker.cli train-model
+
+# Huấn luyện thật trên dữ liệu TimescaleDB (nhãn hỗn hợp):
+# đã kiểm chứng 2026-09-27 — 616 hàng, roc_auc=0.702, model APPROVED.
+docker compose exec -T api python -m apps.worker.cli train-model --source db
+```
+
+**Bảo mật API & quan sát (T015, 2026-09-27):**
+
+```bash
+# Bật API-key auth: đặt API_AUTH_KEY trong .env rồi
+# docker compose up -d --force-recreate api
+# Sau đó mọi POST/PUT/PATCH/DELETE dưới /api/v1/ (trừ /auth/login) và
+# GET /metrics cần header: Authorization: Bearer <key>
+
+# Scraping metrics (Prometheus text format, thuần stdlib — không thêm dependency):
+curl -s http://localhost:8000/metrics
+# dtck_http_requests_total · dtck_http_request_duration_seconds (histogram)
+# dtck_agent_runs_total · dtck_agent_duration_seconds
 ```
 
 
@@ -272,7 +290,7 @@ docker compose exec db pg_dump -U dtck dtck | gzip > backup_$(date +%F).sql.gz
 | 1 | **T015** — JWT/RBAC thật (login hiện là demo token), rate limiting, audit, CI/CD | Chưa làm |
 | 2 | **KI-008 (phần còn lại)** — mặc định vẫn `memory`; chiều **ghi** qua API (`POST /backtests` vào DB) chưa có; các bảng chỉ số/báo cáo tài chính chưa có job ghi → `auto` chưa an toàn làm mặc định | Phần đọc ✅ DONE 2026-09-25 |
 | 3 | **KI-009** — backfill lịch sử nhiều năm qua Yahoo để backtest có ý nghĩa (hiện mới ~1 tháng) | Chờ bước 3.3 của bạn |
-| 4 | **KI-012** — ML huấn luyện thật cần dữ liệu giá hỗn hợp tăng/giảm; hiện fixture chỉ tăng → `train-model` từ chối đúng | Chờ #2 + #3 |
+| 4 | ~~**KI-012**~~ **ĐÃ GIẢI (2026-09-27)** — `train-model --source db` huấn luyện trên CSDL (nhãn hỗn hợp): 616 hàng, `roc_auc=0.702`, model APPROVED | Backfill lâu dài còn phụ thuộc KI-009 |
 | 5 | HTTPS/reverse proxy (nginx/traefik) + secrets manager | Chưa có trong compose |
 | 6 | Backup DB định kỳ (cron + `pg_dump`) | Chưa cấu hình |
 | 7 | **Lệch DSN worker** — `docker-compose.yml`: `worker.DATABASE_URL` dùng fallback `dtckpassword`, `api` dùng `change_me`. Đặt `POSTGRES_PASSWORD` rõ trong `.env` để hai service giống nhau | Sửa khi rảnh (không chặn bước 3 nếu `.env` đã có mật khẩu) |
@@ -293,4 +311,4 @@ docker compose exec db pg_dump -U dtck dtck | gzip > backup_$(date +%F).sql.gz
 | `readyz` báo database `connected-no-prices` | CSDL thông nhưng bảng `prices` rỗng → `auto` phục vụ memory; nạp giá rồi `/readyz` sẽ báo `auto->db` |
 | Ingest `prices` trả `fetched=0 written=0` | Sai khoảng ngày (ví dụ `--start/--end` trùng ngày nghỉ) hoặc symbol/mã chỉ số không đúng; SSI dùng mã gốc (`FPT`), Yahoo cần `.VN` |
 | Ingest trả exit 1 | Quality gate §39 từ chối batch kém chất lượng — xem log `validation issue` |
-| `train-model` lỗi "single class" | KI-012 — fixture tổng hợp chỉ tăng; cần dữ liệu thật |
+| `train-model` lỗi "single class" | KI-012 — fixture tổng hợp chỉ tăng; dùng `--source db` để huấn luyện trên dữ liệu thật (đã đóng 2026-09-27) |

@@ -142,28 +142,45 @@ def compute_scores(args: argparse.Namespace) -> int:
     return 0
 
 
+def _train_market_service(source: str) -> Any:
+    """Resolve the market source for ``train-model`` (KI-012 unblock).
+
+    ``memory`` is the offline fixture (default — unit tests need no infra);
+    ``db`` reads TimescaleDB through ``DbMarketService`` (mixed labels).
+    """
+    if source == "db":
+        from apps.api.services.db_market import DbMarketService
+
+        return DbMarketService()
+    from apps.api.services.market_data import MarketService
+
+    return MarketService()
+
+
 def train_model(args: argparse.Namespace) -> int:
     """Train + calibrate the price-direction model (T014, spec §14.3/§40).
 
-    Builds the feature dataset from the in-memory market service, fits
-    XGBoost with a temporal split, calibrates on validation, and registers
-    the model as APPROVED in the process registry.  Note: the in-memory
-    fixture (KI-008) produces single-class labels, so real training requires
-    the DB wiring; this command surfaces that state honestly.
+    Builds the feature dataset from the selected source, fits XGBoost with a
+    temporal split, calibrates on validation, and registers the model as
+    APPROVED in the process registry.  ``--source memory`` (default) uses the
+    in-memory fixture, whose monotone prices produce single-class labels the
+    trainer rejects honestly (KI-012); ``--source db`` trains on real
+    TimescaleDB history, which carries mixed up/down labels.
     """
-    from apps.api.services.market_data import MarketService
     from src.ml.feature_dataset import FeatureDatasetBuilder
     from src.ml.model_registry import get_default_registry
     from src.ml.training import ModelTrainer
 
     symbols = args.symbols or None
+    source = getattr(args, "source", "memory") or "memory"
     dataset = FeatureDatasetBuilder(horizon_days=args.horizon).build(
-        MarketService(), symbols=symbols
+        _train_market_service(source), symbols=symbols
     )
     logger.info(
-        "dataset built: %d rows · %d features · version %s",
+        "dataset built: %d rows · %d features · source=%s · version %s",
         len(dataset.features),
         dataset.features.shape[1],
+        source,
         "feature_v1",
     )
     registry = get_default_registry()
@@ -302,6 +319,15 @@ def build_parser() -> argparse.ArgumentParser:
 
     train = sub.add_parser(
         "train-model", help="train + calibrate + register the ML model (T014, §14.3/§40)"
+    )
+    train.add_argument(
+        "--source",
+        default="memory",
+        choices=["memory", "db"],
+        help=(
+            "training data source: 'memory' = offline fixture (default, single-class "
+            "labels are rejected — KI-012); 'db' = real TimescaleDB history"
+        ),
     )
     train.add_argument("--symbols", help="comma-separated tickers (default: full universe)")
     train.add_argument("--horizon", type=int, default=5, help="prediction horizon in trade days")
