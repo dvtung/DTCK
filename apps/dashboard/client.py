@@ -25,6 +25,30 @@ class MarketClient:
         self.base_url = base_url.rstrip("/")
         self._timeout = timeout
         self._svc = MarketService()
+        # Which transport served the last call — surfaced in the dashboard so a
+        # silent fixture fallback can never masquerade as real data (T015b).
+        self.last_transport: str = "unknown"
+        self.last_error: str = ""
+
+    def source_badge(self) -> tuple[str, str]:
+        """``("api", base_url)`` when the API answered, else ``("fixture", error)``."""
+        if self.last_transport == "api":
+            return "api", self.base_url
+        return "fixture", self.last_error or "chưa kết nối"
+
+    def probe(self) -> dict[str, Any]:
+        """Hit ``/readyz`` directly to decide which transport is live."""
+        try:
+            resp = httpx.get(f"{self.base_url}/readyz", timeout=self._timeout)
+            resp.raise_for_status()
+            payload = resp.json()
+            self.last_transport = "api"
+            self.last_error = ""
+            return payload if isinstance(payload, dict) else {}
+        except (httpx.HTTPError, ValueError) as exc:
+            self.last_transport = "fixture"
+            self.last_error = str(exc)
+            return {}
 
     # -- low-level transport ------------------------------------------------
     def _get(self, path: str, **params: Any) -> dict[str, Any] | list[Any]:
@@ -32,9 +56,13 @@ class MarketClient:
         try:
             resp = httpx.get(f"{self.base_url}{path}", params=params or None, timeout=self._timeout)
             resp.raise_for_status()
+            self.last_transport = "api"
+            self.last_error = ""
             return resp.json()  # type: ignore[no-any-return]
-        except (httpx.HTTPError, ValueError):
+        except (httpx.HTTPError, ValueError) as exc:
             # Offline fallback — strip the /api/v1 prefix and use in-process methods.
+            self.last_transport = "fixture"
+            self.last_error = str(exc)
             key = path.removeprefix("/api/v1")
             return self._fallback(key, params)
 
@@ -242,3 +270,14 @@ class MarketClient:
 
     def get_health(self) -> dict[str, Any]:
         return self._get("/healthz")  # type: ignore[return-value]
+
+    def get_metrics_text(self) -> str:
+        """Fetch raw Prometheus /metrics text representation."""
+        try:
+            resp = httpx.get(f"{self.base_url}/metrics", timeout=self._timeout)
+            if resp.status_code == 200:
+                return resp.text
+            return ""
+        except Exception:
+            return ""
+

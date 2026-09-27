@@ -125,6 +125,8 @@ services:
         required: false
     environment:
       API_HOST: http://api:8000
+    volumes:
+      - ./apps/dashboard:/app/apps/dashboard
     ports:
       - "${DASHBOARD_PORT:-8501}:8501"
     depends_on:

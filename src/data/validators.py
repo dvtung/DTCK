@@ -28,11 +28,38 @@ class ValidationIssue:
 
 
 def _key_eod(bar: EODBar) -> str:
-    return f"{bar.symbol}@{bar.trade_date}"
+    return eod_key(bar.symbol, bar.trade_date)
 
 
 def _key_index(bar: IndexBar) -> str:
-    return f"{bar.index_code}@{bar.trade_date}"
+    return index_key(bar.index_code, bar.trade_date)
+
+
+def index_key(index_code: str, trade_date: date) -> str:
+    """Canonical row key for an index bar (``CODE@YYYY-MM-DD``)."""
+    return f"{index_code}@{trade_date}"
+
+
+def eod_key(symbol: str, trade_date: date) -> str:
+    """Canonical row key for an EOD bar (``SYMBOL@YYYY-MM-DD``)."""
+    return f"{symbol}@{trade_date}"
+
+
+#: Fields whose value must satisfy the OHLC/volume invariants (§39).
+OHLC_INVARIANT_FIELDS = frozenset(
+    {"open", "high", "low", "close", "volume", "trading_value"}
+)
+
+
+def corrupt_keys(issues: list[ValidationIssue]) -> set[str]:
+    """Row keys whose OHLC/volume invariants are violated.
+
+    These bars are corrupt (e.g. Yahoo reported ``high < low``): they stay in
+    the issue list so the quality score still penalises the batch, but the
+    pipeline drops them from the upsert — bad rows must never reach ``prices``
+    (found live in the 2-year backfill: 4 rows on TPB, 2026-09-27).
+    """
+    return {issue.key for issue in issues if issue.field in OHLC_INVARIANT_FIELDS}
 
 
 def _key_news(item: NewsItem) -> str:
@@ -165,4 +192,13 @@ def validate_news(items: list[NewsItem], *, now: datetime | None = None) -> list
     return issues
 
 
-__all__ = ["ValidationIssue", "validate_eod", "validate_index", "validate_news"]
+__all__ = [
+    "OHLC_INVARIANT_FIELDS",
+    "ValidationIssue",
+    "corrupt_keys",
+    "eod_key",
+    "index_key",
+    "validate_eod",
+    "validate_index",
+    "validate_news",
+]

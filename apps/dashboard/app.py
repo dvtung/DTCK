@@ -15,11 +15,14 @@ Run:
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+from plotly.subplots import make_subplots
 
-from apps.dashboard.client import MarketClient
+from apps.dashboard.client import DEFAULT_BASE, MarketClient
 from apps.dashboard.components import (
     contribution_rows,
     evidence_rows,
@@ -39,20 +42,72 @@ from apps.dashboard.components import (
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-st.set_page_config(page_title="DTCK — AI Investment Platform", layout="wide")
+st.set_page_config(
+    page_title="DTCK — AI Investment Platform", page_icon="📊", layout="wide"
+)
+
+st.markdown(
+    """
+    <style>
+      .block-container {padding-top: 1.6rem; padding-bottom: 2rem;}
+      div[data-testid="stMetric"] {
+          background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px;
+          padding: 12px 14px;
+      }
+      div[data-testid="stMetricValue"] {font-size: 1.45rem;}
+      .dtck-badge {
+          display:inline-block; padding:4px 10px; border-radius:999px;
+          font-size:0.82rem; font-weight:600; margin-bottom:6px;
+      }
+      .dtck-badge-real {background:#dcfce7; color:#166534;}
+      .dtck-badge-demo {background:#fee2e2; color:#991b1b;}
+      .dtck-sub {color:#475569; font-size:0.85rem;}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+# Page registry — order defines the sidebar navigation (T015b: one radio nav
+# instead of the old radio + three context checkboxes).
+PAGE_NAMES = (
+    "📈 Tổng quan",
+    "🔍 Bộ lọc",
+    "🏆 Xếp hạng",
+    "🧭 Chi tiết mã",
+    "🧪 Backtest",
+    "📰 Tin tức & RAG",
+    "🩺 Sức khỏe",
+)
 
 with st.sidebar:
-    st.title("⚙️ DTCK")
-    api_host = st.text_input("API host", value="http://localhost:8000", key="api_host")
-    st.caption("Đặt `API_HOST` môi trường để thay đổi mặc định.")
-    if st.button("🔄 Làm mới", type="primary"):
+    st.title("📊 DTCK")
+    # Default comes from the environment (compose sets API_HOST=http://api:8000);
+    # hardcoding localhost here used to make the container call itself, fail, and
+    # silently render the in-memory fixture — the "fake data" bug (T015b).
+    api_host = st.text_input("API host", value=DEFAULT_BASE, key="api_host")
+    client = MarketClient(base_url=api_host)
+    ready = client.probe()
+    kind, detail = client.source_badge()
+    if kind == "api":
+        market_source = str(ready.get("market_source", "?"))
+        st.markdown(
+            f'<span class="dtck-badge dtck-badge-real">● DỮ LIỆU THẬT — {market_source}</span>'
+            f'<div class="dtck-sub">{detail}</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            '<span class="dtck-badge dtck-badge-demo">▲ DỮ LIỆU MÔ PHỎNG (API offline)</span>'
+            f'<div class="dtck-sub">{detail}</div>',
+            unsafe_allow_html=True,
+        )
+    if st.button("🔄 Làm mới dữ liệu", type="primary"):
         st.cache_data.clear()
+        st.rerun()
     st.divider()
-    st.caption("Tài liệu: docs/DEPLOYMENT.md · docs/api.html")
-
-
-def _fetch() -> MarketClient:
-    return MarketClient(base_url=api_host)
+    page = st.radio("Điều hướng", PAGE_NAMES)
+    st.divider()
+    st.caption("Tài liệu: `docs/DEPLOYMENT_vi.md` · `docs/api.html`")
 
 
 # ---------------------------------------------------------------------------
@@ -60,32 +115,94 @@ def _fetch() -> MarketClient:
 # ---------------------------------------------------------------------------
 def page_market_overview() -> None:
     st.header("📈 Tổng quan thị trường")
-    c = _fetch()
-    col_idx, col_reg, col_br = st.columns(3)
-    with col_idx:
-        st.subheader("Chỉ số")
-        indices = c.get_indices()
-        for ix in indices:
-            change = float(str(ix.get("close", 0))) - float(str(ix.get("open", 0)))
+    st.caption("Chỉ số, chế độ thị trường, độ rộng và xếp hạng mới nhất từ API.")
+    c = client
+    indices = c.get_indices()
+    breadth = c.get_breadth()
+    regime = c.get_regime()
+    ranked = c.get_ranked()
+
+    # --- KPI row -----------------------------------------------------------
+    k1, k2, k3, k4 = st.columns(4)
+    with k1:
+        if indices:
+            ix = indices[0]
             base = float(str(ix.get("open", 1))) or 1.0
-            pct = change / base
-            code = ix.get("index_code", "?")
-            close = format_price(ix.get("close"))
-            chg = format_percent(pct, signed=True)
-            st.metric(code, close, chg)
-    with col_reg:
-        st.subheader("Chế độ thị trường")
-        regime = c.get_regime()
-        conf = regime.get("confidence", 0)
-        st.markdown(
-            f"**{regime.get('regime', 'N/A')}** — độ tin cậy {conf:.0%}"
+            close = float(str(ix.get("close", 0)))
+            st.metric(
+                str(ix.get("index_code", "Chỉ số")),
+                format_price(close),
+                format_percent((close - base) / base, signed=True),
+            )
+        else:
+            st.metric("Chỉ số", "—")
+    with k2:
+        st.metric(
+            "Độ rộng (tăng/giảm)",
+            f"{breadth.get('advancers', 0)} / {breadth.get('decliners', 0)}",
+            f"{int(breadth.get('advancers', 0)) - int(breadth.get('decliners', 0)):+d}",
         )
-    with col_br:
-        st.subheader("Độ rộng")
-        breadth = c.get_breadth()
-        st.metric("Tăng", f"{breadth.get('advancers', 0)}")
-        st.metric("Giảm", f"{breadth.get('decliners', 0)}")
-        st.caption(f"Ngày giao dịch: {format_date(breadth.get('trade_date'))}")
+    with k3:
+        st.metric(
+            "Chế độ thị trường",
+            str(regime.get("regime", "N/A")),
+            f"tin cậy {float(regime.get('confidence', 0)):.0%}",
+        )
+    with k4:
+        scored_symbols = len(ranked)
+        st.metric("Mã đã chấm điểm", f"{scored_symbols}")
+    st.caption(
+        f"Ngày dữ liệu: {format_date(breadth.get('trade_date'))} · "
+        f"nguồn đọc: {ready.get('market_source', '?')} · "
+        f"model: {ready.get('dependencies', {}).get('models', '?')}"
+    )
+    st.divider()
+
+    # --- Index table + top scores -------------------------------------------
+    col_left, col_right = st.columns([1, 2])
+    with col_left:
+        st.subheader("Chỉ số")
+        if indices:
+            idx_rows = [
+                {
+                    "Mã": ix.get("index_code"),
+                    "Đóng cửa": format_price(ix.get("close")),
+                    "KL": f"{float(str(ix.get('volume', 0))):,.0f}",
+                    "Ngày": format_date(ix.get("trade_date")),
+                }
+                for ix in indices
+            ]
+            st.dataframe(pd.DataFrame(idx_rows), hide_index=True, width="stretch")
+        else:
+            st.info("Chưa có dữ liệu chỉ số.")
+    with col_right:
+        st.subheader("Top 10 điểm tổng hợp")
+        top = [r for r in ranked if r.get("overall_score") is not None][:10]
+        if top:
+            colors = [
+                "#16a34a" if r.get("signal") == "POSITIVE"
+                else "#dc2626" if r.get("signal") == "NEGATIVE"
+                else "#64748b"
+                for r in top
+            ]
+            fig = go.Figure(
+                go.Bar(
+                    x=[r.get("symbol") for r in top],
+                    y=[float(r.get("overall_score") or 0) for r in top],
+                    marker_color=colors,
+                    text=[signal_label(r.get("signal", "")) for r in top],
+                    textposition="outside",
+                )
+            )
+            fig.update_layout(
+                height=340,
+                yaxis_title="Điểm tổng hợp (0–100)",
+                margin=dict(t=30, b=10),
+                showlegend=False,
+            )
+            st.plotly_chart(fig, width="stretch")
+        else:
+            st.info("Chưa có bảng xếp hạng — hãy chạy `compute-scores`.")
 
 
 # ---------------------------------------------------------------------------
@@ -93,7 +210,7 @@ def page_market_overview() -> None:
 # ---------------------------------------------------------------------------
 def page_screener() -> None:
     st.header("🔍 Bộ lọc cổ phiếu")
-    c = _fetch()
+    c = client
     stocks = c.list_stocks()
     df = pd.DataFrame(stocks)
     st.data_editor(
@@ -105,7 +222,7 @@ def page_screener() -> None:
             "is_vn30": st.column_config.CheckboxColumn("VN30"),
         },
         hide_index=True,
-        use_container_width=True,
+        width="stretch",
     )
 
 
@@ -114,21 +231,60 @@ def page_screener() -> None:
 # ---------------------------------------------------------------------------
 def page_rankings() -> None:
     st.header("🏆 Xếp hạng cổ phiếu")
-    c = _fetch()
+    st.caption("Điểm đa yếu tố (§12) kèm tín hiệu và độ tin cậy — dữ liệu từ API.")
+    c = client
     ranked = c.get_ranked()
     rows = ranking_rows(ranked)
-    df = pd.DataFrame(rows)
-    st.data_editor(
-        df,
+    if not rows:
+        st.info("Chưa có xếp hạng — chạy `compute-scores` trước.")
+        return
+
+    signals = sorted({str(r.get("signal") or "NEUTRAL") for r in rows})
+    chosen = st.multiselect("Lọc theo tín hiệu", options=signals, default=signals)
+    filtered = [r for r in rows if str(r.get("signal") or "NEUTRAL") in chosen]
+
+    col_chart, col_stat = st.columns([3, 2])
+    with col_chart:
+        top = [r for r in filtered if r.get("overall_score") is not None][:15]
+        if top:
+            fig = go.Figure(
+                go.Bar(
+                    x=[r["symbol"] for r in top],
+                    y=[float(r["overall_score"] or 0) for r in top],
+                    marker_color=[
+                        "#16a34a" if r.get("signal") == "POSITIVE"
+                        else "#dc2626" if r.get("signal") == "NEGATIVE"
+                        else "#64748b"
+                        for r in top
+                    ],
+                )
+            )
+            fig.update_layout(
+                height=360, yaxis_title="Điểm tổng hợp", margin=dict(t=20, b=10)
+            )
+            st.plotly_chart(fig, width="stretch")
+    with col_stat:
+        by_signal = pd.Series([str(r.get("signal") or "NEUTRAL") for r in filtered])
+        st.metric("Số mã hiển thị", str(len(filtered)))
+        counts = by_signal.value_counts().to_dict()
+        st.write(
+            {
+                signal_label(k): int(v)
+                for k, v in sorted(counts.items(), key=lambda kv: -kv[1])
+            }
+        )
+
+    st.dataframe(
+        pd.DataFrame(filtered),
         column_config={
-            "rank": st.column_config.NumberColumn("Hạng"),
-            "symbol": st.column_config.TextColumn("Mã"),
+            "rank": st.column_config.NumberColumn("Hạng", width="small"),
+            "symbol": st.column_config.TextColumn("Mã", width="small"),
             "overall_score": st.column_config.NumberColumn("Điểm", format="%.1f"),
             "signal": st.column_config.TextColumn("Tín hiệu"),
             "confidence": st.column_config.NumberColumn("Độ tin cậy", format="%.0%"),
         },
         hide_index=True,
-        use_container_width=True,
+        width="stretch",
     )
 
 
@@ -137,7 +293,7 @@ def page_rankings() -> None:
 # ---------------------------------------------------------------------------
 def page_stock_detail(symbol: str = "FPT") -> None:
     st.header(f"📋 Chi tiết mã {symbol}")
-    c = _fetch()
+    c = client
     stock = c.get_stock(symbol)
     if not stock:
         st.error(f"Không tìm thấy mã {symbol}")
@@ -174,27 +330,73 @@ def page_stock_detail(symbol: str = "FPT") -> None:
                 yaxis_title="Điểm số",
                 height=300,
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
 
     # Price chart
     prices = c.get_prices(symbol)
     if prices:
         pdf = price_dataframe(prices)
         dfp = pd.DataFrame(pdf)
-        st.subheader("Biểu đồ giá")
-        fig = go.Figure(
-            data=[
-                go.Candlestick(
-                    x=dfp["date"],
-                    open=dfp["open"],
-                    high=dfp["high"],
-                    low=dfp["low"],
-                    close=dfp["close"],
-                )
-            ]
+        dfp["MA20"] = dfp["close"].rolling(20).mean()
+        dfp["MA50"] = dfp["close"].rolling(50).mean()
+        st.subheader("Biểu đồ giá & khối lượng")
+        window = st.radio(
+            "Khoảng thời gian",
+            options=["6 tháng", "1 năm", "Toàn bộ (2 năm)"],
+            index=1,
+            horizontal=True,
+            key=f"range_{symbol}",
         )
-        fig.update_layout(height=350, xaxis_rangeslider_visible=False)
-        st.plotly_chart(fig, use_container_width=True)
+        bars = {"6 tháng": 126, "1 năm": 252}.get(window)
+        view = dfp.tail(bars) if bars else dfp
+        fig = make_subplots(
+            rows=2,
+            cols=1,
+            shared_xaxes=True,
+            row_heights=[0.72, 0.28],
+            vertical_spacing=0.04,
+            subplot_titles=(f"{symbol} — nến ngày", "Khối lượng"),
+        )
+        fig.add_trace(
+            go.Candlestick(
+                x=view["date"],
+                open=view["open"],
+                high=view["high"],
+                low=view["low"],
+                close=view["close"],
+                name=symbol,
+            ),
+            row=1,
+            col=1,
+        )
+        fig.add_trace(
+            go.Scatter(x=view["date"], y=view["MA20"], name="MA20", line=dict(color="#2563eb")),
+            row=1,
+            col=1,
+        )
+        fig.add_trace(
+            go.Scatter(x=view["date"], y=view["MA50"], name="MA50", line=dict(color="#f59e0b")),
+            row=1,
+            col=1,
+        )
+        fig.add_trace(
+            go.Bar(x=view["date"], y=view["volume"], name="KL", marker_color="#94a3b8"),
+            row=2,
+            col=1,
+        )
+        fig.update_layout(
+            height=560,
+            xaxis_rangeslider_visible=False,
+            margin=dict(t=50, b=10),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02),
+        )
+        st.plotly_chart(fig, width="stretch")
+        last = view.iloc[-1]
+        d1 = st.columns(4)
+        d1[0].metric("Giá đóng cửa", format_price(last["close"]))
+        d1[1].metric("Cao / Thấp", f"{float(last['high']):,.0f} / {float(last['low']):,.0f}")
+        d1[2].metric("Khối lượng", f"{float(last['volume']):,.0f}")
+        d1[3].metric("Ngày", format_date(last["date"]))
 
     # Indicators + valuation + quality
     col_ind, col_val, col_qual = st.columns(3)
@@ -222,40 +424,76 @@ def page_stock_detail(symbol: str = "FPT") -> None:
             if dims:
                 dfig = go.Figure(data=[go.Bar(x=list(dims.keys()), y=list(dims.values()))])
                 dfig.update_layout(height=200, title="6 chiều chất lượng", showlegend=False)
-                st.plotly_chart(dfig, use_container_width=True)
+                st.plotly_chart(dfig, width="stretch")
 
 
 # ---------------------------------------------------------------------------
 # Page 5 — Backtests
 # ---------------------------------------------------------------------------
+def _format_metric(name: str, value: float) -> str:
+    """Render a §16 metric with the unit that actually fits it.
+
+    The old page printed every metric as a percentage (``{value:.2%}``), which
+    turned Sharpe 1.2 into "120%".
+    """
+    percent_like = (
+        "return",
+        "volatility",
+        "drawdown",
+        "win_rate",
+        "turnover",
+        "cost",
+        "cagr",
+    )
+    if any(token in name for token in percent_like):
+        return f"{value:.2%}"
+    return f"{value:,.3f}"
+
+
 def page_backtests() -> None:
     st.header("🧪 Backtest")
-    c = _fetch()
+    st.caption("Lượt chạy đã lưu trong CSDL, chỉ số §16 và nhật ký lệnh.")
+    c = client
     backtests = c.get_backtests()
     if not backtests:
-        st.info("Chưa có backtest nào được lưu.")
+        st.info(
+            "Chưa có backtest nào trong CSDL. Tạo lượt chạy bằng "
+            "`POST /api/v1/backtests` (chế độ DB)."
+        )
         return
-    ids = [b["id"] for b in backtests]
-    selected = st.selectbox("Chọn backtest", options=ids,
-                            format_func=lambda x: x)
+    ids = [str(b["id"]) for b in backtests]
+    labels = {
+        str(b["id"]): f"{b.get('strategy_name', '?')} · {b.get('start_date')} → {b.get('end_date')}"
+        for b in backtests
+    }
+    selected = st.selectbox(
+        "Chọn lượt chạy", options=ids, format_func=lambda x: labels.get(x, x)
+    )
     detail = c.get_backtest(selected)
     if detail:
-        st.subheader(detail.get("strategy_name", "Chiến lược"))
-        run_type = detail.get("run_type")
-        capital = format_price(detail.get("initial_capital", 0))
-        st.caption(f"Loại: {run_type} · Vốn: {capital}")
-        st.subheader("Chỉ số đo")
+        st.subheader(str(detail.get("strategy_name", "Chiến lược")))
+        st.caption(
+            f"Loại: {detail.get('run_type')} · Vũ trụ: {detail.get('universe')} · "
+            f"Chi phí: {detail.get('transaction_cost_bps')} bps + "
+            f"{detail.get('slippage_bps')} bps"
+        )
         metrics = c.get_backtest_metrics(selected)
         mrows = metric_rows(metrics)
         if mrows:
-            cols = st.columns(len(mrows))
-            for col, m in zip(cols, mrows, strict=True):
-                col.metric(m["metric"], f"{m['value']:.2%}")
+            st.subheader("Chỉ số đo (§16)")
+            cols = st.columns(min(len(mrows), 4))
+            for i, m in enumerate(mrows):
+                cols[i % len(cols)].metric(
+                    m["metric"], _format_metric(str(m["metric"]), float(m["value"]))
+                )
+        else:
+            st.info("Lượt chạy này chưa có chỉ số (engine chưa ghi).")
         st.subheader("Giao dịch")
         trades = c.get_backtest_trades(selected)
         if trades:
-            tdf = pd.DataFrame(trades)
-            st.data_editor(tdf, hide_index=True, use_container_width=True)
+            st.dataframe(pd.DataFrame(trades), hide_index=True, width="stretch")
+        else:
+            st.info("Chưa có giao dịch nào được ghi cho lượt chạy này.")
 
 
 # ---------------------------------------------------------------------------
@@ -263,7 +501,7 @@ def page_backtests() -> None:
 # ---------------------------------------------------------------------------
 def page_news_rag() -> None:
     st.header("📰 Tin tức & Bằng chứng RAG")
-    c = _fetch()
+    c = client
 
     tab_news, tab_rag, tab_status = st.tabs(
         ["Tin tức thị trường", "Truy vấn bằng chứng RAG", "Trạng thái RAG"]
@@ -309,7 +547,7 @@ def page_news_rag() -> None:
                     "url": st.column_config.LinkColumn("Link gốc"),
                 },
                 hide_index=True,
-                use_container_width=True,
+                width="stretch",
             )
         else:
             st.info("Chưa có tin tức nào phù hợp.")
@@ -344,7 +582,7 @@ def page_news_rag() -> None:
                         "chunk_id": st.column_config.TextColumn("Chunk ID"),
                     },
                     hide_index=True,
-                    use_container_width=True,
+                    width="stretch",
                 )
             else:
                 st.info("Không tìm thấy bằng chứng nào liên quan.")
@@ -364,7 +602,7 @@ def page_news_rag() -> None:
                         "content": st.column_config.TextColumn("Nội dung", width="large"),
                     },
                     hide_index=True,
-                    use_container_width=True,
+                    width="stretch",
                 )
 
     with tab_status:
@@ -377,29 +615,95 @@ def page_news_rag() -> None:
 # ---------------------------------------------------------------------------
 def page_health() -> None:
     st.header("🩺 Sức khỏe hệ thống")
-    c = _fetch()
-    st.json(c.get_health())
-    st.json(c._get("/readyz"))  # noqa: SLF001
+    st.caption("Trạng thái phụ thuộc trực tiếp từ `/healthz` và `/readyz`.")
+    c = client
+    ready = c.probe()
+    health = c.get_health()
+
+    ok = bool(health.get("status") == "ok") and bool(ready.get("status") == "ready")
+    if ok:
+        st.success("Hệ thống sẵn sàng (liveness + readiness đều OK).")
+    else:
+        st.error("Hệ thống chưa sẵn sàng — xem chi tiết bên dưới.")
+
+    k1, k2, k3 = st.columns(3)
+    k1.metric("/healthz", str(health.get("status", "?")))
+    k2.metric("/readyz", str(ready.get("status", "?")))
+    k3.metric("Nguồn dữ liệu đọc", str(ready.get("market_source", "?")))
+
+    deps = ready.get("dependencies", {}) if isinstance(ready, dict) else {}
+    if deps:
+        st.subheader("Phụ thuộc")
+        dependency_rows = [
+            {
+                "Thành phần": name,
+                "Trạng thái": str(state),
+                "Đánh giá": "🟢 OK"
+                if str(state)
+                not in ("unreachable", "unavailable", "offline-index-ready", "stub")
+                else "🟡 dự phòng",
+            }
+            for name, state in deps.items()
+        ]
+        st.dataframe(pd.DataFrame(dependency_rows), hide_index=True, width="stretch")
+
+    st.subheader("Số liệu vận hành (/metrics)")
+    metrics_text = c.get_metrics_text()
+    if not metrics_text:
+        st.info(
+            "Không đọc được `/metrics` (có thể đang bật `API_AUTH_KEY` nên endpoint "
+            "yêu cầu Bearer). Scrape trực tiếp bằng Prometheus/cron kèm header."
+        )
+    else:
+        requests = [
+            line
+            for line in metrics_text.splitlines()
+            if line.startswith("dtck_http_requests_total")
+        ]
+        agent_runs = [
+            line
+            for line in metrics_text.splitlines()
+            if line.startswith("dtck_agent_runs_total{")
+        ]
+        if requests:
+            rows = []
+            for line in requests:
+                try:
+                    labels, value = line.rsplit(" ", 1)
+                    route = labels.split('route="')[1].split('"')[0]
+                    status = labels.split('status="')[1].split('"')[0]
+                    rows.append({"Route": route, "HTTP": status, "Số lượt": int(float(value))})
+                except (IndexError, ValueError):
+                    continue
+            if rows:
+                st.dataframe(
+                    pd.DataFrame(rows).sort_values("Số lượt", ascending=False),
+                    hide_index=True,
+                    width="stretch",
+                )
+        if agent_runs:
+            st.caption("Lượt chạy tác tử: " + " · ".join(agent_runs))
+        with st.expander("Nội dung /metrics thô"):
+            st.code(metrics_text, language="text")
+
+    with st.expander("JSON gốc"):
+        st.json(health)
+        st.json(ready)
 
 
 # ---------------------------------------------------------------------------
-# Navigation (sidebar radio + context toggles)
+# Navigation
 # ---------------------------------------------------------------------------
-PAGES: dict[str, object] = {
+PAGES: dict[str, Callable[[], None]] = {
     "📈 Tổng quan": page_market_overview,
     "🔍 Bộ lọc": page_screener,
     "🏆 Xếp hạng": page_rankings,
+    "🧭 Chi tiết mã": lambda: page_stock_detail(
+        st.text_input("Mã cổ phiếu", value="FPT", key="detail_symbol").strip().upper()
+    ),
+    "🧪 Backtest": page_backtests,
     "📰 Tin tức & RAG": page_news_rag,
+    "🩺 Sức khỏe": page_health,
 }
 
-page = st.sidebar.radio("Điều hướng", list(PAGES.keys()))
-PAGES[page]()  # type: ignore[operator]
-
-st.sidebar.markdown("---")
-if st.sidebar.checkbox("Chi tiết mã"):
-    symbol = st.sidebar.text_input("Mã CK", value="FPT", key="detail_symbol")
-    page_stock_detail(symbol)
-if st.sidebar.checkbox("Backtests"):
-    page_backtests()
-if st.sidebar.checkbox("Sức khỏe"):
-    page_health()
+PAGES[page]()

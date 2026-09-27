@@ -23,7 +23,15 @@ from src.data.normalizers import (
 from src.data.providers.base import DataProvider
 from src.data.quality import QualityScore, compute_quality, persist_quality
 from src.data.records import EODBar, IndexBar, NewsItem
-from src.data.validators import ValidationIssue, validate_eod, validate_index, validate_news
+from src.data.validators import (
+    ValidationIssue,
+    corrupt_keys,
+    eod_key,
+    index_key,
+    validate_eod,
+    validate_index,
+    validate_news,
+)
 
 
 @dataclass(slots=True)
@@ -144,11 +152,19 @@ def ingest_eod(
         # never opens a transaction (§39 has no denominators for it).
         return result
 
+    # Drop bars that violate the OHLC/volume invariants (§39): they stay in
+    # `issues` so the quality score still penalises the batch, but corrupt rows
+    # must never be persisted (live finding: Yahoo returned `high < low` on TPB).
+    bad_keys = corrupt_keys(issues)
+    kept_bars = bars
+    if bad_keys:
+        kept_bars = [b for b in bars if eod_key(b.symbol, b.trade_date) not in bad_keys]
+
     with engine.begin() as conn:
         stock_ids = resolve_stock_ids(conn, symbols)
-        rows, normalize_issues = normalize_eod(bars, stock_ids, source=src, ingested_at=_now())
+        rows, normalize_issues = normalize_eod(kept_bars, stock_ids, source=src, ingested_at=_now())
         result.issues.extend(normalize_issues)
-        result.rows_skipped = len(bars) - len(rows)
+        result.rows_skipped = (len(bars) - len(kept_bars)) + (len(kept_bars) - len(rows))
 
         if rows:
             # Chunked upsert: one statement per _UPSERT_CHUNK rows so a 2-year
@@ -179,7 +195,7 @@ def ingest_eod(
             end=end,
             latest_date=max((bar.trade_date for bar in bars), default=None),
             expected_keys=len({s.upper() for s in symbols}) * len(_weekdays(start, end)),
-            present_keys=len({(bar.symbol, bar.trade_date) for bar in bars}),
+            present_keys=len({(bar.symbol, bar.trade_date) for bar in kept_bars}),
             threshold=threshold,
         )
     return result
@@ -202,12 +218,21 @@ def ingest_index(
     bars: list[IndexBar] = collect_index(provider, index_codes, start, end)
     issues = validate_index(bars, start=start, end=end)
     result = IngestResult(dataset="index_prices", source=src, rows_fetched=len(bars), issues=issues)
-    rows = normalize_index(bars, source=src, ingested_at=_now())
 
     if not bars:
         return result
 
+    # Same corrupt-row guard as ``ingest_eod`` (§39).
+    bad_index_keys = corrupt_keys(issues)
+    kept_bars = bars
+    if bad_index_keys:
+        kept_bars = [
+            b for b in bars if index_key(b.index_code, b.trade_date) not in bad_index_keys
+        ]
+    rows = normalize_index(kept_bars, source=src, ingested_at=_now())
+
     with engine.begin() as conn:
+        result.rows_skipped = len(bars) - len(kept_bars)
         if rows:
             for chunk_start in range(0, len(rows), _UPSERT_CHUNK):
                 stmt = pg_insert(IndexPrice).values(rows[chunk_start : chunk_start + _UPSERT_CHUNK])
@@ -234,7 +259,7 @@ def ingest_index(
             end=end,
             latest_date=max((bar.trade_date for bar in bars), default=None),
             expected_keys=len({c.upper() for c in index_codes}) * len(_weekdays(start, end)),
-            present_keys=len({(bar.index_code, bar.trade_date) for bar in bars}),
+            present_keys=len({(bar.index_code, bar.trade_date) for bar in kept_bars}),
             threshold=threshold,
         )
     return result
