@@ -16,6 +16,8 @@ Run:
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import date
+from typing import Any
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -49,20 +51,58 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-      .block-container {padding-top: 1.6rem; padding-bottom: 2rem;}
+      :root {
+        --ink:#0f172a; --ink-2:#475569; --line:#e2e8f0; --bg:#ffffff;
+        --brand:#1d4ed8; --up:#15803d; --down:#b91c1c; --neutral:#64748b;
+      }
+      .stApp {background: #f6f8fb;}
+      .block-container {padding-top: 1.2rem; padding-bottom: 2.5rem; max-width: 1400px;}
+      h1, h2, h3 {color: var(--ink); letter-spacing: -0.01em;}
+      section[data-testid="stSidebar"] {
+        background: #0f172a; border-right: 1px solid #1e293b;
+      }
+      section[data-testid="stSidebar"] * {color: #e2e8f0 !important;}
+      section[data-testid="stSidebar"] input {
+        background: #1e293b !important; color: #f8fafc !important;
+      }
       div[data-testid="stMetric"] {
-          background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px;
-          padding: 12px 14px;
+        background: var(--bg); border: 1px solid var(--line);
+        border-left: 4px solid var(--brand); border-radius: 12px;
+        padding: 14px 16px; box-shadow: 0 1px 2px rgba(15,23,42,.05);
       }
-      div[data-testid="stMetricValue"] {font-size: 1.45rem;}
+      div[data-testid="stMetricValue"] {font-size: 1.5rem; font-weight: 700;}
+      div[data-testid="stMetricLabel"] {color: var(--ink-2); font-weight: 600;}
+      .dtck-banner {
+        background: linear-gradient(90deg,#0f172a 0%,#1d4ed8 100%);
+        color:#fff; border-radius:14px; padding:16px 20px; margin-bottom:14px;
+      }
+      .dtck-banner h1 {color:#fff; margin:0; font-size:1.35rem;}
+      .dtck-banner .sub {color:#c7d2fe; font-size:.85rem; margin-top:4px;}
       .dtck-badge {
-          display:inline-block; padding:4px 10px; border-radius:999px;
-          font-size:0.82rem; font-weight:600; margin-bottom:6px;
+        display:inline-block; padding:4px 10px; border-radius:999px;
+        font-size:.78rem; font-weight:700; margin-bottom:6px;
       }
-      .dtck-badge-real {background:#dcfce7; color:#166534;}
-      .dtck-badge-demo {background:#fee2e2; color:#991b1b;}
-      .dtck-sub {color:#475569; font-size:0.85rem;}
+      .dtck-badge-real {background:#dcfce7; color:#14532d;}
+      .dtck-badge-demo {background:#fee2e2; color:#7f1d1d;}
+      .dtck-sub {color:#94a3b8; font-size:.78rem;}
+      .dtck-foot {color:var(--ink-2); font-size:.78rem; border-top:1px solid var(--line);
+        margin-top:26px; padding-top:10px;}
+      div[data-testid="stDataFrame"] {border:1px solid var(--line); border-radius:10px;}
+      .stTabs [data-baseweb="tab"] {font-weight:600;}
     </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+st.markdown(
+    """
+    <div class="dtck-banner">
+      <h1>📊 DTCK — Nền tảng Nghiên cứu &amp; Hỗ trợ Quyết định Đầu tư</h1>
+      <div class="sub">
+        Thị trường Việt Nam (HOSE/HNX/UPCOM) · Universe VN30 ·
+        Đánh giá định lượng → dự đoán ML → luận điểm AI → con người quyết định
+      </div>
+    </div>
     """,
     unsafe_allow_html=True,
 )
@@ -113,9 +153,39 @@ with st.sidebar:
 # ---------------------------------------------------------------------------
 # Page 1 — Market Overview
 # ---------------------------------------------------------------------------
+@st.cache_data(ttl=120, show_spinner=False)
+def _load_predictions(base_url: str, symbols: tuple[str, ...]) -> dict[str, dict[str, Any]]:
+    """Cached ML probability P(return > 0) for the traded universe (§2.8/§26).
+
+    One unavailable symbol must never break the whole overview page.
+    """
+    api = MarketClient(base_url=base_url)
+    out: dict[str, dict[str, Any]] = {}
+    for sym in symbols:
+        try:
+            pred = api.get_prediction(sym)
+        except Exception:  # noqa: BLE001 — fallback path may not know the route
+            continue
+        if pred and pred.get("probability_positive") is not None:
+            out[sym] = pred
+    return out
+
+
+def _decision_hint(signal: str, probability: float | None) -> str:
+    """Deterministic decision-support label (không phải khuyến nghị đầu tư, §3)."""
+    prob = probability if probability is not None else 0.5
+    if signal == "POSITIVE" and prob >= 0.55:
+        return "🟢 Tín hiệu tích cực"
+    if signal == "NEGATIVE" or prob < 0.45:
+        return "🔴 Thận trọng"
+    return "🟡 Trung tính — theo dõi"
+
+
 def page_market_overview() -> None:
-    st.header("📈 Tổng quan thị trường")
-    st.caption("Chỉ số, chế độ thị trường, độ rộng và xếp hạng mới nhất từ API.")
+    st.header("📈 Tổng quan thị trường & dự đoán VN30")
+    st.caption(
+        "Đánh giá định lượng (§12), dự đoán ML (§26) và mức độ bằng chứng dữ liệu (§39)."
+    )
     c = client
     indices = c.get_indices()
     breadth = c.get_breadth()
@@ -123,7 +193,7 @@ def page_market_overview() -> None:
     ranked = c.get_ranked()
 
     # --- KPI row -----------------------------------------------------------
-    k1, k2, k3, k4 = st.columns(4)
+    k1, k2, k3, k4, k5 = st.columns(5)
     with k1:
         if indices:
             ix = indices[0]
@@ -138,7 +208,7 @@ def page_market_overview() -> None:
             st.metric("Chỉ số", "—")
     with k2:
         st.metric(
-            "Độ rộng (tăng/giảm)",
+            "Độ rộng tăng/giảm",
             f"{breadth.get('advancers', 0)} / {breadth.get('decliners', 0)}",
             f"{int(breadth.get('advancers', 0)) - int(breadth.get('decliners', 0)):+d}",
         )
@@ -149,13 +219,70 @@ def page_market_overview() -> None:
             f"tin cậy {float(regime.get('confidence', 0)):.0%}",
         )
     with k4:
-        scored_symbols = len(ranked)
-        st.metric("Mã đã chấm điểm", f"{scored_symbols}")
+        st.metric("Mã đã chấm điểm", f"{len(ranked)}")
+    with k5:
+        st.metric("Model phục vụ", str(ready.get("dependencies", {}).get("models", "?")))
     st.caption(
         f"Ngày dữ liệu: {format_date(breadth.get('trade_date'))} · "
-        f"nguồn đọc: {ready.get('market_source', '?')} · "
-        f"model: {ready.get('dependencies', {}).get('models', '?')}"
+        f"chế độ đọc: {ready.get('market_source', '?')} · "
+        f"độ rộng tính từ {len(ranked)} mã VN30"
     )
+    st.divider()
+
+    # --- Assembly: score + ML prediction per symbol ------------------------
+    symbols = tuple(str(r.get("symbol")) for r in ranked if r.get("symbol"))
+    predictions = _load_predictions(api_host, symbols) if symbols else {}
+    st.subheader("🎯 Đánh giá & dự đoán VN30")
+    st.caption(
+        "P(tăng 5D) là xác suất mô hình ML dự đoán lợi nhuận 5 phiên tới dương. "
+        "Cột Gợi ý chỉ để sàng lọc — hệ thống không đưa lệnh mua/bán (§3)."
+    )
+    if ranked:
+        table = []
+        for r in ranked:
+            sym = str(r.get("symbol"))
+            pred = predictions.get(sym, {})
+            prob = pred.get("probability_positive")
+            table.append(
+                {
+                    "Hạng": r.get("rank"),
+                    "Mã": sym,
+                    "Điểm": r.get("overall_score"),
+                    "Tín hiệu": signal_label(str(r.get("signal") or "")),
+                    "P(tăng 5D)": round(float(prob), 3) if prob is not None else None,
+                    "LN kỳ vọng": pred.get("expected_return"),
+                    "Độ tin cậy": r.get("confidence"),
+                    "Gợi ý": _decision_hint(str(r.get("signal") or ""), prob),
+                }
+            )
+        st.dataframe(
+            pd.DataFrame(table),
+            column_config={
+                "Hạng": st.column_config.NumberColumn(width="small"),
+                "Mã": st.column_config.TextColumn(width="small"),
+                "Điểm": st.column_config.NumberColumn(format="%.1f"),
+                "P(tăng 5D)": st.column_config.ProgressColumn(
+                    "P(tăng 5D)", min_value=0.0, max_value=1.0, format="%.3f"
+                ),
+                "LN kỳ vọng": st.column_config.NumberColumn(format="%.4f"),
+                "Độ tin cậy": st.column_config.NumberColumn(format="%.0%"),
+            },
+            hide_index=True,
+            width="stretch",
+            height=430,
+        )
+        with st.expander("❓ Cách đọc bảng này"):
+            st.markdown(
+                "- **Điểm**: điểm đa yếu tố 0–100 từ engine định lượng (§12) — tất định, "
+                "không do LLM sinh.\n"
+                "- **Tín hiệu**: POSITIVE / NEUTRAL / NEGATIVE theo ngưỡng điểm.\n"
+                "- **P(tăng 5D)**: xác suất XGBoost + hiệu chuẩn Platt (model đang "
+                "phục vụ, xem `/readyz`).\n"
+                "- **Gợi ý**: tổ hợp tất định của tín hiệu và xác suất — hỗ trợ sàng lọc, "
+                "**không** phải khuyến nghị đầu tư."
+            )
+    else:
+        st.info("Chưa có bảng xếp hạng — chạy `compute-scores` trước.")
     st.divider()
 
     # --- Index table + top scores -------------------------------------------
@@ -210,19 +337,51 @@ def page_market_overview() -> None:
 # ---------------------------------------------------------------------------
 def page_screener() -> None:
     st.header("🔍 Bộ lọc cổ phiếu")
+    st.caption("Toàn bộ universe VN30 trong CSDL, kèm tìm kiếm và sắp xếp.")
     c = client
-    stocks = c.list_stocks()
-    df = pd.DataFrame(stocks)
-    st.data_editor(
-        df,
+    stocks = c.list_stocks(vn30=True)
+    if not stocks:
+        stocks = c.list_stocks()
+    if not stocks:
+        st.info("Chưa có dữ liệu mã — kiểm tra ingest và seed VN30.")
+        return
+
+    c1, c2 = st.columns([2, 1])
+    with c1:
+        query = st.text_input(
+            "Tìm theo mã / tên công ty", value="", key="screener_query"
+        ).strip().upper()
+    with c2:
+        exchanges = sorted({str(s.get("exchange") or "?") for s in stocks})
+        picked = st.multiselect("Sàn", options=exchanges, default=exchanges)
+
+    rows = [
+        {
+            "Mã": s.get("symbol"),
+            "Công ty": s.get("company_name"),
+            "Sàn": s.get("exchange"),
+            "Ngành": s.get("sector") or s.get("industry") or "—",
+            "VN30": "✔" if s.get("is_vn30") else "",
+            "Giá": s.get("price"),
+        }
+        for s in stocks
+        if str(s.get("exchange") or "?") in picked
+        and (
+            not query
+            or query in str(s.get("symbol") or "").upper()
+            or query in str(s.get("company_name") or "").upper()
+        )
+    ]
+    st.caption(f"{len(rows)}/{len(stocks)} mã hiển thị")
+    st.dataframe(
+        pd.DataFrame(rows),
         column_config={
-            "symbol": st.column_config.TextColumn("Mã"),
-            "price": st.column_config.NumberColumn("Giá", format="%.1f"),
-            "sector": st.column_config.TextColumn("Ngành"),
-            "is_vn30": st.column_config.CheckboxColumn("VN30"),
+            "Giá": st.column_config.NumberColumn(format="%,.0f"),
+            "VN30": st.column_config.TextColumn(width="small"),
         },
         hide_index=True,
         width="stretch",
+        height=560,
     )
 
 
@@ -332,6 +491,46 @@ def page_stock_detail(symbol: str = "FPT") -> None:
             )
             st.plotly_chart(fig, width="stretch")
 
+    # --- ML prediction + AI analysis ---------------------------------------
+    st.subheader("🤖 Dự đoán ML & đánh giá AI")
+    pred = c.get_prediction(symbol)
+    if pred and pred.get("probability_positive") is not None:
+        prob = float(pred["probability_positive"])
+        p_cols = st.columns(4)
+        p_cols[0].metric("P(tăng 5D)", f"{prob:.3f}")
+        p_cols[1].metric(
+            "Lợi nhuận kỳ vọng", f"{float(pred.get('expected_return') or 0):.4f}"
+        )
+        p_cols[2].metric("Độ tin cậy", f"{float(pred.get('confidence') or 0):.0%}")
+        p_cols[3].metric(
+            "Model", f"{pred.get('model_id')}@{pred.get('model_version')}"
+        )
+        st.progress(min(max(prob, 0.0), 1.0), text=f"Xác suất tăng: {prob:.1%}")
+    else:
+        st.info("Chưa có dự đoán ML cho mã này (cần model APPROVED trong registry).")
+
+    if st.button("🧠 Chạy phân tích AI (LLM + dữ liệu tool)", key=f"ai_{symbol}"):
+        with st.spinner("Đang tổng hợp luận điểm đầu tư (có thể mất ~15 giây)…"):
+            analysis = c.analyze_symbol(symbol)
+        if analysis.get("error"):
+            st.error(f"Phân tích thất bại: {analysis['error']}")
+        else:
+            st.markdown("**Luận điểm đầu tư (thesis)**")
+            st.info(str(analysis.get("thesis") or "—"))
+            a_left, a_right = st.columns(2)
+            with a_left:
+                st.markdown("**Yếu tố hỗ trợ (catalysts)**")
+                for item in analysis.get("catalysts") or []:
+                    st.write(f"- {item}")
+            with a_right:
+                st.markdown("**Rủi ro (risks)**")
+                for item in analysis.get("risks") or []:
+                    st.write(f"- {item}")
+            st.caption(
+                f"Model suy luận: {analysis.get('model', '?')} · "
+                f"điểm/quant do engine tất định cung cấp, LLM không sửa số liệu."
+            )
+
     # Price chart
     prices = c.get_prices(symbol)
     if prices:
@@ -404,15 +603,36 @@ def page_stock_detail(symbol: str = "FPT") -> None:
         inds = c.get_indicators(symbol)
         if inds:
             st.subheader("Chỉ báo Kỹ thuật")
-            for k, v in indicator_dict(inds).items():
-                st.metric(k.upper(), f"{v:.4f}" if v is not None else "—")
+            ind_rows = [
+                {"Chỉ báo": k.upper(), "Giá trị": v}
+                for k, v in indicator_dict(inds).items()
+            ]
+            st.dataframe(
+                pd.DataFrame(ind_rows),
+                column_config={
+                    "Giá trị": st.column_config.NumberColumn(format="%.2f"),
+                },
+                hide_index=True,
+                width="stretch",
+                height=280,
+            )
     with col_val:
         val = c.get_valuation(symbol)
         if val:
             st.subheader("Định giá")
-            for k in ("pe", "pb", "ev_ebitda", "dividend_yield", "peg"):
-                v = val.get(k)
-                st.metric(k.upper(), f"{v:.2f}" if v is not None else "—")
+            val_rows = [
+                {"Chỉ số": k.upper(), "Giá trị": val.get(k)}
+                for k in ("pe", "pb", "ev_ebitda", "dividend_yield", "peg")
+            ]
+            st.dataframe(
+                pd.DataFrame(val_rows),
+                column_config={"Giá trị": st.column_config.NumberColumn(format="%.2f")},
+                hide_index=True,
+                width="stretch",
+                height=280,
+            )
+        else:
+            st.caption("Chưa có dữ liệu định giá (cần bảng `valuation_daily`).")
     with col_qual:
         q = c.get_quality(symbol)
         if q:
@@ -425,6 +645,27 @@ def page_stock_detail(symbol: str = "FPT") -> None:
                 dfig = go.Figure(data=[go.Bar(x=list(dims.keys()), y=list(dims.values()))])
                 dfig.update_layout(height=200, title="6 chiều chất lượng", showlegend=False)
                 st.plotly_chart(dfig, width="stretch")
+
+    # --- Evidence (§19) -----------------------------------------------------
+    st.divider()
+    st.subheader("📎 Bằng chứng dữ liệu đáng tin cậy (§19)")
+    st.caption(
+        "Trích đoạn có nguồn + ngày đăng + độ tin cậy, truy xuất từ chỉ mục RAG "
+        "(kho tài liệu tin tức đã thu thập)."
+    )
+    evidence = c.get_evidence(query=f"{symbol} kết quả kinh doanh", symbol=symbol, top_k=5)
+    if evidence:
+        st.dataframe(
+            pd.DataFrame(evidence_rows(evidence)),
+            column_config={
+                "confidence": st.column_config.NumberColumn("Tin cậy", format="%.2f"),
+                "snippet": st.column_config.TextColumn("Đoạn trích", width="large"),
+            },
+            hide_index=True,
+            width="stretch",
+        )
+    else:
+        st.info("Chưa tìm thấy bằng chứng cho mã này — chạy job tin tức để nạp thêm.")
 
 
 # ---------------------------------------------------------------------------
@@ -452,14 +693,51 @@ def _format_metric(name: str, value: float) -> str:
 
 def page_backtests() -> None:
     st.header("🧪 Backtest")
-    st.caption("Lượt chạy đã lưu trong CSDL, chỉ số §16 và nhật ký lệnh.")
+    st.caption("Tạo lượt chạy mới, xem chỉ số §16 và nhật ký lệnh đã lưu trong CSDL.")
     c = client
+
+    with st.form("create_backtest_form"):
+        f1, f2, f3 = st.columns(3)
+        strategy = f1.selectbox(
+            "Chiến lược",
+            options=[
+                "momentum_breakout_v1",
+                "baseline_multi_factor",
+                "mean_reversion_v1",
+            ],
+        )
+        universe = f2.selectbox("Vũ trụ", options=["VN30"])
+        run_type = f3.selectbox("Loại chạy", options=["walk-forward", "single-run"])
+        d1, d2 = st.columns(2)
+        start = d1.date_input("Từ ngày", value=date(2025, 1, 1))
+        end = d2.date_input("Đến ngày", value=date(2026, 9, 25))
+        submitted = st.form_submit_button("▶️ Tạo lượt chạy", type="primary")
+
+    if submitted:
+        if end <= start:
+            st.error("Ngày kết thúc phải sau ngày bắt đầu.")
+        else:
+            with st.spinner("Đang gửi yêu cầu tới API…"):
+                created = c.create_backtest(
+                    strategy_name=strategy,
+                    start_date=start.isoformat(),
+                    end_date=end.isoformat(),
+                    universe=universe,
+                    run_type=run_type,
+                )
+            if created.get("error"):
+                st.error(
+                    f"Không tạo được lượt chạy: {created['error']}. "
+                    "Nếu API bật API_AUTH_KEY/AUTH_JWT_SECRET, dashboard cần kèm "
+                    "credential (xem helper/deployment_vi.md)."
+                )
+            else:
+                st.success(f"Đã tạo lượt chạy `{created.get('id')}`.")
+                st.cache_data.clear()
+
     backtests = c.get_backtests()
     if not backtests:
-        st.info(
-            "Chưa có backtest nào trong CSDL. Tạo lượt chạy bằng "
-            "`POST /api/v1/backtests` (chế độ DB)."
-        )
+        st.info("Chưa có backtest nào trong CSDL — dùng form phía trên để tạo.")
         return
     ids = [str(b["id"]) for b in backtests]
     labels = {
@@ -707,3 +985,14 @@ PAGES: dict[str, Callable[[], None]] = {
 }
 
 PAGES[page]()
+
+st.markdown(
+    '<div class="dtck-foot">'
+    f'Nguồn dữ liệu: <b>{ready.get("market_source", "?")}</b>'
+    f' · CSDL: <b>{ready.get("dependencies", {}).get("database", "?")}</b>'
+    f' · Model: <b>{ready.get("dependencies", {}).get("models", "?")}</b>'
+    f' · Tác tử: <b>{ready.get("dependencies", {}).get("agents", "?")}</b>'
+    ' · DTCK hỗ trợ quyết định cho con người — không đưa lời khuyên đầu tư (§3).'
+    '</div>',
+    unsafe_allow_html=True,
+)

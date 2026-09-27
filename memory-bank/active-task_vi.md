@@ -2,6 +2,31 @@
 
 > Thuật ngữ chuyên môn (tên bảng, biến môi trường, lệnh, đường dẫn) giữ nguyên tiếng Anh.
 
+## Task: T015c — Dashboard dùng dữ liệu thật + Bảng Đánh giá & Dự đoán VN30 + Form Backtest
+
+**Trạng thái:** HOÀN THÀNH (2026-09-27)
+**Mục tiêu:** (1) dashboard phải đọc dữ liệu **thật** từ API/CSDL thay vì fixture giả; (2) trình bày đánh giá + dự đoán xu hướng VN30 kèm bằng chứng đáng tin cậy để hỗ trợ quyết định đầu tư; (3) form nhập thông tin backtest; (4) giao diện chuyên nghiệp hơn.
+
+### Nguyên nhân "dữ liệu giả" (đã sửa cả 4):
+- [x] `client.py` gọi URL **literal** `{symbol}` → 404 → fallback fixture. Sửa: f-string URL thật + `_fallback` chuẩn hoá mã về template.
+- [x] `list_stocks` thiếu `limit` (API mặc định 20/30 mã) → `limit=200`.
+- [x] Sidebar hardcode `http://localhost:8000` (container tự gọi chính nó) → đọc `API_HOST` (`DEFAULT_BASE`).
+- [x] `./apps/dashboard` chưa bind-mount → thêm vào `docker-compose.yml`.
+
+### Trình bày mục tiêu hệ thống:
+- [x] **Tổng quan:** bảng Đánh giá & Dự đoán VN30 (điểm §12 + tín hiệu + **P(tăng 5D) từ model thật** + Gợi ý 🟢/🟡/🔴 tất định + chú giải + footer disclaimer §3), KPI 5 thẻ, Top-10 biểu đồ màu theo tín hiệu.
+- [x] **Chi tiết mã:** nến + MA20/MA50 + volume (6 tháng/1 năm/2 năm), chỉ báo §2.4 đủ 15 chỉ báo, khối Dự đoán ML, nút Phân tích AI (thesis + catalysts + risks từ Ollama), Bằng chứng RAG §19.
+- [x] **Backtest:** form tạo lượt chạy (chiến lược/vũ trụ/loại/khoảng ngày → `POST /api/v1/backtests`), danh sách nhãn dễ đọc, chỉ số §16 đúng đơn vị.
+- [x] **Bộ lọc:** đủ 30 mã VN30 + tìm kiếm theo mã/tên + lọc sàn.
+- [x] **Giao diện:** banner gradient, sidebar tối, thẻ KPI viền xanh, bảng bo góc, nav 7 trang unified, footer trạng thái.
+
+### Kiểm chứng trực tiếp (fact, 2026-09-27):
+- Container dashboard → API thật: `stocks=30 transport=api`, `FPT prices=496 bars` (đến 2026-09-25), `inds=15 chỉ báo`, `prediction FPT P=0.5058 model v1.0.0`, `ranked=30`.
+- AppTest headless trong container với API thật: **7/7 trang render không exception**.
+- Bộ test: **499 unit + 20 integration passed**; ruff + mypy (133 tệp) sạch.
+
+---
+
 ## Task: T015b — Bền vững hoá ML registry, backfill dữ liệu 2 năm, vận hành tự động & hoàn thiện API
 
 **Trạng thái:** HOÀN THÀNH (2026-09-27)

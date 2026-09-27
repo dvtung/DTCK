@@ -57,12 +57,25 @@ Endpoint:
 
 ```bash
 docker compose logs -f api            # theo dõi log API
-LLM_PROVIDER=mock MARKET_DATA_SOURCE=memory pytest -q       # kỳ vọng 469 passed, 3 skipped (chạy trên máy chủ)
+LLM_PROVIDER=mock MARKET_DATA_SOURCE=memory pytest -q       # kỳ vọng 499 passed, 3 skipped (chạy trên máy chủ)
 LLM_PROVIDER=mock MARKET_DATA_SOURCE=db pytest tests/integration -q   # kỳ vọng 20 passed (cần CSDL đang chạy)
 ./scripts/backup_db.sh                # sao lưu CSDL (backups/dtck_<timestamp>.sql.gz, giữ 14 ngày)
 ./scripts/health_alert.sh             # kiểm tra /healthz + /readyz (dùng cho cron/cảnh báo)
 docker compose down                   # dừng (giữ volume)
 docker compose down -v                # XOÁ volume (phá huỷ — mất dữ liệu!)
+```
+
+**Dashboard (T015c):** `./apps/dashboard` được bind-mount vào container nên sửa giao diện chỉ cần
+`docker compose restart dashboard` (không cần rebuild). Sidebar đọc host API từ `API_HOST`
+(compose đặt `http://api:8000`); huy hiệu xanh `● DỮ LIỆU THẬT — auto->db` nghĩa là dashboard
+đang đọc API thật — nếu hiện huy hiệu đỏ thì client đã rơi về fixture và cần kiểm tra kết nối API.
+
+```bash
+# Kiểm tra toàn bộ 7 trang dashboard chạy được (headless, không cần trình duyệt):
+docker compose exec -T -e API_HOST=http://api:8000 dashboard python -c "
+from streamlit.testing.v1 import AppTest
+at = AppTest.from_file('apps/dashboard/app.py', default_timeout=60); at.run()
+print('exception:', at.exception)"
 ```
 
 **Vận hành mô hình ML (T015b):** huấn luyện trên CSDL rồi khởi động lại API để nạp registry:

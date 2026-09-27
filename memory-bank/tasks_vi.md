@@ -46,6 +46,13 @@ Chú giải: `[ ]` Cần làm · `[~]` Đang làm · `[x]` Hoàn thành · `[!]`
   3. **#4 Tự động hoá Vận hành & Giám sát:** Tạo script `scripts/backup_db.sh` sao lưu `pg_dump` nén gzip + chính sách xóa sau 14 ngày. Tạo `scripts/health_alert.sh` kiểm tra liveness/readiness tự động. Tạo luồng GitHub Actions `.github/workflows/ci.yml` tự động kiểm tra ruff/mypy/pytest khi push/PR.
   4. **#5 Chất lượng, Chiều ghi API & JWT/RBAC:** sửa lỗi làm tròn phân rã điểm trong `apps/api/services/ranking_payload.py` (cộng phần dư làm tròn vào thành phần lớn nhất, triệt tiêu sai lệch 1e-4); triển khai chiều ghi CSDL cho `POST /api/v1/backtests` (kiểm chứng live: 201 + hàng trong `backtests`); **JWT HS256 thuần stdlib** (`apps/api/security.py`: `create_token`/`decode_token`/`require_roles`) — login cấp access/refresh thật khi có `AUTH_JWT_SECRET`, middleware nhận **cả** API key **cả** JWT hợp lệ (token giả ký → 401 trước route), `POST /backtests` ép vai trò ANALYST/ADMIN (VIEWER → 403).
   - Bộ kiểm thử: **491 unit test passed, 3 skipped** (thêm 18 bài JWT/RBAC), **20 integration test passed**, `ruff` và `mypy` 133 tệp hoàn toàn sạch. *(2026-09-27)*
+- [x] **T015c — Dashboard dùng dữ liệu thật + Đánh giá & dự đoán VN30 + form Backtest (2026-09-27)** —
+  1. **Gốc rễ dữ liệu giả:** client gọi URL literal `{symbol}` (404 → fallback fixture); `list_stocks` thiếu `limit` (20/30 mã); sidebar hardcode `localhost:8000` (container tự gọi mình); `./apps/dashboard` chưa bind-mount. Đã sửa cả 4.
+  2. **Mục tiêu hệ thống:** trang Tổng quan thêm bảng **Đánh giá & dự đoán VN30** (điểm §12 + P(tăng 5D) từ model ML thật + Gợi ý 🟢/🟡/🔴 tất định + chú giải); Chi tiết mã thêm khối Dự đoán ML + nút Phân tích AI (thesis/catalysts/risks qua Ollama) + Bằng chứng RAG §19; footer gắn disclaimer §3.
+  3. **Chỉ báo §2.4 đầy đủ:** `get_indicators` công bố 15 chỉ báo (SMA20/50, EMA12/26, RSI14, MACD×3, Bollinger×3, ATR14, volume SMA20, price_vs_sma20) trên **cả hai nguồn** memory và DB.
+  4. **Backtest có form:** chọn chiến lược/vũ trụ/loại/khoảng ngày → `POST /api/v1/backtests`; hiển thị lỗi auth rõ; định dạng chỉ số §16 đúng đơn vị.
+  5. **Giao diện:** banner gradient, sidebar tối, thẻ KPI, bảng bo góc, nav 7 trang unified, footer trạng thái hệ thống.
+  - Kiểm thử: `tests/unit/test_dashboard_app.py` (3 bài AppTest headless) + AppTest trong container với API thật (7/7 trang render); cập nhật kỳ vọng chỉ báo ở 3 test cũ. Kết quả: **499 unit + 20 integration passed**, ruff + mypy 133 tệp sạch. Kiểm chứng live: 30 mã · 496 bars FPT · 15 chỉ báo · P(FPT)=0.5058 · transport=`api`. *(2026-09-27)*
 
 
 ---

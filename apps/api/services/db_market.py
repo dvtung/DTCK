@@ -329,18 +329,47 @@ class DbMarketService:
 
     # ------------------------------------------------- fundamentals/technical
     def get_indicators(self, symbol: str) -> dict[str, Any] | None:
+        """Full §2.4 indicator set computed as-of the latest stored bar.
+
+        The engine (``src/market/technical``) exposes MACD, Bollinger, ATR and
+        volume averages; the read path used to publish only SMA20/EMA12/RSI14,
+        which made the dashboard page look wrong (T015c).
+        """
         prices = self.get_prices(symbol)
         if not prices:
             return None
         closes = [float(str(row["close"])) for row in prices]
+        highs = [float(str(row["high"])) for row in prices]
+        lows = [float(str(row["low"])) for row in prices]
+        volumes = [int(float(str(row["volume"]))) for row in prices]
+
+        macd_line, macd_signal, macd_hist = tech.macd(closes)
+        bb_upper, bb_mid, bb_lower = tech.bollinger_bands(closes)
+        last = -1
+        series: dict[str, float | None] = {
+            "close": closes[last],
+            "sma20": tech.sma(closes, 20)[last],
+            "sma50": tech.sma(closes, 50)[last],
+            "ema12": tech.ema(closes, 12)[last],
+            "ema26": tech.ema(closes, 26)[last],
+            "rsi14": tech.rsi(closes, 14)[last],
+            "macd": macd_line[last],
+            "macd_signal": macd_signal[last],
+            "macd_hist": macd_hist[last],
+            "bb_upper": bb_upper[last],
+            "bb_middle": bb_mid[last],
+            "bb_lower": bb_lower[last],
+            "atr14": tech.atr(highs, lows, closes, 14)[last],
+            "volume_sma20": tech.volume_sma(volumes, 20)[last],
+        }
+        sma20 = series["sma20"]
+        series["price_vs_sma20"] = (
+            round(closes[last] / sma20 - 1.0, 6) if sma20 else None
+        )
         return {
             "symbol": symbol.upper(),
             "as_of": prices[-1]["trade_date"],
-            "series": {
-                "sma20": tech.sma(closes, 20)[-1],
-                "ema12": tech.ema(closes, 12)[-1],
-                "rsi14": tech.rsi(closes, 14)[-1],
-            },
+            "series": series,
         }
 
     def get_features(self, symbol: str) -> dict[str, Any]:

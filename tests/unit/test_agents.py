@@ -140,11 +140,9 @@ class TestToolCatalog:
             "SIDEWAYS",
             "VOLATILE",
         )
-        assert set(tools.call("get_technical", symbol="FPT")["series"]) == {
-            "sma20",
-            "ema12",
-            "rsi14",
-        }
+        series = tools.call("get_technical", symbol="FPT")["series"]
+        # Full §2.4 set (T015c) — at minimum the original three scalars.
+        assert {"sma20", "ema12", "rsi14"} <= set(series)
 
     def test_fundamentals_valuation_risk(self) -> None:
         tools = _tools()

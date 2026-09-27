@@ -167,14 +167,35 @@ class MarketService:
         if not rows:
             return None
         closes = [float(str(r["close"])) for r in rows]
+        highs = [float(str(r["high"])) for r in rows]
+        lows = [float(str(r["low"])) for r in rows]
+        volumes = [int(float(str(r["volume"]))) for r in rows]
+        macd_line, macd_signal, macd_hist = tech.macd(closes)
+        bb_upper, bb_mid, bb_lower = tech.bollinger_bands(closes)
+        series: dict[str, float | None] = {
+            "close": closes[-1],
+            "sma20": tech.sma(closes, 20)[-1],
+            "sma50": tech.sma(closes, 50)[-1],
+            "ema12": tech.ema(closes, 12)[-1],
+            "ema26": tech.ema(closes, 26)[-1],
+            "rsi14": tech.rsi(closes, 14)[-1],
+            "macd": macd_line[-1],
+            "macd_signal": macd_signal[-1],
+            "macd_hist": macd_hist[-1],
+            "bb_upper": bb_upper[-1],
+            "bb_middle": bb_mid[-1],
+            "bb_lower": bb_lower[-1],
+            "atr14": tech.atr(highs, lows, closes, 14)[-1],
+            "volume_sma20": tech.volume_sma(volumes, 20)[-1],
+        }
+        sma20 = series["sma20"]
+        series["price_vs_sma20"] = (
+            round(closes[-1] / sma20 - 1.0, 6) if sma20 else None
+        )
         return {
             "symbol": symbol,
             "as_of": rows[-1]["trade_date"],
-            "series": {
-                "sma20": tech.sma(closes, 20)[-1],
-                "ema12": tech.ema(closes, 12)[-1],
-                "rsi14": tech.rsi(closes, 14)[-1],
-            },
+            "series": series,
         }
 
     def get_valuation_summary(self, symbol: str) -> dict[str, object] | None:

@@ -200,9 +200,12 @@ def test_indicators_reuse_the_deterministic_engine(
     assert row is not None
     assert row["symbol"] == TEST_SYMBOL
     assert row["as_of"] == DATES[-1]
-    assert set(row["series"]) == {"sma20", "ema12", "rsi14"}
+    # Full §2.4 set now published (T015c) — keys exist even when warmup is None.
+    assert {"sma20", "ema12", "rsi14", "macd", "bb_upper", "atr14"} <= set(row["series"])
     # Only 3 bars: warmup indicators stay None rather than being fabricated.
     assert row["series"]["sma20"] is None
+    assert row["series"]["macd"] is None
+    assert row["series"]["atr14"] is None
 
 
 def test_breadth_counts_are_consistent(db_service: Any, session: Session) -> None:

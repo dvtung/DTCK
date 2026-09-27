@@ -69,6 +69,10 @@ class MarketClient:
     def _fallback(self, key: str, params: dict[str, Any]) -> dict[str, Any] | list[Any]:
         """Map path fragments to ``MarketService`` methods."""
         symbol = params.get("symbol")
+        # Concrete URLs (``/stocks/FPT/prices``) are normalised back to the
+        # template form used below, so both callers work (T015c).
+        if symbol:
+            key = key.replace(str(symbol), "{symbol}")
         if key == "/market/indices":
             return self._svc.list_indices()
         if key == "/market/indices/{code}":
@@ -147,6 +151,9 @@ class MarketClient:
             return self._svc.get_valuation_summary(symbol) or {}
         if key == "/fundamentals/{symbol}/quality":
             return self._svc.get_quality(symbol) or {}
+        if key.startswith("/predictions/"):
+            # Offline fallback: the in-memory service has no trained model.
+            return {}
         raise KeyError(f"Unknown dashboard route: {key}")
 
     # -- high-level accessors ----------------------------------------------
@@ -174,8 +181,14 @@ class MarketClient:
         exchange: str | None = None,
         sector: str | None = None,
         vn30: bool | None = None,
+        limit: int = 200,
     ) -> list[dict[str, Any]]:
-        params: dict[str, Any] = {}
+        """Reference universe — ``limit`` defaults to 200 so the full VN30 fits.
+
+        The API pages at 20 by default, which used to make the screener show
+        only a slice of the universe (T015c).
+        """
+        params: dict[str, Any] = {"limit": limit}
         if exchange:
             params["exchange"] = exchange
         if sector:
@@ -190,23 +203,70 @@ class MarketClient:
         return self._unwrap_items(res)
 
     def get_stock(self, symbol: str) -> dict[str, Any]:
-        return self._get("/api/v1/stocks/{symbol}", symbol=symbol)  # type: ignore[return-value]
+        return self._get(f"/api/v1/stocks/{symbol}", symbol=symbol)  # type: ignore[return-value]
 
     def get_prices(self, symbol: str) -> list[dict[str, Any]]:
-        res = self._get("/api/v1/stocks/{symbol}/prices", symbol=symbol)
+        res = self._get(f"/api/v1/stocks/{symbol}/prices", symbol=symbol)
         return self._unwrap_items(res)
 
     def get_ranking(self, symbol: str) -> dict[str, Any]:
-        return self._get("/api/v1/stocks/{symbol}/ranking", symbol=symbol)  # type: ignore[return-value]
+        return self._get(f"/api/v1/stocks/{symbol}/ranking", symbol=symbol)  # type: ignore[return-value]
 
     def get_indicators(self, symbol: str) -> dict[str, Any]:
-        return self._get("/api/v1/technical/{symbol}/indicators", symbol=symbol)  # type: ignore[return-value]
+        return self._get(f"/api/v1/technical/{symbol}/indicators", symbol=symbol)  # type: ignore[return-value]
 
     def get_valuation(self, symbol: str) -> dict[str, Any]:
-        return self._get("/api/v1/valuation/{symbol}/summary", symbol=symbol)  # type: ignore[return-value]
+        return self._get(f"/api/v1/valuation/{symbol}/summary", symbol=symbol)  # type: ignore[return-value]
 
     def get_quality(self, symbol: str) -> dict[str, Any]:
-        return self._get("/api/v1/fundamentals/{symbol}/quality", symbol=symbol)  # type: ignore[return-value]
+        return self._get(f"/api/v1/fundamentals/{symbol}/quality", symbol=symbol)  # type: ignore[return-value]
+
+    def get_prediction(self, symbol: str) -> dict[str, Any]:
+        """ML prediction P(return > 0) from the trained model (spec §2.8/§26)."""
+        res = self._get(f"/api/v1/predictions/{symbol}", symbol=symbol)
+        return res if isinstance(res, dict) else {}
+
+    def analyze_symbol(self, symbol: str) -> dict[str, Any]:
+        """Run the AI Analysis Agent for structured thesis + catalysts + risks (§20.2/§23)."""
+        try:
+            resp = httpx.post(
+                f"{self.base_url}/api/v1/agents/analyze",
+                json={"symbol": symbol},
+                timeout=60.0,
+            )
+            if resp.status_code == 200:
+                return resp.json().get("analysis", {})  # type: ignore[no-any-return]
+            return {"error": f"HTTP {resp.status_code}: {resp.text}"}
+        except Exception as exc:
+            return {"error": str(exc)}
+
+    def create_backtest(
+        self,
+        strategy_name: str,
+        start_date: str,
+        end_date: str,
+        universe: str = "VN30",
+        run_type: str = "walk-forward",
+    ) -> dict[str, Any]:
+        """Trigger an execution run via POST /api/v1/backtests (KI-008 write path)."""
+        try:
+            resp = httpx.post(
+                f"{self.base_url}/api/v1/backtests",
+                json={
+                    "strategy_name": strategy_name,
+                    "strategy_version": "1.0.0",
+                    "universe": universe,
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "run_type": run_type,
+                },
+                timeout=30.0,
+            )
+            if resp.status_code in (200, 201):
+                return resp.json()  # type: ignore[no-any-return]
+            return {"error": f"HTTP {resp.status_code}: {resp.text}"}
+        except Exception as exc:
+            return {"error": str(exc)}
 
     def get_news(
         self,

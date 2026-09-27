@@ -162,7 +162,21 @@ def test_fundamentals_quality() -> None:
 def test_technical_indicators() -> None:
     r = client.get("/api/v1/technical/FPT/indicators")
     assert r.status_code == 200
-    assert set(r.json()["series"]) == {"sma20", "ema12", "rsi14"}
+    # §2.4 promises the full set (RSI, MACD, MA, Bollinger, ATR…) — the read
+    # path used to publish only 3 scalars (T015c).
+    assert {
+        "sma20",
+        "sma50",
+        "ema12",
+        "ema26",
+        "rsi14",
+        "macd",
+        "macd_signal",
+        "bb_upper",
+        "bb_lower",
+        "atr14",
+        "volume_sma20",
+    } <= set(r.json()["series"])
 
 
 def test_valuation_summary() -> None:
