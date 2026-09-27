@@ -29,9 +29,12 @@
 | Method | Path | Mô tả |
 |---|---|---|
 | GET | `/market/indices` | snapshot chỉ số (VNINDEX, VN30, …) |
+| GET | `/market/indices/{code}` | snapshot một chỉ số |
+| GET | `/market/indices/{code}/prices` | chuỗi OHLCV ngày của chỉ số (nến VNINDEX, T016) |
 | GET | `/market/regime` | chế độ thị trường hiện tại + độ tin cậy (§13) |
 | GET | `/market/regime/history` | lịch sử chế độ |
 | GET | `/market/breadth` | số mã tăng/giảm, độ lan tỏa |
+| GET | `/market/movers` | top tăng/giảm `?universe=VN100\|VN30\|HNX\|UPCOM&limit=10` kèm `%1D`, khoảng cách MA20/MA50 (T016) |
 
 ## 2.2. `/api/v1/stocks`
 

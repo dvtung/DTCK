@@ -21,14 +21,42 @@ DEFAULT_BASE = os.getenv("API_HOST", "http://localhost:8000")
 class MarketClient:
     """Thin client over the DTCK FastAPI endpoints (or in-process fallback)."""
 
-    def __init__(self, base_url: str = DEFAULT_BASE, timeout: float = 5.0) -> None:
+    def __init__(
+        self,
+        base_url: str = DEFAULT_BASE,
+        timeout: float = 5.0,
+        token: str | None = None,
+    ) -> None:
         self.base_url = base_url.rstrip("/")
         self._timeout = timeout
+        self.token = token
         self._svc = MarketService()
         # Which transport served the last call — surfaced in the dashboard so a
         # silent fixture fallback can never masquerade as real data (T015b).
         self.last_transport: str = "unknown"
         self.last_error: str = ""
+
+    def _headers(self) -> dict[str, str]:
+        h: dict[str, str] = {}
+        if self.token:
+            h["Authorization"] = f"Bearer {self.token}"
+        return h
+
+    def login(self, email: str, password: str) -> dict[str, Any]:
+        """Authenticate via POST /api/v1/auth/login and cache the JWT token."""
+        try:
+            resp = httpx.post(
+                f"{self.base_url}/api/v1/auth/login",
+                json={"email": email, "password": password},
+                timeout=self._timeout,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                self.token = str(data.get("access_token", ""))
+                return {"success": True, "data": data}
+            return {"success": False, "error": f"HTTP {resp.status_code}: {resp.text}"}
+        except Exception as exc:
+            return {"success": False, "error": str(exc)}
 
     def source_badge(self) -> tuple[str, str]:
         """``("api", base_url)`` when the API answered, else ``("fixture", error)``."""
@@ -54,7 +82,12 @@ class MarketClient:
     def _get(self, path: str, **params: Any) -> dict[str, Any] | list[Any]:
         """GET a JSON payload, falling back to the in-process service."""
         try:
-            resp = httpx.get(f"{self.base_url}{path}", params=params or None, timeout=self._timeout)
+            resp = httpx.get(
+                f"{self.base_url}{path}",
+                params=params or None,
+                headers=self._headers(),
+                timeout=self._timeout,
+            )
             resp.raise_for_status()
             self.last_transport = "api"
             self.last_error = ""
@@ -73,19 +106,30 @@ class MarketClient:
         # template form used below, so both callers work (T015c).
         if symbol:
             key = key.replace(str(symbol), "{symbol}")
+        code = params.get("code")
+        if code:
+            key = key.replace(str(code), "{code}")
         if key == "/market/indices":
             return self._svc.list_indices()
+        if key == "/market/indices/{code}/prices":
+            return self._svc.get_index_prices(str(params.get("code", ""))) or []
         if key == "/market/indices/{code}":
             return self._svc.get_index(params.get("code", "")) or {}
         if key == "/market/regime":
             return self._svc.get_regime()
         if key == "/market/breadth":
             return self._svc.get_breadth()
+        if key == "/market/movers":
+            return self._svc.get_movers(
+                universe=str(params.get("universe") or "VN100"),
+                limit=int(params.get("limit") or 10),
+            )
         if key == "/stocks":
             return self._svc.list_stocks(
                 exchange=params.get("exchange"),
                 sector=params.get("sector"),
                 vn30=params.get("vn30"),
+                vn100=params.get("vn100"),
             )
         if key == "/stocks/ranked":
             return self._svc.get_ranked()
@@ -176,18 +220,25 @@ class MarketClient:
     def get_breadth(self) -> dict[str, Any]:
         return self._get("/api/v1/market/breadth")  # type: ignore[return-value]
 
+    def get_index_prices(self, code: str = "VNINDEX") -> list[dict[str, Any]]:
+        """Index daily OHLCV series for candlestick charts."""
+        res = self._get(f"/api/v1/market/indices/{code}/prices", code=code)
+        return self._unwrap_items(res) if isinstance(res, (dict, list)) else []
+
+    def get_movers(self, universe: str = "VN100", limit: int = 10) -> dict[str, Any]:
+        """Top gainers and decliners with MA20 / MA50 deviation metrics."""
+        res = self._get("/api/v1/market/movers", universe=universe, limit=limit)
+        return res if isinstance(res, dict) else {"gainers": [], "decliners": []}
+
     def list_stocks(
         self,
         exchange: str | None = None,
         sector: str | None = None,
         vn30: bool | None = None,
+        vn100: bool | None = None,
         limit: int = 200,
     ) -> list[dict[str, Any]]:
-        """Reference universe — ``limit`` defaults to 200 so the full VN30 fits.
-
-        The API pages at 20 by default, which used to make the screener show
-        only a slice of the universe (T015c).
-        """
+        """Reference universe — ``limit`` defaults to 200 so the full VN100 fits."""
         params: dict[str, Any] = {"limit": limit}
         if exchange:
             params["exchange"] = exchange
@@ -195,6 +246,8 @@ class MarketClient:
             params["sector"] = sector
         if vn30 is not None:
             params["vn30"] = vn30
+        if vn100 is not None:
+            params["vn100"] = vn100
         res = self._get("/api/v1/stocks", **params)
         return self._unwrap_items(res)
 
@@ -232,6 +285,7 @@ class MarketClient:
             resp = httpx.post(
                 f"{self.base_url}/api/v1/agents/analyze",
                 json={"symbol": symbol},
+                headers=self._headers(),
                 timeout=60.0,
             )
             if resp.status_code == 200:
@@ -260,6 +314,7 @@ class MarketClient:
                     "end_date": end_date,
                     "run_type": run_type,
                 },
+                headers=self._headers(),
                 timeout=30.0,
             )
             if resp.status_code in (200, 201):

@@ -299,3 +299,42 @@ class TestMarketClient:
 
         evidence = client.get_evidence("FPT", top_k=2)
         assert isinstance(evidence, list)
+
+    # -- T016: index history, movers, VN100 filter, JWT login ----------------
+
+    def test_get_index_prices_fallback(self) -> None:
+        client = MarketClient(base_url="http://nonexistent:9999")
+        rows = client.get_index_prices("VNINDEX")
+        assert isinstance(rows, list)
+        assert len(rows) > 10
+        assert {"open", "high", "low", "close", "volume"} <= set(rows[0])
+        dates = [r["trade_date"] for r in rows]
+        assert dates == sorted(dates)
+
+    def test_get_movers_fallback(self) -> None:
+        client = MarketClient(base_url="http://nonexistent:9999")
+        movers = client.get_movers(universe="VN30", limit=3)
+        assert {"trade_date", "gainers", "decliners"} <= set(movers)
+        assert movers["gainers"] and movers["decliners"]
+        assert len(movers["gainers"]) <= 3
+        g = movers["gainers"][0]
+        assert {"symbol", "close", "change_pct", "price_vs_sma20", "price_vs_sma50"} <= set(g)
+
+    def test_list_stocks_vn100_filter_param(self) -> None:
+        client = MarketClient(base_url="http://nonexistent:9999")
+        # Fallback path: vn100 is forwarded to the in-process service.
+        rows = client.list_stocks(vn100=True)
+        assert isinstance(rows, list)
+
+    def test_token_header_and_login_state(self) -> None:
+        client = MarketClient(base_url="http://nonexistent:9999")
+        assert client._headers() == {}
+        client.token = "jwt-token"
+        assert client._headers() == {"Authorization": "Bearer jwt-token"}
+
+    def test_login_failure_offline_returns_error(self) -> None:
+        client = MarketClient(base_url="http://nonexistent:9999")
+        result = client.login("admin@dtck.local", "admin123")
+        assert result["success"] is False
+        assert "error" in result
+        assert client.token is None

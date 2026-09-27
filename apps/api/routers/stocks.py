@@ -19,10 +19,11 @@ def list_stocks(
     exchange: str | None = Query(default=None),
     sector: str | None = Query(default=None),
     vn30: bool | None = Query(default=None),
+    vn100: bool | None = Query(default=None),
     limit: int = Query(default=20),
     offset: int = Query(default=0),
 ) -> dict[str, Any]:
-    rows = service.list_stocks(exchange=exchange, sector=sector, vn30=vn30)
+    rows = service.list_stocks(exchange=exchange, sector=sector, vn30=vn30, vn100=vn100)
     limit, offset = paginate_params(limit, offset)
     return page_of(rows, len(rows), limit, offset)
 

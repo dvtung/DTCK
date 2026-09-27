@@ -20,8 +20,10 @@ from src.quant.scoring.engine import score_universe
 SOURCE_METHODS = (
     "list_indices",
     "get_index",
+    "get_index_prices",
     "get_regime",
     "get_breadth",
+    "get_movers",
     "list_stocks",
     "get_stock",
     "get_prices",

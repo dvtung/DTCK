@@ -57,6 +57,24 @@ class BreadthOut(BaseModel):
     participation: float | None
 
 
+class MoverItem(BaseModel):
+    symbol: str
+    company_name: str
+    exchange: str
+    close: float
+    change_pct: float
+    sma20: float | None = None
+    price_vs_sma20: float | None = None
+    sma50: float | None = None
+    price_vs_sma50: float | None = None
+
+
+class MoversOut(BaseModel):
+    trade_date: date
+    gainers: list[MoverItem]
+    decliners: list[MoverItem]
+
+
 class StockOut(BaseModel):
     symbol: str
     company_name: str
@@ -66,6 +84,7 @@ class StockOut(BaseModel):
     listed_date: date | None = None
     status: str = "ACTIVE"
     is_vn30: bool = False
+    is_vn100: bool = False
 
 
 class PriceRow(BaseModel):

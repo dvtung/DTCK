@@ -4,6 +4,14 @@
 
 **Cập nhật lần cuối:** 2026-09-27
 
+## 2026-09-27 — T016: VN100 + 3 sàn, nến VNINDEX, bảng tăng/giảm MA20/MA50, đăng nhập JWT
+
+- **Universe VN100 & đa sàn thật** — provider SSI mới `fetch_index_components` (`Market/IndexComponents`, `pageSize=1000`) lấy đúng **100 mã VN100** + **30 mã HNX30** chính thức; seed `stocks` (cờ `is_vn100`, tên công ty từ `Market/SecuritiesDetails`) → DB hiện **HOSE 100 · HNX 30 · UPCOM 8** (UPCOM chọn lọc qua `DailyOhlc`). Nạp lại **~67k bars / 2 năm** cho 108 mã chưa có giá; `compute-scores` chấm **137 mã**; **train-model --source db** trên 63,436 dòng → `roc_auc=0.565` APPROVED (v1.0.0).
+- **Sửa giới hạn DailyIndex của SSI** — API từ chối cửa sổ > ~30 ngày (trả 0 rows, im lặng). `fetch_index` tự chia trâu 30 ngày + khử trùng lặp → nạp **992 bars index** (VNINDEX + VN30, 2024-09-27 → 2026-09-25, **496 dòng/chiếu**).
+- **Endpoint mới** — `GET /market/indices/{code}/prices` (chuỗi OHLCV chỉ số, `MarketSource.get_index_prices` trên cả 2 nguồn) · `GET /market/movers?universe=&limit=` (top tăng/giảm kèm `%1D`, `price_vs_sma20/50` — MA tính trên ~100 ngày gần nhất) · `GET /stocks?vn100=` (bộ lọc universe VN100, cột `is_vn100` trong `StockOut`). Universe lạ (`BAD`) trả 200 + rỗng thay vì lộ toàn bộ.
+- **Dashboard** — (1) **Đăng nhập JWT** ở sidebar: form email/mật khẩu → `POST /api/v1/auth/login`, token giữ trong `st.session_state`, `MarketClient(token=…)` đính `Authorization: Bearer` vào mọi GET/POST (Phân tích AI, Backtest) + nút Đăng xuất. (2) **Nến VNINDEX 2 năm + MA20/MA50 + khối lượng** hai tầng trên Tổng quan. (3) **Bảng Top 10 tăng/giảm** với chọn universe VN100/VN30/HNX/UPCOM. (4) Screener hiển thị toàn bộ 138 mã 3 sàn + cột VN100. (5) Biểu đồ xếp hạng **15 → 30 mã**, nhãn điểm trên cột.
+- **Kiểm thử** — +11 bài (`/indices/{code}/prices`, `/movers` thứ tự + contract, fallback client index/movers/token/login, 2 bài AppTest sidebar-login & overview-sections) ⇒ **510 unit passed, 3 skipped**; 20 integration; `ruff check` + `mypy` (133 tệp) sạch. Kiểm chứng live: login JWT thật · movers VN100 · 496 bars VNINDEX · lọc `exchange=HNX/UPCOM` · `vn100=true`.
+
 ## 2026-09-27 — T015c: Sửa dashboard dùng dữ liệu thật + bảng dự đoán VN30 + form Backtest
 
 - **Gốc rễ "dữ liệu giả" trên dashboard** — `apps/dashboard/client.py` từng gọi `self._get("/api/v1/stocks/{symbol}/prices", symbol=…)` với **URL literal `{symbol}`** → API trả 404 → client âm thầm rơi về fixture trong tiến trình (7 mã, giá giả). Sửa: URL f-string thật (`/api/v1/stocks/FPT/prices`) + `_fallback` tự chuẩn hoá mã về template cũ. Kèm: `list_stocks` mặc định `limit=200` (API mặc định 20 → screener chỉ hiện 20/30 mã), bind-mount `./apps/dashboard` vào container, sidebar đọc `API_HOST` thay vì hardcode `localhost:8000` (trước đây container tự gọi chính nó → fail → fixture).

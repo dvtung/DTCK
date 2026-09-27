@@ -125,7 +125,12 @@ with st.sidebar:
     # hardcoding localhost here used to make the container call itself, fail, and
     # silently render the in-memory fixture — the "fake data" bug (T015b).
     api_host = st.text_input("API host", value=DEFAULT_BASE, key="api_host")
-    client = MarketClient(base_url=api_host)
+    # JWT session (T016): keep the access token in session_state across reruns.
+    if "auth_token" not in st.session_state:
+        st.session_state["auth_token"] = ""
+    if "auth_email" not in st.session_state:
+        st.session_state["auth_email"] = ""
+    client = MarketClient(base_url=api_host, token=st.session_state["auth_token"] or None)
     ready = client.probe()
     kind, detail = client.source_badge()
     if kind == "api":
@@ -144,6 +149,36 @@ with st.sidebar:
     if st.button("🔄 Làm mới dữ liệu", type="primary"):
         st.cache_data.clear()
         st.rerun()
+
+    # --- Login (T016): JWT via POST /api/v1/auth/login ----------------------
+    st.divider()
+    if st.session_state["auth_token"]:
+        st.markdown(
+            f'<span class="dtck-badge dtck-badge-real">● {st.session_state["auth_email"]}</span>',
+            unsafe_allow_html=True,
+        )
+        if st.button("Đăng xuất", key="logout"):
+            st.session_state["auth_token"] = ""
+            st.session_state["auth_email"] = ""
+            st.rerun()
+    else:
+        with st.form("login_form", clear_on_submit=False):
+            st.caption("Đăng nhập để chạy Phân tích AI & Backtest (JWT)")
+            email = st.text_input("Email", value="admin@dtck.local", key="login_email")
+            password = st.text_input(
+                "Mật khẩu", value="admin123", type="password", key="login_password"
+            )
+            submitted = st.form_submit_button("Đăng nhập", type="primary")
+            if submitted:
+                result = client.login(email, password)
+                if result.get("success"):
+                    st.session_state["auth_token"] = client.token or ""
+                    st.session_state["auth_email"] = email
+                    st.success("Đăng nhập thành công.")
+                    st.rerun()
+                else:
+                    st.error(f"Đăng nhập thất bại: {result.get('error')}")
+
     st.divider()
     page = st.radio("Điều hướng", PAGE_NAMES)
     st.divider()
@@ -227,6 +262,133 @@ def page_market_overview() -> None:
         f"chế độ đọc: {ready.get('market_source', '?')} · "
         f"độ rộng tính từ {len(ranked)} mã VN30"
     )
+    st.divider()
+
+    # --- VNINDEX candlestick + volume (T016) --------------------------------
+    st.subheader("📉 VNINDEX — nến ngày 2 năm")
+    ix_bars = c.get_index_prices("VNINDEX")
+    if ix_bars:
+        idx = pd.DataFrame(price_dataframe(ix_bars))
+        idx["MA20"] = idx["close"].rolling(20).mean()
+        idx["MA50"] = idx["close"].rolling(50).mean()
+        fig = make_subplots(
+            rows=2,
+            cols=1,
+            shared_xaxes=True,
+            row_heights=[0.72, 0.28],
+            vertical_spacing=0.04,
+            subplot_titles=("VNINDEX — nến ngày", "Khối lượng"),
+        )
+        fig.add_trace(
+            go.Candlestick(
+                x=idx["date"],
+                open=idx["open"],
+                high=idx["high"],
+                low=idx["low"],
+                close=idx["close"],
+                name="VNINDEX",
+            ),
+            row=1,
+            col=1,
+        )
+        fig.add_trace(
+            go.Scatter(x=idx["date"], y=idx["MA20"], name="MA20", line=dict(color="#2563eb")),
+            row=1,
+            col=1,
+        )
+        fig.add_trace(
+            go.Scatter(x=idx["date"], y=idx["MA50"], name="MA50", line=dict(color="#f59e0b")),
+            row=1,
+            col=1,
+        )
+        fig.add_trace(
+            go.Bar(x=idx["date"], y=idx["volume"], name="KL", marker_color="#94a3b8"),
+            row=2,
+            col=1,
+        )
+        fig.update_layout(
+            height=520,
+            xaxis_rangeslider_visible=False,
+            margin=dict(t=40, b=10),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02),
+        )
+        st.plotly_chart(fig, width="stretch")
+        last_ix = idx.iloc[-1]
+        d_ix = st.columns(4)
+        d_ix[0].metric("VNINDEX", format_price(last_ix["close"]))
+        d_ix[1].metric("MA20", format_price(float(last_ix["MA20"])))
+        d_ix[2].metric("MA50", format_price(float(last_ix["MA50"])))
+        d_ix[3].metric("Ngày", format_date(last_ix["date"]))
+    else:
+        st.info("Chưa có dữ liệu VNINDEX — chạy `ingest --dataset index_prices`.")
+    st.divider()
+
+    # --- Top gainers / decliners with MA20 & MA50 (T016) --------------------
+    st.subheader("↕️ Tăng / giảm mạnh — so với MA20 & MA50")
+    m1, m2 = st.columns([1, 2])
+    with m1:
+        universe = st.selectbox(
+            "Universe",
+            options=["VN100", "VN30", "HNX", "UPCOM"],
+            index=0,
+            key="movers_universe",
+        )
+    with m2:
+        st.caption(
+            "Cột MA20/MA50 = khoảng cách giá đóng cửa (%). Chọn universe tương ứng "
+            "bộ lọc ở trang Bộ lọc."
+        )
+    movers = c.get_movers(universe=universe, limit=10)
+    gainers = movers.get("gainers") or []
+    decliners = movers.get("decliners") or []
+    if gainers or decliners:
+        def _mover_rows(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+            return [
+                {
+                    "Mã": it.get("symbol"),
+                    "Giá": it.get("close"),
+                    "%1D": it.get("change_pct"),
+                    "vs MA20 %": it.get("price_vs_sma20"),
+                    "vs MA50 %": it.get("price_vs_sma50"),
+                }
+                for it in items
+            ]
+
+        gl, dl = st.columns(2)
+        with gl:
+            st.markdown("**🟢 Top 10 tăng**")
+            st.dataframe(
+                pd.DataFrame(_mover_rows(gainers)),
+                column_config={
+                    "Giá": st.column_config.NumberColumn(format="%,.0f"),
+                    "%1D": st.column_config.NumberColumn(format="%+.2f"),
+                    "vs MA20 %": st.column_config.NumberColumn(format="%+.2f"),
+                    "vs MA50 %": st.column_config.NumberColumn(format="%+.2f"),
+                },
+                hide_index=True,
+                width="stretch",
+                height=420,
+            )
+        with dl:
+            st.markdown("**🔴 Top 10 giảm**")
+            st.dataframe(
+                pd.DataFrame(_mover_rows(decliners)),
+                column_config={
+                    "Giá": st.column_config.NumberColumn(format="%,.0f"),
+                    "%1D": st.column_config.NumberColumn(format="%+.2f"),
+                    "vs MA20 %": st.column_config.NumberColumn(format="%+.2f"),
+                    "vs MA50 %": st.column_config.NumberColumn(format="%+.2f"),
+                },
+                hide_index=True,
+                width="stretch",
+                height=420,
+            )
+        st.caption(
+            f"Ngày dữ liệu: {format_date(movers.get('trade_date'))} · "
+            "%1D = thay đổi so với phiên trước · so với MA = giá/MA − 1."
+        )
+    else:
+        st.info("Chưa có dữ liệu giá cho universe này.")
     st.divider()
 
     # --- Assembly: score + ML prediction per symbol ------------------------
@@ -337,13 +499,11 @@ def page_market_overview() -> None:
 # ---------------------------------------------------------------------------
 def page_screener() -> None:
     st.header("🔍 Bộ lọc cổ phiếu")
-    st.caption("Toàn bộ universe VN30 trong CSDL, kèm tìm kiếm và sắp xếp.")
+    st.caption("Toàn bộ universe trong CSDL (VN30/VN100/HNX/UPCOM), kèm tìm kiếm và sắp xếp.")
     c = client
-    stocks = c.list_stocks(vn30=True)
+    stocks = c.list_stocks(limit=500)
     if not stocks:
-        stocks = c.list_stocks()
-    if not stocks:
-        st.info("Chưa có dữ liệu mã — kiểm tra ingest và seed VN30.")
+        st.info("Chưa có dữ liệu mã — kiểm tra ingest và seed.")
         return
 
     c1, c2 = st.columns([2, 1])
@@ -362,6 +522,7 @@ def page_screener() -> None:
             "Sàn": s.get("exchange"),
             "Ngành": s.get("sector") or s.get("industry") or "—",
             "VN30": "✔" if s.get("is_vn30") else "",
+            "VN100": "✔" if s.get("is_vn100") else "",
             "Giá": s.get("price"),
         }
         for s in stocks
@@ -378,6 +539,7 @@ def page_screener() -> None:
         column_config={
             "Giá": st.column_config.NumberColumn(format="%,.0f"),
             "VN30": st.column_config.TextColumn(width="small"),
+            "VN100": st.column_config.TextColumn(width="small"),
         },
         hide_index=True,
         width="stretch",
@@ -404,7 +566,7 @@ def page_rankings() -> None:
 
     col_chart, col_stat = st.columns([3, 2])
     with col_chart:
-        top = [r for r in filtered if r.get("overall_score") is not None][:15]
+        top = [r for r in filtered if r.get("overall_score") is not None][:30]
         if top:
             fig = go.Figure(
                 go.Bar(
@@ -416,12 +578,20 @@ def page_rankings() -> None:
                         else "#64748b"
                         for r in top
                     ],
+                    text=[
+                        f"{float(r['overall_score'] or 0):.1f}" for r in top
+                    ],
+                    textposition="outside",
                 )
             )
             fig.update_layout(
-                height=360, yaxis_title="Điểm tổng hợp", margin=dict(t=20, b=10)
+                height=420,
+                yaxis_title="Điểm tổng hợp",
+                margin=dict(t=30, b=10),
+                xaxis_tickangle=-45,
             )
             st.plotly_chart(fig, width="stretch")
+            st.caption("30 mã xếp hạng cao nhất — nhãn = điểm tổng hợp, trục X = mã.")
     with col_stat:
         by_signal = pd.Series([str(r.get("signal") or "NEUTRAL") for r in filtered])
         st.metric("Số mã hiển thị", str(len(filtered)))

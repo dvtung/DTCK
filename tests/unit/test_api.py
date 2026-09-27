@@ -110,6 +110,45 @@ def test_market_breadth() -> None:
     assert r.json()["advancers"] + r.json()["decliners"] > 0
 
 
+def test_market_index_prices_series() -> None:
+    """T016: full OHLCV history for the candlestick chart (oldest first)."""
+    r = client.get("/api/v1/market/indices/VNINDEX/prices")
+    assert r.status_code == 200
+    rows = r.json()
+    assert len(rows) > 10
+    dates = [row["trade_date"] for row in rows]
+    assert dates == sorted(dates)
+    assert {"open", "high", "low", "close", "volume"} <= set(rows[0])
+
+
+def test_market_index_prices_unknown_index_404() -> None:
+    r = client.get("/api/v1/market/indices/NOPE/prices")
+    assert r.status_code == 404
+
+
+def test_market_movers_top_gainers_decliners() -> None:
+    """T016: top-10 gainers/decliners carry 1D change + MA20/MA50 distance."""
+    r = client.get("/api/v1/market/movers", params={"universe": "VN100", "limit": 5})
+    assert r.status_code == 200
+    body = r.json()
+    gainers, decliners = body["gainers"], body["decliners"]
+    assert len(gainers) <= 5 and len(decliners) <= 5
+    assert gainers and decliners
+    # Ordered: gainers descending, decliners ascending by 1D change.
+    g_chg = [g["change_pct"] for g in gainers]
+    d_chg = [d["change_pct"] for d in decliners]
+    assert g_chg == sorted(g_chg, reverse=True)
+    assert d_chg == sorted(d_chg)
+    for item in gainers + decliners:
+        assert {"symbol", "close", "change_pct", "price_vs_sma20", "price_vs_sma50"} <= set(item)
+
+
+def test_market_movers_unknown_universe_returns_empty_lists() -> None:
+    r = client.get("/api/v1/market/movers", params={"universe": "NOSUCHINDEX"})
+    assert r.status_code == 200
+    assert r.json()["gainers"] == [] and r.json()["decliners"] == []
+
+
 # ------------------------------------------------------------ stocks
 def test_list_stocks_paginated() -> None:
     r = client.get("/api/v1/stocks", params={"limit": 3, "offset": 2})

@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
@@ -147,6 +147,7 @@ class DbMarketService:
                     "listed_date": stock.listed_date,
                     "status": stock.status,
                     "is_vn30": bool(stock.is_vn30),
+                    "is_vn100": bool(stock.is_vn100),
                     "price": closes.get(stock.id),
                 }
             )
@@ -172,6 +173,16 @@ class DbMarketService:
         with self._scope() as session:
             row = session.scalars(stmt).first()
             return _index_row(row) if row else None
+
+    def get_index_prices(self, code: str) -> list[dict[str, Any]] | None:
+        stmt = (
+            select(IndexPrice)
+            .where(func.upper(IndexPrice.index_code) == code.upper())
+            .order_by(IndexPrice.trade_date.asc())
+        )
+        with self._scope() as session:
+            rows = [_index_row(row) for row in session.scalars(stmt)]
+        return rows or None
 
     def get_regime(self) -> dict[str, Any]:
         stmt = select(MarketRegime).order_by(MarketRegime.trade_date.desc()).limit(1)
@@ -252,9 +263,105 @@ class DbMarketService:
                 "participation": participation,
             }
 
+    def get_movers(
+        self,
+        universe: str = "VN100",
+        limit: int = 10,
+    ) -> dict[str, Any]:
+        """Top gainers and decliners with MA20 / MA50 deviation metrics."""
+        with self._scope() as session:
+            dates = list(
+                session.scalars(
+                    select(Price.trade_date).distinct().order_by(Price.trade_date.desc()).limit(2)
+                )
+            )
+            if not dates:
+                return {"trade_date": date.today(), "gainers": [], "decliners": []}
+            current_date = dates[0]
+
+            # Build query for target universe stocks
+            stock_stmt = select(Stock.id, Stock.symbol, Stock.company_name, Exchange.code).join(
+                Exchange, Stock.exchange_id == Exchange.id
+            ).where(Stock.status == "ACTIVE")
+
+            u_clean = universe.upper().strip()
+            if u_clean not in ("VN30", "VN100", "HNX", "HNX30", "UPCOM", "HOSE", "ALL"):
+                return {"trade_date": current_date, "gainers": [], "decliners": []}
+            if u_clean == "VN30":
+                stock_stmt = stock_stmt.where(Stock.is_vn30.is_(True))
+            elif u_clean == "VN100":
+                stock_stmt = stock_stmt.where(Stock.is_vn100.is_(True))
+            elif u_clean in ("HNX", "HNX30"):
+                stock_stmt = stock_stmt.where(Exchange.code == "HNX")
+            elif u_clean == "UPCOM":
+                stock_stmt = stock_stmt.where(Exchange.code == "UPCOM")
+            elif u_clean == "HOSE":
+                stock_stmt = stock_stmt.where(Exchange.code == "HOSE")
+
+            target_stocks = session.execute(stock_stmt).all()
+            if not target_stocks:
+                return {"trade_date": current_date, "gainers": [], "decliners": []}
+
+            stock_ids = [row[0] for row in target_stocks]
+            stock_meta = {
+                row[0]: {"symbol": row[1], "company_name": row[2], "exchange": row[3]}
+                for row in target_stocks
+            }
+
+            # Fetch recent price bars only: ~100 calendar days ≈ 65 trading
+            # sessions covers MA50 + a 1-day change baseline.
+            cutoff = current_date - timedelta(days=100)
+            prices_stmt = (
+                select(Price.stock_id, Price.trade_date, Price.close)
+                .where(Price.stock_id.in_(stock_ids), Price.trade_date >= cutoff)
+                .order_by(Price.stock_id, Price.trade_date.asc())
+            )
+            # Group closes by stock_id
+            stock_prices: dict[int, list[float]] = {}
+            for sid, _dt, close in session.execute(prices_stmt).all():
+                stock_prices.setdefault(sid, []).append(float(close))
+
+            items: list[dict[str, Any]] = []
+            for sid, meta in stock_meta.items():
+                closes = stock_prices.get(sid) or []
+                if len(closes) < 2:
+                    continue
+                curr = closes[-1]
+                prev = closes[-2]
+                chg = round((curr / prev - 1.0) * 100, 2) if prev else 0.0
+
+                sma20 = round(sum(closes[-20:]) / 20, 2) if len(closes) >= 20 else None
+                sma50 = round(sum(closes[-50:]) / 50, 2) if len(closes) >= 50 else None
+                p_vs_sma20 = round((curr / sma20 - 1.0) * 100, 2) if sma20 else None
+                p_vs_sma50 = round((curr / sma50 - 1.0) * 100, 2) if sma50 else None
+
+                items.append({
+                    "symbol": meta["symbol"],
+                    "company_name": meta["company_name"],
+                    "exchange": meta["exchange"],
+                    "close": curr,
+                    "change_pct": chg,
+                    "sma20": sma20,
+                    "price_vs_sma20": p_vs_sma20,
+                    "sma50": sma50,
+                    "price_vs_sma50": p_vs_sma50,
+                })
+
+            gainers = sorted(items, key=lambda x: x["change_pct"], reverse=True)[:limit]
+            decliners = sorted(items, key=lambda x: x["change_pct"])[:limit]
+            return {
+                "trade_date": current_date,
+                "gainers": gainers,
+                "decliners": decliners,
+            }
+
     # ---------------------------------------------------------------- stocks
     def list_stocks(
-        self, exchange: str | None, sector: str | None, vn30: bool | None
+        self,
+        exchange: str | None,
+        sector: str | None,
+        vn30: bool | None,
+        vn100: bool | None = None,
     ) -> list[dict[str, Any]]:
         stmt = self._reference_statement().where(Stock.status == "ACTIVE")
         if exchange:
@@ -263,6 +370,8 @@ class DbMarketService:
             stmt = stmt.where(func.upper(Sector.code) == sector.upper())
         if vn30:
             stmt = stmt.where(Stock.is_vn30.is_(True))
+        if vn100:
+            stmt = stmt.where(Stock.is_vn100.is_(True))
         with self._scope() as session:
             rows = self._reference_rows(session, stmt)
         return sorted(rows, key=lambda row: str(row["symbol"]))

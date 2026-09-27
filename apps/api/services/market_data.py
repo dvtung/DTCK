@@ -100,6 +100,12 @@ class MarketService:
         rows = self._index_prices.get(code)
         return dict(rows[-1]) if rows else None
 
+    def get_index_prices(self, code: str) -> list[dict[str, object]] | None:
+        rows = self._index_prices.get(code.upper())
+        if not rows:
+            return None
+        return [{"index_code": code.upper(), **dict(r)} for r in rows]
+
     def get_regime(self) -> dict[str, object]:
         return dict(self._regime)
 
@@ -112,9 +118,65 @@ class MarketService:
             "participation": 0.82,
         }
 
+    def get_movers(
+        self,
+        universe: str = "VN100",
+        limit: int = 10,
+    ) -> dict[str, object]:
+        u = universe.upper().strip()
+        items: list[dict[str, object]] = []
+        for sym, meta in self._stocks.items():
+            is_vn30 = bool(meta.get("is_vn30"))
+            exchange = str(meta.get("exchange", "HOSE"))
+            if u == "VN30" and not is_vn30:
+                continue
+            if u == "VN100" and not (is_vn30 or meta.get("is_vn100")):
+                continue
+            if u in ("HNX", "HNX30") and exchange != "HNX":
+                continue
+            if u == "UPCOM" and exchange != "UPCOM":
+                continue
+            if u == "HOSE" and exchange != "HOSE":
+                continue
+            if u not in ("VN30", "VN100", "HNX", "HNX30", "UPCOM", "HOSE", "ALL"):
+                continue
+            prices = self._prices.get(sym) or []
+            if len(prices) < 2:
+                continue
+            curr = float(str(prices[-1]["close"]))
+            prev = float(str(prices[-2]["close"]))
+            chg = round((curr / prev - 1.0) * 100, 2) if prev else 0.0
+            closes = [float(str(p["close"])) for p in prices]
+            sma20 = round(sum(closes[-20:]) / 20, 2) if len(closes) >= 20 else None
+            sma50 = round(sum(closes[-50:]) / 50, 2) if len(closes) >= 50 else None
+            p_vs_sma20 = round((curr / sma20 - 1.0) * 100, 2) if sma20 else None
+            p_vs_sma50 = round((curr / sma50 - 1.0) * 100, 2) if sma50 else None
+            items.append({
+                "symbol": sym,
+                "company_name": str(meta.get("company_name", sym)),
+                "exchange": str(meta.get("exchange", "HOSE")),
+                "close": curr,
+                "change_pct": chg,
+                "sma20": sma20,
+                "price_vs_sma20": p_vs_sma20,
+                "sma50": sma50,
+                "price_vs_sma50": p_vs_sma50,
+            })
+        gainers = sorted(items, key=lambda x: float(str(x["change_pct"])), reverse=True)[:limit]
+        decliners = sorted(items, key=lambda x: float(str(x["change_pct"])))[:limit]
+        return {
+            "trade_date": self._dates[-1],
+            "gainers": gainers,
+            "decliners": decliners,
+        }
+
     # ---------------------------------------------------------- stocks
     def list_stocks(
-        self, exchange: str | None, sector: str | None, vn30: bool | None
+        self,
+        exchange: str | None,
+        sector: str | None,
+        vn30: bool | None,
+        vn100: bool | None = None,
     ) -> list[dict[str, object]]:
         out = []
         for sym, meta in self._stocks.items():
@@ -123,6 +185,8 @@ class MarketService:
             if sector and meta["sector"] != sector:
                 continue
             if vn30 and not meta["is_vn30"]:
+                continue
+            if vn100 and not meta.get("is_vn100", meta["is_vn30"]):
                 continue
             out.append({**meta, "price": self._prices[sym][-1]["close"]})
         return sorted(out, key=lambda r: str(r["symbol"]))

@@ -33,6 +33,10 @@ class MarketSource(Protocol):
         """Latest snapshot for one index code, or ``None`` when unknown."""
         ...
 
+    def get_index_prices(self, code: str) -> list[dict[str, Any]] | None:
+        """EOD OHLCV series for one index code (oldest first), or ``None``."""
+        ...
+
     def get_regime(self) -> dict[str, Any]:
         """Current market regime snapshot."""
         ...
@@ -41,11 +45,23 @@ class MarketSource(Protocol):
         """Advancers/decliners/unchanged counts for the latest trade date."""
         ...
 
+    def get_movers(
+        self,
+        universe: str = "VN100",
+        limit: int = 10,
+    ) -> dict[str, Any]:
+        """Top gainers and decliners with MA20 / MA50 deviation metrics."""
+        ...
+
     # ------------------------------------------------------------------ stocks
     def list_stocks(
-        self, exchange: str | None, sector: str | None, vn30: bool | None
+        self,
+        exchange: str | None,
+        sector: str | None,
+        vn30: bool | None,
+        vn100: bool | None = None,
     ) -> list[dict[str, Any]]:
-        """Reference universe filtered by exchange/sector/VN30 membership."""
+        """Reference universe filtered by exchange/sector/VN30/VN100 membership."""
         ...
 
     def get_stock(self, symbol: str) -> dict[str, Any] | None:

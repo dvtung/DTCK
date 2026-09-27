@@ -174,6 +174,28 @@ class SSIFastConnectProvider(DataProvider):
 
         raise ConnectionError(f"provider '{self.id}': request failed for {endpoint}")
 
+    def fetch_index_components(self, index_code: str) -> list[dict[str, str]]:
+        """Fetch constituent stocks of an index (e.g. 'VN100', 'VN30', 'HNX30').
+
+        Returns a list of dicts with keys: ``{"symbol": ..., "isin": ...}``.
+        """
+        params = {
+            "indexCode": index_code.strip().upper(),
+            "pageIndex": 1,
+            "pageSize": 1000,
+        }
+        resp = self._request_with_retry("api/v2/Market/IndexComponents", params)
+        data = resp.get("data") or []
+        if not data:
+            return []
+        items = data[0].get("IndexComponent") or []
+        out: list[dict[str, str]] = []
+        for it in items:
+            sym = str(it.get("StockSymbol") or "").strip().upper()
+            if sym:
+                out.append({"symbol": sym, "isin": str(it.get("Isin") or "")})
+        return out
+
     def fetch_eod(self, symbols: list[str], start: date, end: date) -> list[EODBar]:
         """Fetch daily OHLCV bars for given symbols within [start, end]."""
         bars: list[EODBar] = []
@@ -252,7 +274,36 @@ class SSIFastConnectProvider(DataProvider):
     def fetch_index(
         self, index_codes: list[str], start: date, end: date
     ) -> list[IndexBar]:
-        """Fetch index daily OHLCV bars for given index codes within [start, end]."""
+        """Fetch index daily OHLCV bars for given index codes within [start, end].
+
+        Note: SSI DailyIndex API rejects queries with date windows exceeding ~30-60 days.
+        To support multi-year backfills, queries spanning > 30 days are automatically chunked.
+        """
+        from datetime import timedelta
+
+        if (end - start).days > 30:
+            all_bars: list[IndexBar] = []
+            curr_start = start
+            while curr_start <= end:
+                curr_end = min(curr_start + timedelta(days=30), end)
+                sub_bars = self._fetch_index_sub_window(index_codes, curr_start, curr_end)
+                all_bars.extend(sub_bars)
+                curr_start = curr_end + timedelta(days=1)
+            # Deduplicate by (index_code, trade_date)
+            seen_index: set[tuple[str, date]] = set()
+            unique_bars: list[IndexBar] = []
+            for b in all_bars:
+                k = (b.index_code, b.trade_date)
+                if k not in seen_index:
+                    seen_index.add(k)
+                    unique_bars.append(b)
+            return sorted(unique_bars, key=lambda x: (x.index_code, x.trade_date))
+
+        return self._fetch_index_sub_window(index_codes, start, end)
+
+    def _fetch_index_sub_window(
+        self, index_codes: list[str], start: date, end: date
+    ) -> list[IndexBar]:
         bars: list[IndexBar] = []
         from_date_str = _format_date(start)
         to_date_str = _format_date(end)
