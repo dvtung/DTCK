@@ -1276,6 +1276,9 @@ def page_email_notifications() -> None:
                     res_s = c.save_email_smtp(payload)
                     if res_s.get("error"):
                         st.error(f"Lưu thất bại: {res_s['error']}")
+                    elif res_s.get("warning"):
+                        # No rerun here: the warning must stay visible.
+                        st.warning(f"✅ Đã lưu. ⚠️ {res_s['warning']}")
                     else:
                         st.success("✅ Đã lưu cấu hình tài khoản gửi SMTP thành công.")
                         st.rerun()

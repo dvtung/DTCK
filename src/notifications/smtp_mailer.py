@@ -78,8 +78,29 @@ class SmtpMailer:
             return {"success": True, "recipient": to_email}
         except smtplib.SMTPAuthenticationError as exc:
             err = (
-                "Lỗi xác thực SMTP: Vui lòng kiểm tra lại Email và Mật khẩu ứng dụng "
-                f"(App Password) của Gmail. Chi tiết: {exc}"
+                "Lỗi xác thực SMTP: Gmail từ chối tài khoản gửi. Hãy dùng "
+                "Mật khẩu ứng dụng (App Password 16 ký tự, bật Xác thực 2 bước tại "
+                "myaccount.google.com/apppasswords) — mật khẩu Gmail thường không hoạt động. "
+                f"Chi tiết: {exc}"
+            )
+            logger.error(err)
+            return {"success": False, "error": err}
+        except smtplib.SMTPServerDisconnected as exc:
+            # Gmail drops the connection after repeated failed AUTH attempts
+            # (anti-abuse), so the real cause is almost always bad credentials.
+            err = (
+                "Máy chủ Gmail đóng kết nối trong lúc đăng nhập — thường do sai "
+                "tài khoản/email gửi hoặc sai App Password bị từ chối liên tiếp "
+                "(Google chống lạm dụng). Kiểm tra lại Gmail người gửi và App Password "
+                "16 ký tự, đợi vài phút rồi gửi thử lại. "
+                f"Chi tiết: {exc}"
+            )
+            logger.error(err)
+            return {"success": False, "error": err}
+        except smtplib.SMTPRecipientsRefused as exc:
+            err = (
+                "Gmail từ chối địa chỉ người nhận — hãy kiểm tra lại email người nhận "
+                f"(có thể sai chính tả hoặc không tồn tại). Chi tiết: {exc.recipients}"
             )
             logger.error(err)
             return {"success": False, "error": err}

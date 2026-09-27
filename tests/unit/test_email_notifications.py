@@ -168,4 +168,68 @@ class TestSmtpMailer:
         assert res["success"] is False
         assert "App Password" in res["error"]
 
+    def test_disconnect_during_auth_reports_app_password_hint(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Gmail drops the connection after repeated failed AUTH (T018 live bug)."""
+        import smtplib
+
+        class _DroppingSMTP:
+            def __init__(self, *args: Any, **kwargs: Any) -> None:
+                pass
+
+            def __enter__(self) -> _DroppingSMTP:
+                return self
+
+            def __exit__(self, *exc: object) -> None:
+                return None
+
+            def starttls(self) -> None:
+                return None
+
+            def login(self, user: str, password: str) -> None:
+                raise smtplib.SMTPServerDisconnected("Connection unexpectedly closed")
+
+            def send_message(self, msg: Any) -> None:
+                return None
+
+        monkeypatch.setattr("smtplib.SMTP", _DroppingSMTP)
+        mailer = SmtpMailer(sender_email="s@gmail.com", sender_password="not-an-app-pw")
+        res = mailer.send_email(to_email="d@example.com", subject="s", html_content="<p>x</p>")
+        assert res["success"] is False
+        assert "App Password" in res["error"]
+        assert "đóng kết nối" in res["error"]
+
+    def test_recipients_refused_reports_recipient_hint(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import smtplib
+
+        class _RefusingSMTP:
+            def __init__(self, *args: Any, **kwargs: Any) -> None:
+                pass
+
+            def __enter__(self) -> _RefusingSMTP:
+                return self
+
+            def __exit__(self, *exc: object) -> None:
+                return None
+
+            def starttls(self) -> None:
+                return None
+
+            def login(self, user: str, password: str) -> None:
+                return None
+
+            def send_message(self, msg: Any) -> None:
+                raise smtplib.SMTPRecipientsRefused(
+                    {"bad@example.com": (550, b"no such user")}
+                )
+
+        monkeypatch.setattr("smtplib.SMTP", _RefusingSMTP)
+        mailer = SmtpMailer(sender_email="s@gmail.com", sender_password="pw")
+        res = mailer.send_email(to_email="bad@example.com", subject="s", html_content="<p>x</p>")
+        assert res["success"] is False
+        assert "người nhận" in res["error"]
+
 

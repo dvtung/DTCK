@@ -154,7 +154,18 @@ class NotificationService:
                 row.use_ssl = use_ssl
                 row.is_active = True
             session.commit()
-            return {"success": True, "sender_email": row.sender_email}
+            result: dict[str, Any] = {"success": True, "sender_email": row.sender_email}
+            # Gmail only accepts 16-char App Passwords over SMTP; anything else is
+            # guaranteed to fail with 535 — surface that before the user test-sends.
+            if row.smtp_server.endswith("gmail.com") and len(
+                row.sender_password.replace(" ", "")
+            ) != 16:
+                result["warning"] = (
+                    "Mật khẩu hiện tại không phải App Password (16 ký tự) nên Google sẽ "
+                    "từ chối khi gửi. Hãy tạo Mật khẩu ứng dụng tại "
+                    "myaccount.google.com/apppasswords (cần bật Xác thực 2 bước) rồi lưu lại."
+                )
+            return result
 
     def get_schedule_config(self) -> dict[str, Any]:
         with self._session_maker() as session:
