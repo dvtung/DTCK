@@ -28,7 +28,7 @@
 │   ├── dashboard/         # giao diện Streamlit (T011)
 │   └── worker/            # tác vụ nền + CLI (ingest/backfill/recompute) + scheduler APScheduler
 ├── src/                   # các package Python có thể import
-│   ├── common/models/     # ★ mô hình SQLAlchemy — nguồn chân lý duy nhất (38 bảng)
+│   ├── common/models/     # ★ mô hình SQLAlchemy — nguồn chân lý duy nhất (42 bảng, gồm notifications T018)
 │   ├── data/              # ★ nạp dữ liệu: provider/thu thập/kiểm tra/chuẩn hóa/chất lượng
 │   ├── market/            # ★ quant: kỹ thuật/cơ bản/định giá/động lượng/rủi ro
 │   ├── quant/             # ★ chấm điểm hệ số + tín hiệu (trọng số baseline §12)
@@ -41,12 +41,12 @@
 │   ├── portfolio/         # nghiệp vụ danh mục (đã dựng khung)
 │   └── evidence/          # ★ engine bằng chứng §19 (T012)
 ├── database/
-│   ├── migrations/        # môi trường Alembic + bản 0001_initial_schema
-│   └── seeds/             # dữ liệu seed lặp lại an toàn (sở/ngành/VN30)
+│   ├── migrations/        # môi trường Alembic + head 0003_email_notifications
+│   └── seeds/             # dữ liệu seed lặp lại an toàn (sở/ngành/VN30/VN100/HNX/UPCOM)
 ├── configs/sources.yaml   # ★ registry nhà cung cấp đọc được bằng máy (T002 — 16 nguồn / 11 bật)
 ├── docs/                  # 15 đặc tả markdown (nguồn chân lý)
 ├── docs/*.html + style.css# ★ chính trang web tĩnh này (index/structure/status/modules/api/database/pipeline)
-├── tests/unit/            # 435 kiểm thử đơn vị (+18 integration; 449 đạt · 3 bỏ qua · 1 lỗi có trước)
+├── tests/unit/            # 523 kiểm thử đơn vị (+28 integration; 551 đạt · 3 bỏ qua)
 ├── memory-bank/           # tasks / current-state / decisions / changelog
 ├── docker/ docker-compose.yml
 └── pyproject.toml requirements.txt .env.example</pre>
@@ -55,9 +55,9 @@
 <table>
 <tr><th>Tầng</th><th>Thư mục</th><th>Trách nhiệm</th><th>Trạng thái</th></tr>
 <tr><td>Trình bày</td><td><code>apps/api</code>, <code>apps/dashboard</code></td><td>Endpoint REST, biểu đồ, bộ lọc, trang chi tiết mã, trang Tin tức &amp; RAG</td><td><span class="pill done">T010 + T011 xong · đọc CSDL thật qua MARKET_DATA_SOURCE=db/auto</span></td></tr>
-<tr><td>Nạp dữ liệu</td><td><code>src/data</code>, <code>apps/worker</code></td><td>Lấy về → kiểm tra → chuẩn hóa → cổng chất lượng → lưu trữ; 3 job lập lịch (tin tức 15' · EOD 15:05 · chấm điểm 15:30)</td><td><span class="pill done">T004 + T005 xong · E2E Yahoo/CaféF đã kiểm chứng</span></td></tr>
+<tr><td>Nạp dữ liệu</td><td><code>src/data</code>, <code>apps/worker</code></td><td>Lấy về → kiểm tra → chuẩn hóa → cổng chất lượng → lưu trữ; 5 job lập lịch (tin tức 15' · EOD 15:05 · chấm điểm 15:30 · <b>báo cáo email 08:00 + 15:30</b>)</td><td><span class="pill done">T004 + T005 xong · E2E Yahoo/CaféF đã kiểm chứng</span></td></tr>
 <tr><td>Quant</td><td><code>src/market/*</code>, <code>src/quant</code></td><td>Chỉ báo tất định, hệ số, định giá, điểm số, xếp hạng kèm giải thích</td><td><span class="pill done">T006 → T008 xong</span></td></tr>
-<tr><td>Lưu trữ</td><td><code>src/common/models</code>, <code>database/</code></td><td>Lược đồ 38 bảng, hypertable, seed</td><td><span class="pill done">T003 xong</span></td></tr>
+<tr><td>Lưu trữ</td><td><code>src/common/models</code>, <code>database/</code></td><td>Lược đồ 42 bảng (gồm email T018), hypertable, seed</td><td><span class="pill done">T003 + 0003_email_notifications xong</span></td></tr>
 <tr><td>Kiểm chứng</td><td><code>src/backtesting</code></td><td>Cuốn chiếu, chi phí, kiểm soát thiên lệch, chỉ số đo hiệu quả</td><td><span class="pill done">T009 xong</span></td></tr>
 <tr><td>Trí tuệ</td><td><code>src/rag</code>, <code>src/agents</code>, <code>src/ml</code></td><td>RAG bằng chứng, tác tử AI, dự báo ML</td><td><span class="pill done">T012 + T013 xong · T014 chặn</span></td></tr>
 <tr><td>Nền tảng</td><td><code>docker/</code>, <code>configs/</code>, <code>helper/</code></td><td>Dịch vụ Compose, registry nhà cung cấp, sổ tay vận hành</td><td><span class="pill prog">Một phần</span></td></tr>
@@ -75,6 +75,6 @@
 <tr><td><code>docker-compose.yml</code></td><td>db (TimescaleDB) · qdrant · redis · api · worker · dashboard</td></tr>
 </table>
 </div>
-<div class="footer">Tài liệu DTCK · cập nhật 2026-09-25 · <a href="index.html">Trang chủ</a></div>
+<div class="footer">Tài liệu DTCK · cập nhật 2026-09-28 · <a href="index.html">Trang chủ</a></div>
 </body>
 </html>

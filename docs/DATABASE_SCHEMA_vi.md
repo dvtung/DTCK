@@ -39,6 +39,7 @@ Agent           : agent_runs, agent_tool_calls
 Danh mục        : portfolios, portfolio_positions, portfolio_snapshots
 Quản trị/Kiểm toán: model_registry, agent_registry, audit_logs, data_quality_scores
 Người dùng/Auth : users, api_keys, roles
+Email tự động (T018): email_recipients, email_smtp_configs, email_schedule_configs, email_send_logs
 ```
 
 ---

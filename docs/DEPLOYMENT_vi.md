@@ -1,6 +1,6 @@
 # Hướng dẫn triển khai DTCK (Tiếng Việt)
 
-> Phiên bản: 2026-09-26 · nhánh `feat/data-source-design` · commit `7b048c5`
+> Phiên bản: 2026-09-28 · nhánh `vndocver` — scheduler 5 job, API 48/53, 42 bảng (head 0003), test 551 passed
 > Trạng thái: **bạn đang ở bước 3** — kiểm tra API/DB trong container + nạp dữ liệu thật.
 
 Dựa trên cấu hình thực tế của repo (docker-compose, Alembic, seeds, các KI đã biết).
@@ -78,20 +78,20 @@ không cần đổi Python 3.12 hay thêm biến môi trường.
 ## Giai đoạn 2: Database migration + seed
 
 ```bash
-# 7. Chạy migration (38 bảng + 12 hypertable TimescaleDB)
+# 7. Chạy migration (42 bảng + 12 hypertable TimescaleDB)
 docker compose exec api alembic upgrade head
 
 # 8. Kiểm tra migration đã áp dụng
-docker compose exec api alembic current     # phải hiện "0001 (head)"
+docker compose exec api alembic current     # phải hiện "0003_email_notifications (head)"
 
 # 9. Nạp dữ liệu tham chiếu (sàn HOSE/HNX/UPCOM, 10 ngành,
-#    15 ngành chi tiết, VN30 30 mã) — idempotent, chạy lại được
+#    15 ngành chi tiết, 138 mã VN30/VN100/HNX/UPCOM) — idempotent, chạy lại được
 docker compose exec api python -m database.seeds.run_all
 
 # 10. Xác minh
-docker compose exec db psql -U dtck -d dtck -c "\dt"        # 38 bảng
+docker compose exec db psql -U dtck -d dtck -c "\dt"        # 43 bảng (có hệ thống alembic_version)
 docker compose exec db psql -U dtck -d dtck -c \
-  "SELECT count(*) FROM stocks;"                            # 30 (VN30)
+  "SELECT count(*) FROM stocks;"                            # 138 (VN30 30 + VN100 dư · HNX 30 · UPCOM 8)
 ```
 
 > Rollback nếu cần: `docker compose exec api alembic downgrade base` (⚠️ mất dữ liệu).
@@ -101,21 +101,23 @@ docker compose exec db psql -U dtck -d dtck -c \
 ## Giai đoạn 3: Kiểm tra dịch vụ + nạp dữ liệu thật ⬅️ **BẠN ĐANG Ở ĐÂY**
 
 > Hoàn cảnh của bạn: Giai đoạn 1–2 đã xong (stack healthy,
-> migration `0001 (head)`, seed VN30). Mục tiêu của bước này:
+> migration `0003_email_notifications (head)` (42 bảng), seed 138 mã VN30/VN100/HNX/UPCOM). Mục tiêu của bước này:
 > (a) xác nhận container đang chạy **code mới nhất** (scheduler + DB read path),
 > (b) kiểm tra API/dashboard/RAG, (c) nạp giá EOD thật qua Yahoo + chấm điểm.
 
 ### 3.0. Rebuild trước (bắt buộc — code mới sau lần build image cũ)
 
 ```bash
-# 11. Build lại api + worker (scheduler 3 job, DbMarketService, SCHEDULER_*/MARKET_DATA_SOURCE)
+# 11. Build lại api + worker (scheduler 5 job, DbMarketService, SCHEDULER_*/MARKET_DATA_SOURCE)
 docker compose build api worker
 docker compose up -d --no-deps api worker
 
-# 12. Xác nhận worker scheduler đã đăng ký đủ 3 job
+# 12. Xác nhận worker scheduler đã đăng ký đủ 5 job
 docker compose logs worker 2>&1 | grep -i "registered job"
 # kỳ vọng thấy: periodic_news_ingestion … daily_eod_ingestion … cron Mon-Fri 15:05 …
-#               daily_eod_scoring … cron Mon-Fri 15:30 …
+#   + daily_eod_scoring … 15:30 + daily_morning_email_report … Mon-Fri 08:00
+#   + daily_afternoon_email_report … Mon-Fri 15:30
+# Báo cáo email T018 ghi mọi lượt vào bảng email_send_logs (SUCCESS/FAILED).
 ```
 
 ### 3.1. Kiểm tra API, dashboard, RAG trong container
@@ -143,7 +145,7 @@ curl "http://localhost:8000/api/v1/stocks/FPT/ranking"
 curl "http://localhost:8000/api/v1/rag/search?query=VNINDEX&top_k=3"
 
 # Swagger UI tương tác → http://localhost:8000/docs
-# Dashboard (có trang "Tin tức & RAG" mới) → http://localhost:8501
+# Dashboard (8 trang gồm "Tin tức & RAG" + "📧 Quản lý Email" T018) → http://localhost:8501
 # Qdrant dashboard → http://localhost:6333/dashboard
 ```
 
@@ -209,10 +211,11 @@ Quy trình ingest chuẩn qua cổng chất lượng:
 3. Chạy lại ingest với `--source yahoo` khi SSI lỗi/hết hạn ngạch (job 15:05 tự làm việc này)
 4. **Quality gate §39**: batch dưới 80 điểm sẽ bị flag `below_threshold` và command trả exit code 1 — đây là hành vi đúng, không phải lỗi
 
-**Worker scheduler (2026-09-25, cập nhật 2026-09-27):** container `worker` (`python -m apps.worker.main`)
-chạy APScheduler blocking với **3 job thật**: tin tức mỗi N phút (`cafef`),
+**Worker scheduler (2026-09-25, cập nhật 2026-09-28):** container `worker` (`python -m apps.worker.main`)
+chạy APScheduler blocking với **5 job thật**: tin tức mỗi N phút (`cafef`),
 EOD Mon–Fri 15:05 (`SCHEDULER_EOD_SOURCE=ssix_finipro` + chuỗi dự phòng
-`yahoo → vndirect → tcbs → dsc`, cửa sổ nạp lại 7 ngày), chấm điểm Mon–Fri 15:30
+`yahoo → vndirect → tcbs → dsc`, cửa sổ nạp lại 7 ngày), chấm điểm Mon–Fri 15:30,
+**báo cáo email Mon–Fri 08:00 + 15:30** (`daily_morning_email_report`/`daily_afternoon_email_report`, T018)
 — múi giờ `Asia/Ho_Chi_Minh`, fail-soft (provider lỗi chỉ ghi log).
 Tắt job bằng `SCHEDULER_JOBS_ENABLED=false` (endpoint `/news/ingest` vẫn dùng được).
 Image cũ chưa có code này → phải `docker compose build api worker` (xem 3.0).
@@ -277,14 +280,27 @@ curl -s http://localhost:8000/metrics
 
 ```bash
 # 19. Chạy toàn bộ test suite (trên máy chủ — thư mục `tests/` không nằm trong image api)
-LLM_PROVIDER=mock MARKET_DATA_SOURCE=memory pytest -q   # kỳ vọng: 469 passed, 3 skipped
-LLM_PROVIDER=mock MARKET_DATA_SOURCE=db pytest tests/integration -q  # kỳ vọng: 20 passed (CSDL đang chạy)
+LLM_PROVIDER=mock MARKET_DATA_SOURCE=memory pytest -q   # kỳ vọng 2026-09-28: 551 passed, 3 skipped (unit 523 + integration 28 liền một lệnh)
+LLM_PROVIDER=mock MARKET_DATA_SOURCE=db pytest tests/integration -q  # kỳ vọng: 28 passed (CSDL đang chạy)
 
 # 20. Lint + type check (image API cài kèm dev deps)
 docker compose exec -T api ruff check .
-docker compose exec -T api mypy apps src    # kỳ vọng: 132 tệp, no issues
+docker compose exec -T api mypy apps src    # kỳ vọng 2026-09-28: 138 tệp, no issues
 
-# 21. Xem dashboard (http://localhost:8501) — có trang "Tin tức & RAG" mới
+# 21. Xem dashboard (http://localhost:8501) — 8 trang gồm 📧 Quản lý Email (T018)
+
+**Thông báo email tự động (T018, 2026-09-28):**
+
+```bash
+# Cấu hình tài khoản Gmail gửi trong dashboard (📧 Quản lý Email → tab SMTP):
+# Gmail yêu cầu App Password 16 ký tự (tạo tại myaccount.google.com/apppasswords,
+# cần bật Xác thực 2 bước). Mật khẩu đăng nhập thường → 535; thử lại nhiều lần
+# → Gmail đóng kết nối (SMTPServerDisconnected). API map cả hai sang hướng dẫn
+# App Password; khi lưu password ≠ 16 ký tự, API trả thêm cảnh báo "warning".
+# Gửi thử: nút "Gửi Thử Ngay" → POST /api/v1/notifications/send-test → xem kết quả.
+# Tự động: worker chạy 2 cron Mon–Fri 08:00 (sáng) + 15:30 (chiều) ICT.
+docker compose logs worker 2>&1 | grep -i "Registered job"   # kỳ vọng 5 job: news / EOD 15:05 / scoring 15:30 / email 08:00 / email 15:30
+```
 ```
 
 ---
@@ -309,10 +325,10 @@ docker compose exec db pg_dump -U dtck dtck | gzip > backup_$(date +%F).sql.gz
 
 ## Các việc còn thiếu để production thật (roadmap §57)
 
-| # | Việc | Trạng thái (cập nhật 2026-09-26) |
+| # | Việc | Trạng thái (cập nhật 2026-09-28) |
 |---|---|---|
-| 1 | **T015** — JWT/RBAC thật (login hiện là demo token), rate limiting, audit, CI/CD | Chưa làm |
-| 2 | **KI-008 (phần còn lại)** — mặc định vẫn `memory`; chiều **ghi** qua API (`POST /backtests` vào DB) chưa có; các bảng chỉ số/báo cáo tài chính chưa có job ghi → `auto` chưa an toàn làm mặc định | Phần đọc ✅ DONE 2026-09-25 |
+| 1 | **T015** — rate limiting, audit | JWT/RBAC login thật ✅ XONG (T015b, JWT HS256 stdlib); CI/CD `ci.yml` + backup `backup_db.sh` + `health_alert.sh` ✅ XONG (T015b); còn rate limiting |
+| 2 | **KI-008 (phần còn lại)** — mặc định vẫn `memory`; các bảng chỉ số/báo cáo tài chính chưa có job ghi → `auto` chưa an toàn làm mặc định | Phần đọc ✅ DONE 2026-09-25; chiều **ghi** `POST /backtests` ✅ DONE (T015b) |
 | 3 | **KI-009** — backfill lịch sử nhiều năm qua Yahoo để backtest có ý nghĩa (hiện mới ~1 tháng) | Chờ bước 3.3 của bạn |
 | 4 | ~~**KI-012**~~ **ĐÃ GIẢI (2026-09-27)** — `train-model --source db` huấn luyện trên CSDL (nhãn hỗn hợp): 616 hàng, `roc_auc=0.702`, model APPROVED | Backfill lâu dài còn phụ thuộc KI-009 |
 | 5 | HTTPS/reverse proxy (nginx/traefik) + secrets manager | Chưa có trong compose |

@@ -2,27 +2,27 @@
 
 > Thuật ngữ chuyên môn (tên bảng, biến môi trường, lệnh, đường dẫn) giữ nguyên tiếng Anh.
 
-## Task: T016 — Universe VN100/đa sàn, nến VNINDEX, bảng tăng/giảm MA, đăng nhập JWT
+## Task: T018 — Module gửi email tự động (Gmail SMTP) + Trang quản trị dashboard
 
-**Trạng thái:** HOÀN THÀNH (2026-09-27)
-**Mục tiêu:** (1) nạp danh sách **VN100** thật từ SSI + mở rộng sang **HNX/UPCOM**; (2) nến **VNINDEX** 2 năm cho trang Tổng quan; (3) bảng **Top 10 tăng/giảm** theo khoảng cách MA20/MA50; (4) bộ lọc đủ 3 sàn; (5) biểu đồ xếp hạng 30 mã; (6) **đăng nhập JWT** cho dashboard.
+**Trạng thái:** HOÀN THÀNH (2026-09-28)
+**Mục tiêu:** (1) gửi email báo cáo Tổng quan tự động Thứ 2–6 lúc 08:00 và 15:30 qua Gmail SMTP; (2) trang **📧 Quản lý Email** trên dashboard quản lý người nhận, tài khoản SMTP, lịch gửi, gửi thử + preview.
 
-### Dữ liệu & endpoint:
-- [x] `SSIFastConnectProvider.fetch_index_components` (`Market/IndexComponents?pageSize=1000`) → VN100=100, HNX30=30.
-- [x] Seed `stocks`: HOSE 100 (100 cờ `is_vn100`, gồm 30 VN30), HNX 30, UPCOM 8 (tên cty từ `SecuritiesDetails`); nạp ~67k bars/2 năm cho 108 mã chưa có giá.
-- [x] Sửa **SSI DailyIndex từ chối cửa sổ > 30 ngày** (trả 0 rows im lặng) → `fetch_index` tự chia trâu 30 ngày + dedupe; nạp 992 bars index (496 VNINDEX + 496 VN30).
-- [x] `GET /market/indices/{code}/prices` · `GET /market/movers?universe=&limit=` (MA20/MA50 tính trên ~100 ngày) · `GET /stocks?vn100=` · cột `StockOut.is_vn100`.
-- [x] `compute-scores` → 137 mã; `train-model --source db` → 63,436 dòng, `roc_auc=0.565` APPROVED.
+### Sản phẩm:
+- [x] `src/notifications/` — `report_generator.py` (HTML Tổng quan: KPI, Top 10 tăng/giảm vs MA20, VN30 + P(tăng 5D), disclaimer §3), `smtp_mailer.py` (stdlib: STARTTLS 587/SSL 465, map lỗi AUTH/disconnect/recipient sang tiếng Việt), `service.py` (`NotificationService`: recipients/SMTP/schedule/logs/dispatch).
+- [x] `src/common/models/notifications.py` + migration `0003_email_notifications` (4 bảng; 42 bảng tổng).
+- [x] Router `notifications` — 11 thao tác `/api/v1/notifications/*` (CRUD recipients, smtp, schedule, send-test, preview-html, logs).
+- [x] Worker: 2 cron Mon–Fri **08:00** + **15:30** (`Asia/Ho_Chi_Minh`) → scheduler **5 job**.
+- [x] Dashboard **📧 Quản lý Email** (5 tab: gửi thử/preview HTML, người nhận, SMTP Gmail, lịch gửi, logs); validation regex stdlib (không `email-validator`); cảnh báo password ≠ 16 ký tự (không phải App Password).
 
-### Dashboard:
-- [x] Sidebar **đăng nhập JWT**: form email/mật khẩu → `/api/v1/auth/login`, token trong `st.session_state`, `MarketClient(token=…)` gắn `Authorization: Bearer` (AI Analysis + Backtest POST), nút Đăng xuất.
-- [x] Tổng quan: **nến VNINDEX 2 tầng** (nến + MA20/MA50 / khối lượng) + **bảng Top 10 tăng/giảm** với chọn universe (VN100/VN30/HNX/UPCOM).
-- [x] Screener: 138 mã 3 sàn + cột VN100; Xếp hạng: **30 mã** + nhãn điểm.
+### Kiểm chứng (fact, 2026-09-28):
+- **523 unit passed, 3 skipped** + **28 integration passed**; `ruff check` + `mypy` (**138 tệp**) sạch.
+- Live trong container: build HTML 16 KB từ service thật, worker đăng ký đủ 5 job (`daily_morning_email_report`, `daily_afternoon_email_report`), trace SMTP đến AUTH rồi 535 → map sang hướng dẫn App Password.
+- **Còn chặn vận hành (phía người dùng, không phải bug repo):** Gmail yêu cầu App Password 16 ký tự cho SMTP (mật khẩu thường → 535; thử lại nhiều lần → Gmail đóng kết nối `SMTPServerDisconnected`). Người dùng tự tạo tại `myaccount.google.com/apppasswords` rồi lưu trên dashboard.
 
-### Kiểm chứng (fact, 2026-09-27):
-- **510 unit passed, 3 skipped** (+11 bài mới), **20 integration passed**; `ruff check` + `mypy` (133 tệp) sạch.
-- Live: login trả JWT HS256 thật · `movers VN100` (VHM +5.66% vs MA20 −3.52%…) · `VNINDEX/prices` 496 bars (2024-09-27 → 2026-09-25) · lọc `exchange=HNX`(30)/`UPCOM`(8) · `vn100=true`(100) · universe lạ → rỗng.
-- Lưu ý: 7 test thất bại khi chạy với `.env` `MARKET_DATA_SOURCE=auto` (đọc CSDL thật) đã **tồn tại trước T016** — chạy CI-gate với `MARKET_DATA_SOURCE=memory` thì sạch.
+### Bối cảnh đã đóng góp (giữ nguyên cho truy vết):
+- T016 (Universe VN100/đa sàn + nến VNINDEX + Top 10 + login JWT, 2026-09-27): +11 bài ⇒ **510 unit, 20 integration**, ruff+mypy 133 tệp.
+- T018 (2026-09-27): +11 bài ⇒ **521 unit, 28 integration**, ruff+mypy 138 tệp.
+- `a39e130` (2026-09-28): map lỗi SMTP sang hướng dẫn App Password + cảnh báo password; +2 bài ⇒ **523 unit, 28 integration**.
 
 ---
 

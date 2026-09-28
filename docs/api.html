@@ -14,7 +14,7 @@
 </header>
 <div class="wrap">
 <h2 class="sec">Tổng quan</h2>
-<p>Dịch vụ REST trong <code>apps/api/</code> triển khai các <b>đường đọc MVP-1</b> của <code>docs/API_SPECIFICATION.md</code>: 14 nhóm đường dẫn (market/stocks/fundamentals/technical/valuation/news/backtests + rag/evidence + agents/analysis + predictions/monitoring/auth), <b>39 đường dẫn / 40 thao tác</b>. Tiền tố phiên bản <code>/api/v1</code>. Tài liệu tương tác tự sinh tại <code>/docs</code> (Swagger UI) và <code>/redoc</code>.</p>
+<p>Dịch vụ REST trong <code>apps/api/</code> triển khai các <b>đường đọc MVP-1</b> của <code>docs/API_SPECIFICATION.md</code>: 13 nhóm đường dẫn (market/stocks/fundamentals/technical/valuation/news/backtests + rag/evidence + agents/analysis + predictions/monitoring/auth + <b>notifications</b>), <b>48 đường dẫn / 53 thao tác</b> (kiểm chứng 2026-09-28 bằng <code>app.openapi()</code>). Tiền tố phiên bản <code>/api/v1</code>. Tài liệu tương tác tự sinh tại <code>/docs</code> (Swagger UI) và <code>/redoc</code>.</p>
 <div class="sig"><b>Kiến trúc 3 lớp:</b> router (khai báo hợp đồng HTTP) → service (<code>MarketService</code> hoặc <code>DbMarketService</code> giữ nghiệp vụ + dữ liệu) → schema (Pydantic, hợp đồng vào/ra). Router không chứa logic và chỉ phụ thuộc <b>protocol</b> <code>MarketSource</code> (<code>apps/api/services/market_source.py</code>) — đó là lý do cùng một bộ router chạy được với kho trong bộ nhớ (mặc định, tất định, không cần hạ tầng) lẫn TimescaleDB thật.</div>
 <div class="sig"><b>Chế độ nguồn dữ liệu</b> — biến môi trường <code>MARKET_DATA_SOURCE</code> (<code>apps/api/dependencies.py</code>): <code>memory</code> (mặc định) dùng <code>MarketService</code> tất định; <code>db</code> dùng <code>DbMarketService</code> đọc thẳng TimescaleDB; <code>auto</code> chọn CSDL khi <code>SELECT 1</code> thông <i>và</i> bảng <code>prices</code> đã có dữ liệu, ngược lại tự về <code>memory</code>. <b>Hợp đồng router và toàn bộ kiểm thử giữ nguyên ở cả ba chế độ</b>.</div>
 <h2 class="sec">Chạy máy chủ</h2>
@@ -35,8 +35,26 @@ curl localhost:8000/healthz</pre>
 <table>
 <tr><th>Phương thức</th><th>Đường dẫn</th><th>Mô tả</th></tr>
 <tr><td>GET</td><td><code>/market/indices</code></td><td>Danh sách chỉ số kèm giá đóng cửa mới nhất (VNINDEX, VN30)</td></tr>
+<tr><td>GET</td><td><code>/market/indices/{code}</code></td><td>Snapshot một chỉ số</td></tr>
+<tr><td>GET</td><td><code>/market/indices/{code}/prices</code></td><td>Chuỗi OHLCV ngày của một chỉ số (nến VNINDEX 2 năm, T016)</td></tr>
 <tr><td>GET</td><td><code>/market/regime</code></td><td>Chế độ thị trường hiện tại (BULL/BEAR/SIDEWAYS/VOLATILE) + độ tin cậy</td></tr>
 <tr><td>GET</td><td><code>/market/breadth</code></td><td>Độ rộng thị trường (số mã tăng/giảm/đi ngang)</td></tr>
+<tr><td>GET</td><td><code>/market/movers</code></td><td>Top tăng/giảm <code>?universe=VN100|VN30|HNX|UPCOM&amp;limit=10</code> kèm %1D + khoảng cách MA20/MA50 (T016)</td></tr>
+</table>
+<h2 class="sec">Nhóm <code>/api/v1/notifications</code> (T018)</h2>
+<table>
+<tr><th>Phương thức</th><th>Đường dẫn</th><th>Mô tả</th></tr>
+<tr><td>GET</td><td><code>/notifications/recipients</code></td><td>Danh sách email nhận báo cáo định kỳ</td></tr>
+<tr><td>POST</td><td><code>/notifications/recipients</code></td><td>Thêm/kích hoạt email nhận mới (regex email stdlib, không <code>email-validator</code>)</td></tr>
+<tr><td>PATCH</td><td><code>/notifications/recipients/{recipient_id}</code></td><td>Bật/tắt trạng thái nhận</td></tr>
+<tr><td>DELETE</td><td><code>/notifications/recipients/{recipient_id}</code></td><td>Xóa email khỏi danh sách</td></tr>
+<tr><td>GET</td><td><code>/notifications/smtp</code></td><td>Thông tin tài khoản SMTP (không bao giờ lộ mật khẩu)</td></tr>
+<tr><td>POST</td><td><code>/notifications/smtp</code></td><td>Lưu cấu hình SMTP Gmail (server/port/email/App Password); cảnh báo khi password ≠ 16 ký tự</td></tr>
+<tr><td>GET</td><td><code>/notifications/schedule</code></td><td>Lịch gửi tự động (sáng 8h, chiều 15h30, Mon–Fri)</td></tr>
+<tr><td>POST</td><td><code>/notifications/schedule</code></td><td>Lưu lịch gửi tự động</td></tr>
+<tr><td>POST</td><td><code>/notifications/send-test</code></td><td>Gửi thử ngay một địa chỉ — lỗi SMTP (535/disconnect/recipient) map sang tiếng Việt hành động được</td></tr>
+<tr><td>GET</td><td><code>/notifications/preview-html</code></td><td>Xem trước toàn bộ HTML bản tin Tổng quan (KPI, Top 10, VN30 + ML, disclaimer §3)</td></tr>
+<tr><td>GET</td><td><code>/notifications/logs</code></td><td>Nhật ký lượt gửi (SUCCESS/FAILED + chi tiết lỗi)</td></tr>
 </table>
 <h2 class="sec">Nhóm <code>/api/v1/stocks</code></h2>
 <table>
@@ -91,6 +109,6 @@ pytest -q tests/unit/test_market_data_source.py  # 11 bài: protocol + chọn ng
 pytest -q tests/integration/test_db_market.py    # 14 bài: đường đọc CSDL thật (tự skip khi không có DATABASE_URL)</pre>
 <p>Bộ kiểm thử dùng <code>fastapi.testclient.TestClient</code> trên chính đối tượng <code>app</code> — không cần máy chủ đang chạy, không cần CSDL. Bảng điều khiển (<code>apps/dashboard</code>) gọi API này trực tiếp qua HTTP (gỡ bao phân trang) với fallback trong tiến trình khi API tắt.</p>
 </div>
-<div class="footer">Tài liệu DTCK · cập nhật 2026-09-25 · <a href="index.html">Trang chủ</a></div>
+<div class="footer">Tài liệu DTCK · cập nhật 2026-09-28 · <a href="index.html">Trang chủ</a></div>
 </body>
 </html>

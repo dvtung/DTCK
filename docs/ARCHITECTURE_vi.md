@@ -114,7 +114,7 @@ Thêm: Backtest trước khi triển khai (§4.5), Con người trong vòng lặ
 - **RAG Service:** chunking, embedding, truy xuất lai, rerank, tập bằng chứng.
 - **Agent Service:** 4 agent + orchestrator, gọi tool, audit đầy đủ.
 - **API Service (FastAPI):** biên REST `/api/v1/*` cho mọi consumer (dashboard, agent, ngoài).
-- **Dashboard (Streamlit):** tổng quan, sàng lọc, xếp hạng, chi tiết mã, backtest, tin tức & RAG, sức khỏe hệ thống.
+- **Dashboard (Streamlit):** tổng quan, sàng lọc, xếp hạng, chi tiết mã, backtest, tin tức & RAG, 📧 Quản lý Email (T018), sức khỏe hệ thống.
 
 ---
 

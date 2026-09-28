@@ -30,14 +30,14 @@
       <span class="badge">Python 3.12 · FastAPI · Streamlit</span>
       <span class="badge">TimescaleDB · Qdrant · Redis</span>
       <span class="badge">Tác tử LangGraph · XGBoost / LightGBM</span>
-      <span class="badge">449 kiểm thử đạt · ruff + mypy sạch</span>
+      <span class="badge">551 kiểm thử đạt · 138 mã · 48 API · ruff + mypy sạch</span>
     </div>
   </div>
   <div class="grid">
     <div class="card"><h3>🏗️ Cấu trúc dự án</h3><p>Bố cục kho mã, các app, package, file cấu hình và cách các thành phần khớp với nhau.</p><a class="btn" href="structure.html">Khám phá cấu trúc →</a></div>
     <div class="card"><h3>📊 Tiến độ phát triển</h3><p>Tiến độ theo từng giai đoạn: đã xong gì, tiếp theo là gì, các điểm nghẽn đã biết.</p><a class="btn" href="status.html">Xem tiến độ →</a></div>
     <div class="card"><h3>🧩 Tham khảo module</h3><p>Mọi module đã triển khai: lớp, hàm, chữ ký và ví dụ sử dụng.</p><a class="btn" href="modules.html">Duyệt module →</a></div>
-    <div class="card"><h3>🗄️ Lược đồ cơ sở dữ liệu</h3><p>38 bảng thuộc 13 nhóm nghiệp vụ, 12 hypertable TimescaleDB, seed và migration.</p><a class="btn" href="database.html">Xem lược đồ →</a></div>
+    <div class="card"><h3>🗄️ Lược đồ cơ sở dữ liệu</h3><p>42 bảng thuộc 14 nhóm nghiệp vụ (gồm Email tự động), 12 hypertable TimescaleDB, seed và migration.</p><a class="btn" href="database.html">Xem lược đồ →</a></div>
     <div class="card"><h3>🔄 Luồng dữ liệu</h3><p>Cách dữ liệu thị trường luân chuyển: nhà cung cấp → thu thập → kiểm tra → chuẩn hóa → cổng chất lượng.</p><a class="btn" href="pipeline.html">Theo dõi luồng →</a></div>
     <div class="card"><h3>⚡ Mô phỏng Hệ thống</h3><p>Mô phỏng trực quan tương tác giữa các module, luồng luân chuyển dữ liệu và nhiệm vụ thực thi.</p><a class="btn" href="simulation.html">Chạy mô phỏng →</a></div>
     <div class="card"><h3>🤖 Mô phỏng Kiến trúc Tác tử</h3><p>Mô phỏng chi tiết tương tác 4 Agent AI, Tool Catalog, Orchestrator, LLM reasoning và Audit Trail.</p><a class="btn" href="agent-architecture-simulation.html">Khám phá tác tử →</a></div>
@@ -54,23 +54,23 @@
   <h2 class="sec">Tổng quan nhanh</h2>
   <table>
     <tr><th>Chỉ số</th><th>Giá trị</th></tr>
-    <tr><td>Mô hình SQLAlchemy / bảng CSDL</td><td>38 bảng · 13 file nghiệp vụ trong <code>src/common/models/</code></td></tr>
+    <tr><td>Mô hình SQLAlchemy / bảng CSDL</td><td>42 bảng · 14 file nghiệp vụ trong <code>src/common/models/</code> (gồm <code>notifications.py</code> — 4 bảng, T018)</td></tr>
     <tr><td>Hypertable TimescaleDB</td><td>12 bảng chuỗi thời gian (prices, index_prices, factors, …)</td></tr>
-    <tr><td>Dữ liệu seed</td><td>3 sở giao dịch · 10 ngành · 15 nhóm ngành · 30 mã VN30</td></tr>
+    <tr><td>Dữ liệu seed</td><td>3 sở giao dịch · 10 ngành · 15 nhóm ngành · 138 mã (VN30/VN100/HNX/UPCOM)</td></tr>
     <tr><td>Hàm quant</td><td>9 kỹ thuật + 12 cơ bản + 11 định giá + 4 động lượng + 6 rủi ro + 4 chấm điểm</td></tr>
     <tr><td>Engine chấm điểm (T008)</td><td>Phân rã đóng góp từng hệ số + nhãn tín hiệu + độ tin cậy; payload giải thích cho mọi mã</td></tr>
     <tr><td>Engine kiểm thử ngược (T009)</td><td>Cuốn chiếu (walk-forward), chi phí giao dịch/trượt giá, 11 chỉ số đo hiệu quả</td></tr>
-    <tr><td>API REST (T010 + T012 + T013)</td><td>12 tệp router <code>/api/v1/*</code> (market, stocks, fundamentals, technical, valuation, news, backtests, rag/evidence, agents/analysis, auth, monitoring, predictions) · <b>39 đường dẫn / 40 thao tác</b> (kể cả POST /backtests, không tính /healthz+/readyz+/docs) · 21 schema Pydantic · nguồn đọc chọn bằng <code>MARKET_DATA_SOURCE=memory|db|auto</code></td></tr>
+    <tr><td>API REST (T010 + T012 + T013 + T016 + T018)</td><td>13 tệp router <code>/api/v1/*</code> (market, stocks, fundamentals, technical, valuation, news, backtests, rag/evidence, agents/analysis, auth, monitoring, predictions, notifications) · <b>48 đường dẫn / 53 thao tác</b> (kể cả POST /backtests và 11 thao tác notifications, không tính /healthz+/readyz+/metrics) · 24 schema Pydantic · nguồn đọc chọn bằng <code>MARKET_DATA_SOURCE=memory|db|auto</code></td></tr>
     <tr><td>Nguồn dữ liệu (T002 + bảo trì)</td><td>16 nhà cung cấp · 11 đang bật · <b>SSIFastConnectProvider</b> (<code>ssix_finipro</code>, nguồn <b>chính</b>: EOD mã + chỉ số, <b>kiểm chứng 2026-09-27</b>) · <b>YahooChartProvider</b> (EOD <code>.VN</code> HOSE/HNX/UPCOM — dự phòng) + <b>RssNewsProvider</b> (CaféF RSS) <b>kiểm chứng 2026-09-25</b> · chuỗi chạy tự động <code>ssix_finipro → yahoo → vndirect → tcbs → dsc</code></td></tr>
-    <tr><td>Worker lập lịch (APScheduler)</td><td>3 job, múi giờ <code>Asia/Ho_Chi_Minh</code>: tin tức mỗi 15 phút · EOD Mon–Fri 15:05 (SSI chính, tự chuyển Yahoo khi lỗi/0 dòng) · chấm điểm Mon–Fri 15:30 (nhập → chấm → API, idempotent cửa sổ 7 ngày)</td></tr>
+    <tr><td>Worker lập lịch (APScheduler)</td><td>5 job, múi giờ <code>Asia/Ho_Chi_Minh</code>: tin tức mỗi 15 phút · EOD Mon–Fri 15:05 (SSI chính, tự chuyển Yahoo khi lỗi/0 dòng) · chấm điểm Mon–Fri 15:30 · <b>báo cáo email Mon–Fri 08:00 + 15:30</b> (T018)</td></tr>
     <tr><td>Nạp dữ liệu thật đã kiểm chứng</td><td><code>ingest --source ssix_finipro</code> (2026-09-27) → 68/68 dòng giá (chất lượng 93.74) + 34 dòng chỉ số; dự phòng <code>--source yahoo</code> → 62/62 dòng (94.88). CaféF 50 bài thật đã lưu <code>news</code> + <code>news_symbols</code></td></tr>
     <tr><td>Chế độ nguồn dữ liệu của API</td><td><code>MARKET_DATA_SOURCE=memory</code> (mặc định) · <code>db</code> đọc thẳng TimescaleDB qua <code>DbMarketService</code> · <code>auto</code> dùng CSDL khi kết nối được và đã có dòng <code>prices</code>. Cùng một bộ router/kiểm thử cho cả ba chế độ (<code>apps/api/dependencies.py</code>, <code>apps/api/db.py</code>)</td></tr>
-<tr><td>Bảng điều khiển (T011)</td><td>4 trang chính (tổng quan · bộ lọc · xếp hạng · <b>Tin tức &amp; RAG</b>) + trang ngữ cảnh (chi tiết mã, backtests, sức khỏe) · nối API thật (gỡ bao phân trang) · <code>apps/dashboard/</code> + 38 kiểm thử</td></tr>
+<tr><td>Bảng điều khiển (T011 + T016 + T018)</td><td>Tổng quan (nến VNINDEX + Top 10) · <b>📧 Quản lý Email</b> (T018, 5 tab) · bộ lọc (3 sàn, cột VN100) · xếp hạng (30 mã) · chi tiết mã (nến + MA + ML + RAG) · backtest (form tạo) · <b>Tin tức &amp; RAG</b> · sức khỏe + JWT ở sidebar · nối API thật (gỡ bao phân trang) · <code>apps/dashboard/</code> + AppTest</td></tr>
     <tr><td>RAG + bằng chứng (T012)</td><td><code>src/rag/</code> (nhúng hash, chunking, kho trong bộ nhớ + Qdrant best-effort, truy xuất hybrid, rerank) + <code>src/evidence/</code> (§19) + 3 endpoint API + 23 kiểm thử</td></tr>
-    <tr><td>Kiểm thử</td><td><b>449 đạt · 3 bỏ qua · 1 lỗi tồn tại</b> (unit 432 + integration 18) — llm 22 · pipeline 39 · technical 40 · quality 26 · agents 64 · dashboard 38 · api 25 · market-source 11 · rag+evidence 23 · backtest 15 · yahoo 13 · rss 14 · scheduler 7 · db-market (integration) 14 · ml 18 · scoring 19 · quant 19 · market+deployment+sources+smoke+t014 40 · live (<code>-m live</code>) 2. Lỗi còn lại <code>test_scoring_job::test_api_reader_serves_the_persisted_run</code> (renormalize tổng đóng góp 0.9999, lỗi có trước T016). Lệnh: <code>LLM_PROVIDER=mock MARKET_DATA_SOURCE=memory pytest</code></td></tr>
-    <tr><td>Tài liệu</td><td>15 đặc tả markdown trong <code>docs/</code> + 7 trang HTML tĩnh (site này) — cùng thư mục <code>docs/</code></td></tr>
+    <tr><td>Kiểm thử</td><td><b>551 đạt · 3 bỏ qua</b> (unit 523 + integration 28: email 21 · api · market-source · db-market; live 2) · ruff + mypy (138 tệp) sạch. Lệnh: <code>LLM_PROVIDER=mock MARKET_DATA_SOURCE=memory pytest</code> · báo cáo email Gmail SMTP + App Password (kẻ chữ ký gửi luôn từ DB, không từ worker)</td></tr>
+    <tr><td>Tài liệu</td><td>15 đặc tả markdown trong <code>docs/</code> + 8 trang HTML tĩnh (site này) — cùng thư mục <code>docs/</code></td></tr>
   </table>
 </div>
-<div class="footer">Tài liệu DTCK · cập nhật 2026-09-25 · nhánh <code>feat/data-source-design</code> · xem <code>docs/</code> để đọc đặc tả đầy đủ</div>
+<div class="footer">Tài liệu DTCK · cập nhật 2026-09-28 · nhánh <code>vndocver</code> · xem <code>docs/</code> để đọc đặc tả đầy đủ</div>
 </body>
 </html>

@@ -86,17 +86,18 @@ Xem các bước xử lý sklearn trong `helper/deployment_vi.md`.
 - `docker compose exec api alembic upgrade head` — migrate
 - `docker compose exec api pytest` — chạy test trong container
 
-## API (T010; 39 đường dẫn / 40 thao tác trên `/api/v1/*`, 2026-09-26)
+## API (T010 + T016 + T018; 48 đường dẫn / 53 thao tác trên `/api/v1/*`, 2026-09-28)
 
 - **Framework:** FastAPI 0.115 · endpoint `/api/v1/*`, tiền tố `docs/api.html`.
-- **Router:** 12 tệp — nhóm market, stocks, fundamentals, technical, valuation, news, backtests, rag/evidence, agents/analysis, predictions, monitoring, auth.
-- **Service:** protocol `MarketSource` (`apps/api/services/market_source.py`) — `MarketService` trong bộ nhớ, tất định (mặc định; KI-008 phần đọc đã mở) hoặc `DbMarketService` đọc TimescaleDB khi `MARKET_DATA_SOURCE=db|auto`; `/readyz` trả `market_source` dạng `<chế độ>-><service>`. Để mở rộng: nối repository SQLAlchemy mới vào `DbMarketService`, không đụng router.
-- **Probe sẵn sàng:** `/healthz` (liveness tĩnh) và `/readyz` dò thật — `database` (`connected`/`connected-no-prices`/`unreachable`), `qdrant` (`up`/`offline-index-ready`), `agents` (`llm:<model>`/`offline:<tasks>`), `models` (`<model_id>@<version>` nạp từ `model_registry`, hoặc `stub`), `market_source`; probe luôn trả 200 (không 5xx). Prebuilt image đã cài extra `[qdrant]` (client Qdrant, không có torch) để mirror `dtck_docs` chạy thật.
+- **Router:** 13 tệp — nhóm market (+ `/indices/{code}/prices`, `/movers`), stocks (+ `?vn100=`), fundamentals, technical, valuation, news, backtests, rag/evidence, agents/analysis, predictions, monitoring, auth, **notifications** (CRUD recipients, smtp, schedule, send-test, preview-html, logs — 11 thao tác, T018).
+- **Service:** protocol `MarketSource` (`apps/api/services/market_source.py`, 23 phương thức) — `MarketService` trong bộ nhớ, tất định (mặc định; KI-008 phần đọc đã mở) hoặc `DbMarketService` đọc TimescaleDB khi `MARKET_DATA_SOURCE=db|auto`; `/readyz` trả `market_source` dạng `<chế độ>-><service>`. Để mở rộng: nối repository SQLAlchemy mới vào `DbMarketService`, không đụng router.
+- **Probe sẵn sàng:** `/healthz` (liveness tĩnh) và `/readyz` dò thật — `database` (`connected`/`connected-no-prices`/`unreachable`), `qdrant` (`up`/`offline-index-ready`), `agents` (`llm:<model>`/`offline:<tasks>`), `models` (`<model_id>@<version>` nạp từ `model_registry`, hoặc `stub`), `market_source` (live: `auto->db`); probe luôn trả 200 (không 5xx). Prebuilt image đã cài extra `[qdrant]` (client Qdrant, không có torch) để mirror `dtck_docs` chạy thật.
 - **Registry mô hình (T015b):** `train-model --source db` lưu pickled `ModelEntry` vào `model_registry.artifact`; API nạp lại qua `lifespan` (`src/ml/registry_store.py`) nên `/predictions` phục vụ model thật thay vì stub. Bảng có `target`/`horizon_days`; chu kỳ huấn luyện để NULL (không bịa theo §31).
 - **Chiều ghi Backtest (T015b):** `POST /api/v1/backtests` chèn bản ghi vào `backtests` khi chạy DB mode (chi phí mặc định 15/5 bps); `GET /backtests*` phục vụ lại đúng bản ghi đó.
-- **Schemas:** 21 lớp Pydantic trong `apps/api/schemas.py`, gồm `Page[T]` generic + `ErrorResponse`.
-- **Kiểm thử:** `pytest tests/unit/test_api.py` (health/readyz, nhóm router, phân trang, 404) + `tests/unit/test_market_data_source.py` + integration `tests/integration/test_db_market.py`.
-- **Kiểm chứng số liệu (2026-09-26):** con số lấy từ `app.openapi()` — 39 đường dẫn / 40 thao tác trên `/api/v1/*`; cộng `/healthz` + `/readyz` thành 41 đường dẫn / 42 thao tác. Các ghi chú cũ "38 đường dẫn / 39 thao tác" là đếm thiếu một đường dẫn.
+- **Thông báo email (T018):** `NotificationService` (`src/notifications/service.py`) + 4 bảng, validation regex email stdlib (không `email-validator`), cảnh báo password Gmail ≠ 16 ký tự (không phải App Password); lỗi SMTP (535/disconnect/recipient) được map sang tiếng Việt hành động được. Job APScheduler: `daily_morning_email_report` (Mon–Fri 08:00) + `daily_afternoon_email_report` (Mon–Fri 15:30) → scheduler **5 job**.
+- **Schemas:** 24 lớp Pydantic trong `apps/api/schemas.py`, gồm `Page[T]` generic + `ErrorResponse` (+ `MoversOut`, schema notifications trong router).
+- **Kiểm thử:** `pytest tests/unit/test_api.py` (health/readyz, nhóm router, notifications, phân trang, 404) + `tests/unit/test_market_data_source.py` (protocol 23 phương thức) + `tests/unit/test_email_notifications.py` (9 bài) + integration `tests/integration/test_email_notifications.py` (8 bài).
+- **Kiểm chứng số liệu (2026-09-28):** con số lấy từ `app.openapi()` — 48 đường dẫn / 53 thao tác trên `/api/v1/*`; cộng `/healthz` + `/readyz` + `/metrics` thành 51 đường dẫn / 56 thao tác. Các ghi chú cũ "39 đường dẫn / 40 thao tác" là trước khi thêm `notifications` (T018) và các endpoint T016.
 
 ## Quy trình cập nhật phụ thuộc
 

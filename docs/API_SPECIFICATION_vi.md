@@ -7,8 +7,8 @@
 **Phiên bản:** 1.0 (dự thảo)
 **Trạng thái:** Cơ sở — suy ra từ SYSTEM_SPECIFICATION.md v1.0 (§28)
 
-> Trạng thái triển khai 2026-09-25: 12 tệp router, **39 đường dẫn / 40 thao tác** trên `/api/v1/*`
-> (không tính `/healthz` + `/readyz` + `/docs`); xem trang tương tác `docs/api.html`.
+> Trạng thái triển khai 2026-09-28: 13 tệp router, **48 đường dẫn / 53 thao tác** trên `/api/v1/*`
+> (không tính `/healthz` + `/readyz` + `/metrics`); xem trang tương tác `docs/api.html`.
 
 ---
 
@@ -19,6 +19,8 @@
 - Lỗi: `{ "error": { "code": str, "message": str, "details": optional } }` với mã HTTP chuẩn
 - Phân trang: query param `limit` (mặc định 20, tối đa 200), `offset` (mặc định 0); response gồm `{ "items": [...], "total": n, "limit": l, "offset": o }`
 - **Hiệu năng (§45):** endpoint không LLM nhắm P95 < 500 ms — độ trễ LLM không tính vào ngân sách API lõi.
+
+- **Quy mô hợp đồng (2026-09-28, lấy từ `app.openapi()`):** **48 đường dẫn / 53 thao tác** trên `/api/v1/*` (không tính `/healthz` + `/readyz` + `/metrics`; cộng 3 đường hệ thống = 51 đường dẫn / 56 thao tác). Router `notifications` (T018) đóng góp 11 thao tác.
 
 ---
 

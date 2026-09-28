@@ -251,12 +251,12 @@
           <div class="mod-node" id="node-worker" onclick="selectModule('worker')">
             <div class="mod-header"><span class="mod-icon">⏱️</span><span class="mod-title">Scheduler Worker</span></div>
             <div class="mod-code">apps/worker/</div>
-            <div class="mod-desc-short">APScheduler nền: nạp RSS (15m), EOD (15:05) & tính điểm (15:30).</div>
+            <div class="mod-desc-short">APScheduler nền: nạp RSS (15m), EOD (15:05), tính điểm (15:30) + báo cáo email (08:00/15:30).</div>
           </div>
           <div class="mod-node" id="node-common" onclick="selectModule('common')">
             <div class="mod-header"><span class="mod-icon">🗄️</span><span class="mod-title">Database Core</span></div>
             <div class="mod-code">src/common/models/</div>
-            <div class="mod-desc-short">TimescaleDB Hypertable, 38 bảng thực thể, session quản lý giao dịch.</div>
+            <div class="mod-desc-short">TimescaleDB Hypertable, 42 bảng thực thể (gồm email T018), session quản lý giao dịch.</div>
           </div>
         </div>
       </div>
@@ -372,7 +372,7 @@
   </table>
 </div>
 <div class="footer">
-  Tài liệu Mô phỏng Hệ thống DTCK · Cập nhật 2026-09-26 · <a href="index.html">Trang chủ</a> · <a href="modules.html">Chi tiết Module</a>
+  Tài liệu Mô phỏng Hệ thống DTCK · Cập nhật 2026-09-28 · <a href="index.html">Trang chủ</a> · <a href="modules.html">Chi tiết Module</a>
 </div>
 <script>
 var moduleData = {
@@ -423,21 +423,22 @@ var moduleData = {
     title: "Database Models & Migration Core",
     icon: "🗄️",
     path: "src/common/models/ & database/",
-    desc: "Lớp lưu trữ quan hệ và chuỗi thời gian. Định nghĩa 38 bảng thực thể bằng SQLAlchemy declarative models và 12 TimescaleDB hypertables, đóng vai trò nguồn chân lý duy nhất (Single Source of Truth).",
+    desc: "Lớp lưu trữ quan hệ và chuỗi thời gian. Định nghĩa 42 bảng thực thể bằng SQLAlchemy declarative models và 12 TimescaleDB hypertables, đóng vai trò nguồn chân lý duy nhất (Single Source of Truth).",
     tasks: [
       "Định nghĩa cấu trúc ORM cho 13 nhóm thực thể: Cổ phiếu, Giá EOD, Chỉ số, BCTC, Tin tức, Điểm Quant, v.v.",
-      "Quản lý vòng đời migration phiên bản CSDL thông qua Alembic (0001_initial_schema).",
+      "Quản lý vòng đời migration phiên bản CSDL thông qua Alembic (head 0003_email_notifications).",
       "Tối ưu hóa bảng chuỗi thời gian prices, index_prices bằng TimescaleDB hypertable partitioning.",
       "Quản lý kết nối, engine pooling và transaction session đảm bảo ACID."
     ],
     inputs: ["Dữ liệu đã chuẩn hóa từ Data Pipeline", "Alembic Migrations", "Seed Scripts"],
-    outputs: ["38 Bảng CSDL quan hệ", "12 Hypertables TimescaleDB", "Dữ liệu phục vụ truy vấn API"],
+    outputs: ["42 Bảng CSDL quan hệ", "12 Hypertables TimescaleDB", "Dữ liệu phục vụ truy vấn API"],
     files: [
       "src/common/models/market.py",
       "src/common/models/factors.py",
       "src/common/models/news.py",
       "src/common/models/agents.py",
-      "database/migrations/versions/0001_initial_schema.py",
+      "src/common/models/notifications.py",
+      "database/migrations/versions/0003_email_notifications.py",
       "database/seeds/run_all.py"
     ]
   },
@@ -568,7 +569,7 @@ var moduleData = {
     title: "REST API Fast-Serving",
     icon: "🚀",
     path: "apps/api/",
-    desc: "Cổng giao tiếp dịch vụ RESTful tốc độ cao của hệ thống. Cung cấp 39 đường dẫn API chuẩn hóa theo chuẩn OpenAPI/Swagger và phân phối dữ liệu cho giao diện người dùng.",
+    desc: "Cổng giao tiếp dịch vụ RESTful tốc độ cao của hệ thống. Cung cấp 48 đường dẫn API chuẩn hóa theo chuẩn OpenAPI/Swagger và phân phối dữ liệu cho giao diện người dùng.",
     tasks: [
       "Điều phối lớp dịch vụ theo protocol MarketSource (tự động chuyển đổi giữa Bộ nhớ giả lập và TimescaleDB thật).",
       "Cung cấp 14 nhóm API: Thị trường, Cổ phiếu, Kỹ thuật, Cơ bản, Định giá, RAG, Tác tử, Dự đoán ML, Giám sát.",
