@@ -125,12 +125,12 @@ class QdrantAdapter:
         self.dim = dim
         self.available = False
         try:
-            from qdrant_client import QdrantClient  # type: ignore[import-not-found]
-            from qdrant_client.models import (  # type: ignore[import-not-found]
+            from qdrant_client import QdrantClient
+            from qdrant_client.models import (
                 Distance,
                 VectorParams,
             )
-            client: Any = QdrantClient(url=self.url, timeout=2.0)
+            client: Any = QdrantClient(url=self.url, timeout=2)
             cols = client.get_collections().collections
             if self.collection not in {c.name for c in cols}:
                 client.create_collection(

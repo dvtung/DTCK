@@ -21,7 +21,7 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -136,7 +136,9 @@ class DbMarketService:
         """Reference rows + exchange/sector/industry codes + latest close."""
         closes = cls._latest_closes(session)
         rows: list[dict[str, Any]] = []
-        for stock, exchange_code, sector_code, industry_code in session.execute(statement):
+        for row in session.execute(statement):
+            stock = cast(Stock, row[0])
+            exchange_code, sector_code, industry_code = row[1], row[2], row[3]
             rows.append(
                 {
                     "symbol": stock.symbol,
