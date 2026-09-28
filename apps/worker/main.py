@@ -1,26 +1,35 @@
 """DTCK Worker — schedulers, collectors, daily feature/scoring jobs (Phase 1+).
 
-Schedules periodic tasks via APScheduler:
+Schedules periodic tasks via APScheduler (all times Asia/Ho_Chi_Minh):
   1. News Ingestion: Periodic polling (default 15m) from configured provider (e.g. CaféF RSS).
-  2. EOD Price Ingestion: Daily fetch after market close (Mon-Fri 15:05 Asia/Ho_Chi_Minh).
-  3. EOD Factor Scoring: Daily recompute at market close (Mon-Fri 15:30 Asia/Ho_Chi_Minh),
-     25 minutes after ingestion so same-day bars are already persisted.
+  2. EOD Price Ingestion: after each session close (Mon-Fri 11:30 & 15:30).
+  3. Factor Scoring: 30 min after each ingestion (Mon-Fri 12:00 & 16:00) so the
+     ranking always reflects the freshest bars.
+  4. Email reports: three windows (08:00 previous-session summary, 12:30 morning
+     session, 16:30 afternoon session) synced from the database schedule so edits
+     made on the dashboard apply without restarting the worker.
 """
 
 from __future__ import annotations
 
 import logging
+from contextlib import suppress
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
+from apscheduler.jobstores.base import JobLookupError
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 
-from apps.api.config import settings
+from apps.api.config import parse_cron_hours, settings
 
 logger = logging.getLogger("dtck.worker")
+
+#: Job id of the periodic re-read of the persisted email schedule.
+EMAIL_SYNC_JOB_ID = "email_schedule_sync"
 
 
 def get_engine() -> Engine:
@@ -154,6 +163,80 @@ def scheduled_email_report(period_label: str = "sáng") -> None:
         logger.exception("Scheduled email report (%s) failed: %s", period_label, exc)
 
 
+def read_email_schedule() -> dict[str, Any]:
+    """Return the persisted email schedule, falling back to the documented default.
+
+    The worker must never crash because the database is unreachable: a missing
+    row, a closed connection or a schema without the noon columns all resolve to
+    ``DEFAULT_EMAIL_SCHEDULE`` (08:00 / 12:30 / 16:30, Mon–Fri, enabled).
+    """
+    from src.notifications.service import DEFAULT_EMAIL_SCHEDULE, NotificationService
+
+    try:
+        sched = NotificationService().get_schedule_config()
+    except Exception as exc:  # pragma: no cover - defensive: DB down at startup
+        logger.warning(
+            "Cannot read the email schedule from the database (%s) — using defaults", exc
+        )
+        sched = {}
+    merged = dict(DEFAULT_EMAIL_SCHEDULE)
+    merged.update({k: v for k, v in (sched or {}).items() if v is not None})
+    return merged
+
+
+def sync_email_schedule_jobs(scheduler: BlockingScheduler) -> dict[str, Any]:
+    """(Re)register the three report jobs from the database schedule.
+
+    Called once at startup and then periodically by ``email_schedule_sync`` so a
+    schedule saved on the dashboard takes effect on the running worker.  Returns
+    the applied schedule (useful for logging and tests).
+    """
+    from src.notifications.service import REPORT_WINDOWS
+
+    sched = read_email_schedule()
+    days = str(sched.get("days_of_week") or "mon-fri")
+    applied: dict[str, Any] = {}
+
+    for period, label, hour_key, minute_key in REPORT_WINDOWS:
+        hour = int(sched.get(hour_key, 0) or 0)
+        minute = int(sched.get(minute_key, 0) or 0)
+        job_id = f"daily_{period}_email_report"
+        # Drop any previous registration first: `replace_existing` only dedupes
+        # jobs that already live in the job store, so an un-started scheduler
+        # would otherwise keep both the old and the new trigger.
+        with suppress(JobLookupError):
+            scheduler.remove_job(job_id)
+        scheduler.add_job(
+            scheduled_email_report,
+            trigger=CronTrigger(
+                day_of_week=days,
+                hour=hour,
+                minute=minute,
+                timezone="Asia/Ho_Chi_Minh",
+            ),
+            args=[label],
+            id=job_id,
+            name=f"Daily {period.title()} Market Email Report",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
+        applied[job_id] = f"{hour:02d}:{minute:02d}"
+        logger.info(
+            "Registered job '%s' cron %s %02d:%02d Asia/Ho_Chi_Minh",
+            job_id,
+            days,
+            hour,
+            minute,
+        )
+
+    if not sched.get("is_enabled", True):
+        logger.info("Email report schedule is disabled — jobs stay registered but will no-op")
+
+    logger.info("Email report schedule synced from the database: %s", applied)
+    return applied
+
+
 def _build_scheduler() -> BlockingScheduler:
     scheduler = BlockingScheduler(timezone="Asia/Ho_Chi_Minh")
     logger.info("Worker scheduler initialized (timezone=Asia/Ho_Chi_Minh)")
@@ -184,84 +267,71 @@ def _build_scheduler() -> BlockingScheduler:
             settings.scheduler_news_interval_minutes,
         )
 
-        # 2. Daily EOD price ingestion after market close (Mon-Fri 15:05)
+        # 2. Session-close EOD ingestion (Mon-Fri 11:30 & 15:30 Asia/Ho_Chi_Minh)
+        eod_hours = parse_cron_hours(settings.scheduler_eod_cron_hours, (11, 15))
         scheduler.add_job(
             scheduled_eod_ingestion,
             trigger=CronTrigger(
                 day_of_week="mon-fri",
-                hour=settings.scheduler_eod_cron_hour,
+                hour=",".join(str(h) for h in eod_hours),
                 minute=settings.scheduler_eod_cron_minute,
                 timezone="Asia/Ho_Chi_Minh",
             ),
             id="daily_eod_ingestion",
-            name="Daily EOD Price Ingestion",
+            name="Session-Close EOD Price Ingestion",
             replace_existing=True,
             max_instances=1,
             coalesce=True,
         )
         logger.info(
-            "Registered job 'daily_eod_ingestion' cron Mon-Fri %02d:%02d Asia/Ho_Chi_Minh",
-            settings.scheduler_eod_cron_hour,
+            "Registered job 'daily_eod_ingestion' cron Mon-Fri %s:%02d Asia/Ho_Chi_Minh",
+            "/".join(f"{h:02d}" for h in eod_hours),
             settings.scheduler_eod_cron_minute,
         )
 
-        # 3. Daily EOD factor scoring (Mon-Fri 15:30 Asia/Ho_Chi_Minh)
+        # 3. Session scoring, 30 min after each ingestion (Mon-Fri 12:00 & 16:00)
+        scoring_hours = parse_cron_hours(settings.scheduler_scoring_cron_hours, (12, 16))
         scheduler.add_job(
             scheduled_scoring_job,
             trigger=CronTrigger(
                 day_of_week="mon-fri",
-                hour=settings.scheduler_scoring_cron_hour,
+                hour=",".join(str(h) for h in scoring_hours),
                 minute=settings.scheduler_scoring_cron_minute,
                 timezone="Asia/Ho_Chi_Minh",
             ),
             id="daily_eod_scoring",
-            name="Daily EOD Factor Scoring",
+            name="Session Factor Scoring",
             replace_existing=True,
             max_instances=1,
             coalesce=True,
         )
         logger.info(
-            "Registered job 'daily_eod_scoring' cron Mon-Fri %02d:%02d Asia/Ho_Chi_Minh",
-            settings.scheduler_scoring_cron_hour,
+            "Registered job 'daily_eod_scoring' cron Mon-Fri %s:%02d Asia/Ho_Chi_Minh",
+            "/".join(f"{h:02d}" for h in scoring_hours),
             settings.scheduler_scoring_cron_minute,
         )
 
-        # 4. Daily Morning Email Report (Mon-Fri 08:00 Asia/Ho_Chi_Minh)
-        scheduler.add_job(
-            lambda: scheduled_email_report("sáng"),
-            trigger=CronTrigger(
-                day_of_week="mon-fri",
-                hour=8,
-                minute=0,
-                timezone="Asia/Ho_Chi_Minh",
-            ),
-            id="daily_morning_email_report",
-            name="Daily Morning Market Email Report",
-            replace_existing=True,
-            max_instances=1,
-            coalesce=True,
-        )
-        logger.info(
-            "Registered job 'daily_morning_email_report' cron Mon-Fri 08:00 Asia/Ho_Chi_Minh"
-        )
+        # 4. Email report windows (08:00 / 12:30 / 16:30) read from the database
+        #    config, so a dashboard change takes effect without a rebuild.
+        sync_email_schedule_jobs(scheduler)
 
-        # 5. Daily Afternoon Email Report (Mon-Fri 15:30 Asia/Ho_Chi_Minh)
+        # 5. Re-read the persisted schedule so edits apply while the worker runs.
         scheduler.add_job(
-            lambda: scheduled_email_report("chiều"),
-            trigger=CronTrigger(
-                day_of_week="mon-fri",
-                hour=15,
-                minute=30,
+            lambda: sync_email_schedule_jobs(scheduler),
+            trigger=IntervalTrigger(
+                minutes=settings.scheduler_email_sync_minutes,
                 timezone="Asia/Ho_Chi_Minh",
             ),
-            id="daily_afternoon_email_report",
-            name="Daily Afternoon Market Email Report",
+            id=EMAIL_SYNC_JOB_ID,
+            name="Email Report Schedule Sync",
             replace_existing=True,
             max_instances=1,
             coalesce=True,
         )
         logger.info(
-            "Registered job 'daily_afternoon_email_report' cron Mon-Fri 15:30 Asia/Ho_Chi_Minh"
+            "Registered job '%s' every %d minutes (email schedule hot-reload)",
+            EMAIL_SYNC_JOB_ID,
+            settings.scheduler_email_sync_minutes,
         )
 
     return scheduler

@@ -20,6 +20,8 @@ Chú giải: `[ ]` Cần làm · `[~]` Đang làm · `[x]` Hoàn thành · `[!]`
 - [x] **T004 — Collector dữ liệu → validator → normalizer → pipeline (Giai đoạn 1)** — gói `src/data/` (collectors, validators, normalizers, pipelines, providers, fixture, quality, records). FixtureProvider cho kiểm thử ngoại tuyến tất định. Worker CLI đã nối. `tests/unit/test_pipeline.py` (38 test). Đã kiểm chứng: ruff sạch, mypy sạch, 82 test pass. *(2026-09-14)*
 - [x] **T005 — Khung chất lượng dữ liệu (chấm điểm + cổng, §39)** — `src/data/quality.py` (chấm điểm 6 chiều: completeness/validity/consistency/uniqueness/freshness/accuracy, trung bình có trọng số và chuẩn hoá lại, cổng ngưỡng). `tests/unit/test_quality.py` (26 test). Đã kiểm chứng: ruff sạch, mypy sạch, 82 test pass. *(2026-09-14)*
 
+- [x] **T019 — Thiết kế lại giao diện Dashboard chuẩn BI tài chính chuyên nghiệp** — `apps/dashboard/theme.py` (design tokens, SVG icons, HTML builders, CSS injection), `apps/dashboard/app.py` (chuẩn hoá 8 trang navigation không emoji, áp dụng theme layout cho mọi biểu đồ Plotly, banner appbar và footer disclaimer §3). `tests/unit/test_dashboard_theme.py` (17 tests), `tests/unit/test_dashboard_app.py` (9 tests), `tests/unit/test_dashboard.py` (43 tests). Đã kiểm chứng: ruff sạch, mypy sạch, toàn bộ 69 test dashboard pass. *(2026-09-28)*
+
 ## Tồn đọng (theo thứ tự đặc tả §57)
 
 - [x] **T006 — Quant Engine: chỉ báo kỹ thuật (+ unit test giá trị kỳ vọng)** — `src/market/technical/indicators.py` (SMA, EMA, RSI, MACD, Bollinger Bands, ATR, OBV, volume SMA, relative strength). Cài đặt thuần Python tất định. `tests/unit/test_technical_indicators.py` (40 test). Đã kiểm chứng: ruff sạch, mypy sạch, 122 test pass. *(2026-09-14)*

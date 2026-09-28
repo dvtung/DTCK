@@ -21,9 +21,11 @@ from typing import Any
 
 import pandas as pd
 import plotly.graph_objects as go
+import plotly.io as pio
 import streamlit as st
 from plotly.subplots import make_subplots
 
+from apps.dashboard import theme
 from apps.dashboard.client import DEFAULT_BASE, MarketClient
 from apps.dashboard.components import (
     contribution_rows,
@@ -46,128 +48,101 @@ from apps.dashboard.components import (
 # ---------------------------------------------------------------------------
 st.set_page_config(page_title="DTCK — AI Investment Platform", page_icon="📊", layout="wide")
 
-st.markdown(
-    """
-    <style>
-      :root {
-        --ink:#0f172a; --ink-2:#475569; --line:#e2e8f0; --bg:#ffffff;
-        --brand:#1d4ed8; --up:#15803d; --down:#b91c1c; --neutral:#64748b;
-      }
-      .stApp {background: #f6f8fb;}
-      .block-container {padding-top: 1.2rem; padding-bottom: 2.5rem; max-width: 1400px;}
-      h1, h2, h3 {color: var(--ink); letter-spacing: -0.01em;}
-      section[data-testid="stSidebar"] {
-        background: #0f172a; border-right: 1px solid #1e293b;
-      }
-      section[data-testid="stSidebar"] * {color: #e2e8f0 !important;}
-      section[data-testid="stSidebar"] input {
-        background: #1e293b !important; color: #f8fafc !important;
-      }
-      div[data-testid="stMetric"] {
-        background: var(--bg); border: 1px solid var(--line);
-        border-left: 4px solid var(--brand); border-radius: 12px;
-        padding: 14px 16px; box-shadow: 0 1px 2px rgba(15,23,42,.05);
-      }
-      div[data-testid="stMetricValue"] {font-size: 1.5rem; font-weight: 700;}
-      div[data-testid="stMetricLabel"] {color: var(--ink-2); font-weight: 600;}
-      .dtck-banner {
-        background: linear-gradient(90deg,#0f172a 0%,#1d4ed8 100%);
-        color:#fff; border-radius:14px; padding:16px 20px; margin-bottom:14px;
-      }
-      .dtck-banner h1 {color:#fff; margin:0; font-size:1.35rem;}
-      .dtck-banner .sub {color:#c7d2fe; font-size:.85rem; margin-top:4px;}
-      .dtck-badge {
-        display:inline-block; padding:4px 10px; border-radius:999px;
-        font-size:.78rem; font-weight:700; margin-bottom:6px;
-      }
-      .dtck-badge-real {background:#dcfce7; color:#14532d;}
-      .dtck-badge-demo {background:#fee2e2; color:#7f1d1d;}
-      .dtck-sub {color:#94a3b8; font-size:.78rem;}
-      .dtck-foot {color:var(--ink-2); font-size:.78rem; border-top:1px solid var(--line);
-        margin-top:26px; padding-top:10px;}
-      div[data-testid="stDataFrame"] {border:1px solid var(--line); border-radius:10px;}
-      .stTabs [data-baseweb="tab"] {font-weight:600;}
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+# --- Design system (T019) -------------------------------------------------
+# Registered once per rerun: the Plotly template keeps every chart on one
+# typography/grid/colour scale; the stylesheet styles Streamlit's own widgets.
+pio.templates["dtck"] = go.layout.Template(theme.PLOTLY_TEMPLATE)
+pio.templates.default = "dtck"
+st.markdown(theme.inject_css(), unsafe_allow_html=True)
 
-st.markdown(
-    """
-    <div class="dtck-banner">
-      <h1>📊 DTCK — Nền tảng Nghiên cứu &amp; Hỗ trợ Quyết định Đầu tư</h1>
-      <div class="sub">
-        Thị trường Việt Nam (HOSE/HNX/UPCOM) · Universe VN30 ·
-        Đánh giá định lượng → dự đoán ML → luận điểm AI → con người quyết định
-      </div>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
+APP_VERSION = "0.1.0"
 
 # Page registry — order defines the sidebar navigation (T015b: one radio nav
 # instead of the old radio + three context checkboxes).
 PAGE_NAMES = (
-    "📈 Tổng quan",
-    "🔍 Bộ lọc",
-    "🏆 Xếp hạng",
-    "🧭 Chi tiết mã",
-    "🧪 Backtest",
-    "📰 Tin tức & RAG",
-    "📧 Quản lý Email",
-    "🩺 Sức khỏe",
+    "Tổng quan",
+    "Bộ lọc cổ phiếu",
+    "Xếp hạng",
+    "Chi tiết mã",
+    "Backtest",
+    "Tin tức & RAG",
+    "Quản lý Email",
+    "Sức khỏe hệ thống",
 )
 
+#: Page label → icon name in ``theme.ICON_PATHS`` (no emoji as icons).
+PAGE_ICONS: dict[str, str] = {
+    "Tổng quan": "grid",
+    "Bộ lọc cổ phiếu": "filter",
+    "Xếp hạng": "trophy",
+    "Chi tiết mã": "compass",
+    "Backtest": "flask",
+    "Tin tức & RAG": "news",
+    "Quản lý Email": "mail",
+    "Sức khỏe hệ thống": "pulse",
+}
+
 with st.sidebar:
-    st.title("📊 DTCK")
+    st.markdown(
+        theme.brand_html("DTCK", f"v{APP_VERSION}", "Nghiên cứu & Hỗ trợ Quyết định Đầu tư"),
+        unsafe_allow_html=True,
+    )
+    st.markdown(theme.nav_title("Điều hướng"), unsafe_allow_html=True)
+    page = st.radio("Điều hướng", PAGE_NAMES, key="nav_page", label_visibility="collapsed")
+
+    st.divider()
+    st.markdown(theme.nav_title("Nguồn dữ liệu"), unsafe_allow_html=True)
     # Default comes from the environment (compose sets API_HOST=http://api:8000);
     # hardcoding localhost here used to make the container call itself, fail, and
     # silently render the in-memory fixture — the "fake data" bug (T015b).
-    api_host = st.text_input("API host", value=DEFAULT_BASE, key="api_host")
     # JWT session (T016): keep the access token in session_state across reruns.
     if "auth_token" not in st.session_state:
         st.session_state["auth_token"] = ""
     if "auth_email" not in st.session_state:
         st.session_state["auth_email"] = ""
+    api_host = st.text_input("API host", value=DEFAULT_BASE, key="api_host")
     client = MarketClient(base_url=api_host, token=st.session_state["auth_token"] or None)
     ready = client.probe()
     kind, detail = client.source_badge()
+    market_source = str(ready.get("market_source", "?"))
     if kind == "api":
-        market_source = str(ready.get("market_source", "?"))
         st.markdown(
-            f'<span class="dtck-badge dtck-badge-real">● DỮ LIỆU THẬT — {market_source}</span>'
-            f'<div class="dtck-sub">{detail}</div>',
+            theme.side_card("Chế độ đọc", f"DỮ LIỆU THẬT · {market_source}", tone="up")
+            + f'<div class="dtck-brand__sub">{detail}</div>',
             unsafe_allow_html=True,
         )
     else:
         st.markdown(
-            '<span class="dtck-badge dtck-badge-demo">▲ DỮ LIỆU MÔ PHỎNG (API offline)</span>'
-            f'<div class="dtck-sub">{detail}</div>',
+            theme.side_card("Chế độ đọc", "DỮ LIỆU MÔ PHỎNG · API offline", tone="down")
+            + f'<div class="dtck-brand__sub">{detail}</div>',
             unsafe_allow_html=True,
         )
-    if st.button("🔄 Làm mới dữ liệu", type="primary"):
+    if st.button("Làm mới dữ liệu", type="primary", icon=":material/refresh:", width="stretch"):
         st.cache_data.clear()
         st.rerun()
 
     # --- Login (T016): JWT via POST /api/v1/auth/login ----------------------
     st.divider()
+    st.markdown(theme.nav_title("Tài khoản"), unsafe_allow_html=True)
     if st.session_state["auth_token"]:
         st.markdown(
-            f'<span class="dtck-badge dtck-badge-real">● {st.session_state["auth_email"]}</span>',
+            theme.side_card("Đang đăng nhập", str(st.session_state["auth_email"]), tone="brand"),
             unsafe_allow_html=True,
         )
-        if st.button("Đăng xuất", key="logout"):
+        if st.button("Đăng xuất", key="logout", icon=":material/logout:", width="stretch"):
             st.session_state["auth_token"] = ""
             st.session_state["auth_email"] = ""
             st.rerun()
     else:
+        st.caption("Đăng nhập để chạy Phân tích AI & Backtest (JWT)")
         with st.form("login_form", clear_on_submit=False):
-            st.caption("Đăng nhập để chạy Phân tích AI & Backtest (JWT)")
             email = st.text_input("Email", value="admin@dtck.local", key="login_email")
             password = st.text_input(
                 "Mật khẩu", value="admin123", type="password", key="login_password"
             )
-            submitted = st.form_submit_button("Đăng nhập", type="primary")
+            submitted = st.form_submit_button(
+                "Đăng nhập", type="primary", icon=":material/login:", width="stretch"
+            )
             if submitted:
                 result = client.login(email, password)
                 if result.get("success"):
@@ -179,9 +154,32 @@ with st.sidebar:
                     st.error(f"Đăng nhập thất bại: {result.get('error')}")
 
     st.divider()
-    page = st.radio("Điều hướng", PAGE_NAMES)
-    st.divider()
     st.caption("Tài liệu: `docs/DEPLOYMENT_vi.md` · `docs/api.html`")
+
+
+# ---------------------------------------------------------------------------
+# App bar (T019) — brand, live data mode and serving dependencies
+# ---------------------------------------------------------------------------
+deps: dict[str, Any] = ready.get("dependencies", {}) if isinstance(ready, dict) else {}
+mode_chip = (
+    theme.chip(f"DỮ LIỆU THẬT · {market_source}", "up", icon="check")
+    if kind == "api"
+    else theme.chip("DỮ LIỆU MÔ PHỎNG · API offline", "down", icon="alert")
+)
+st.markdown(
+    theme.app_bar(
+        "DTCK — Nền tảng Nghiên cứu & Hỗ trợ Quyết định Đầu tư",
+        "Thị trường Việt Nam (HOSE/HNX/UPCOM) · định lượng → dự đoán ML → luận giải AI "
+        "→ con người quyết định",
+        APP_VERSION,
+        chips=(
+            mode_chip,
+            theme.chip(f"Model: {deps.get('models', '?')}", "neutral", icon="layers"),
+            theme.chip(f"Tác tử: {deps.get('agents', '?')}", "neutral", icon="sparkle"),
+        ),
+    ),
+    unsafe_allow_html=True,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -216,8 +214,19 @@ def _decision_hint(signal: str, probability: float | None) -> str:
 
 
 def page_market_overview() -> None:
-    st.header("📈 Tổng quan thị trường & dự đoán VN30")
-    st.caption("Đánh giá định lượng (§12), dự đoán ML (§26) và mức độ bằng chứng dữ liệu (§39).")
+    st.markdown(
+        theme.page_header(
+            "Tổng quan thị trường & dự đoán VN30",
+            "Đánh giá định lượng (§12), dự đoán ML (§26) và mức độ bằng chứng dữ liệu (§39).",
+            icon=PAGE_ICONS["Tổng quan"],
+            eyebrow="Bảng điều khiển trung tâm",
+            meta=(
+                theme.chip(f"Chế độ đọc: {market_source}", "neutral", icon="database"),
+                theme.chip(f"Model: {deps.get('models', '?')}", "neutral", icon="layers"),
+            ),
+        ),
+        unsafe_allow_html=True,
+    )
     c = client
     indices = c.get_indices()
     breadth = c.get_breadth()
@@ -262,7 +271,7 @@ def page_market_overview() -> None:
     st.divider()
 
     # --- VNINDEX candlestick + volume (T016) --------------------------------
-    st.subheader("📉 VNINDEX — nến ngày 2 năm")
+    st.subheader("VNINDEX — nến ngày 2 năm")
     ix_bars = c.get_index_prices("VNINDEX")
     if ix_bars:
         idx = pd.DataFrame(price_dataframe(ix_bars))
@@ -284,32 +293,44 @@ def page_market_overview() -> None:
                 low=idx["low"],
                 close=idx["close"],
                 name="VNINDEX",
+                increasing_line_color=theme.COLORS["up"],
+                decreasing_line_color=theme.COLORS["down"],
             ),
             row=1,
             col=1,
         )
         fig.add_trace(
-            go.Scatter(x=idx["date"], y=idx["MA20"], name="MA20", line=dict(color="#2563eb")),
+            go.Scatter(
+                x=idx["date"],
+                y=idx["MA20"],
+                name="MA20",
+                line=dict(color=theme.CHART_MA20_COLOR, width=1.6),
+            ),
             row=1,
             col=1,
         )
         fig.add_trace(
-            go.Scatter(x=idx["date"], y=idx["MA50"], name="MA50", line=dict(color="#f59e0b")),
+            go.Scatter(
+                x=idx["date"],
+                y=idx["MA50"],
+                name="MA50",
+                line=dict(color=theme.CHART_MA50_COLOR, width=1.6),
+            ),
             row=1,
             col=1,
         )
         fig.add_trace(
-            go.Bar(x=idx["date"], y=idx["volume"], name="KL", marker_color="#94a3b8"),
+            go.Bar(
+                x=idx["date"],
+                y=idx["volume"],
+                name="KL",
+                marker_color=theme.CHART_VOLUME_COLOR,
+            ),
             row=2,
             col=1,
         )
-        fig.update_layout(
-            height=520,
-            xaxis_rangeslider_visible=False,
-            margin=dict(t=40, b=10),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02),
-        )
-        st.plotly_chart(fig, width="stretch")
+        fig.update_layout(**theme.chart_layout(520, xaxis_rangeslider_visible=False))
+        st.plotly_chart(fig, width="stretch", theme=None, config=theme.PLOTLY_CONFIG)
         last_ix = idx.iloc[-1]
         d_ix = st.columns(4)
         d_ix[0].metric("VNINDEX", format_price(last_ix["close"]))
@@ -321,7 +342,7 @@ def page_market_overview() -> None:
     st.divider()
 
     # --- Top gainers / decliners with MA20 & MA50 (T016) --------------------
-    st.subheader("↕️ Tăng / giảm mạnh — so với MA20 & MA50")
+    st.subheader("Tăng / giảm mạnh — so với MA20 & MA50")
     m1, m2 = st.columns([1, 2])
     with m1:
         universe = st.selectbox(
@@ -354,7 +375,9 @@ def page_market_overview() -> None:
 
         gl, dl = st.columns(2)
         with gl:
-            st.markdown("**🟢 Top 10 tăng**")
+            st.markdown(
+                theme.section_label("Top 10 tăng", "up", icon="check"), unsafe_allow_html=True
+            )
             st.dataframe(
                 pd.DataFrame(_mover_rows(gainers)),
                 column_config={
@@ -368,7 +391,9 @@ def page_market_overview() -> None:
                 height=420,
             )
         with dl:
-            st.markdown("**🔴 Top 10 giảm**")
+            st.markdown(
+                theme.section_label("Top 10 giảm", "down", icon="alert"), unsafe_allow_html=True
+            )
             st.dataframe(
                 pd.DataFrame(_mover_rows(decliners)),
                 column_config={
@@ -392,7 +417,7 @@ def page_market_overview() -> None:
     # --- Assembly: score + ML prediction per symbol ------------------------
     symbols = tuple(str(r.get("symbol")) for r in ranked if r.get("symbol"))
     predictions = _load_predictions(api_host, symbols) if symbols else {}
-    st.subheader("🎯 Đánh giá & dự đoán VN30")
+    st.subheader("Đánh giá & dự đoán VN30")
     st.caption(
         "P(tăng 5D) là xác suất mô hình ML dự đoán lợi nhuận 5 phiên tới dương. "
         "Cột Gợi ý chỉ để sàng lọc — hệ thống không đưa lệnh mua/bán (§3)."
@@ -431,7 +456,7 @@ def page_market_overview() -> None:
             width="stretch",
             height=430,
         )
-        with st.expander("❓ Cách đọc bảng này"):
+        with st.expander("Cách đọc bảng này"):
             st.markdown(
                 "- **Điểm**: điểm đa yếu tố 0–100 từ engine định lượng (§12) — tất định, "
                 "không do LLM sinh.\n"
@@ -466,14 +491,7 @@ def page_market_overview() -> None:
         st.subheader("Top 10 điểm tổng hợp")
         top = [r for r in ranked if r.get("overall_score") is not None][:10]
         if top:
-            colors = [
-                "#16a34a"
-                if r.get("signal") == "POSITIVE"
-                else "#dc2626"
-                if r.get("signal") == "NEGATIVE"
-                else "#64748b"
-                for r in top
-            ]
+            colors = [theme.signal_hex(str(r.get("signal") or "")) for r in top]
             fig = go.Figure(
                 go.Bar(
                     x=[r.get("symbol") for r in top],
@@ -484,12 +502,9 @@ def page_market_overview() -> None:
                 )
             )
             fig.update_layout(
-                height=340,
-                yaxis_title="Điểm tổng hợp (0–100)",
-                margin=dict(t=30, b=10),
-                showlegend=False,
+                **theme.chart_layout(340, yaxis_title="Điểm tổng hợp (0–100)", showlegend=False)
             )
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, width="stretch", theme=None, config=theme.PLOTLY_CONFIG)
         else:
             st.info("Chưa có bảng xếp hạng — hãy chạy `compute-scores`.")
 
@@ -498,8 +513,15 @@ def page_market_overview() -> None:
 # Page 2 — Stock Screener
 # ---------------------------------------------------------------------------
 def page_screener() -> None:
-    st.header("🔍 Bộ lọc cổ phiếu")
-    st.caption("Toàn bộ universe trong CSDL (VN30/VN100/HNX/UPCOM), kèm tìm kiếm và sắp xếp.")
+    st.markdown(
+        theme.page_header(
+            "Bộ lọc cổ phiếu",
+            "Toàn bộ universe trong CSDL (VN30/VN100/HNX/UPCOM), kèm tìm kiếm và sắp xếp.",
+            icon=PAGE_ICONS["Bộ lọc cổ phiếu"],
+            eyebrow="Vũ trụ đầu tư",
+        ),
+        unsafe_allow_html=True,
+    )
     c = client
     stocks = c.list_stocks(limit=500)
     if not stocks:
@@ -553,8 +575,15 @@ def page_screener() -> None:
 # Page 3 — Rankings
 # ---------------------------------------------------------------------------
 def page_rankings() -> None:
-    st.header("🏆 Xếp hạng cổ phiếu")
-    st.caption("Điểm đa yếu tố (§12) kèm tín hiệu và độ tin cậy — dữ liệu từ API.")
+    st.markdown(
+        theme.page_header(
+            "Xếp hạng cổ phiếu",
+            "Điểm đa yếu tố (§12) kèm tín hiệu và độ tin cậy — dữ liệu từ API.",
+            icon=PAGE_ICONS["Xếp hạng"],
+            eyebrow="Điểm & tín hiệu",
+        ),
+        unsafe_allow_html=True,
+    )
     c = client
     ranked = c.get_ranked()
     rows = ranking_rows(ranked)
@@ -574,25 +603,15 @@ def page_rankings() -> None:
                 go.Bar(
                     x=[r["symbol"] for r in top],
                     y=[float(r["overall_score"] or 0) for r in top],
-                    marker_color=[
-                        "#16a34a"
-                        if r.get("signal") == "POSITIVE"
-                        else "#dc2626"
-                        if r.get("signal") == "NEGATIVE"
-                        else "#64748b"
-                        for r in top
-                    ],
+                    marker_color=[theme.signal_hex(str(r.get("signal") or "")) for r in top],
                     text=[f"{float(r['overall_score'] or 0):.1f}" for r in top],
                     textposition="outside",
                 )
             )
             fig.update_layout(
-                height=420,
-                yaxis_title="Điểm tổng hợp",
-                margin=dict(t=30, b=10),
-                xaxis_tickangle=-45,
+                **theme.chart_layout(420, yaxis_title="Điểm tổng hợp", xaxis_tickangle=-45)
             )
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, width="stretch", theme=None, config=theme.PLOTLY_CONFIG)
             st.caption("30 mã xếp hạng cao nhất — nhãn = điểm tổng hợp, trục X = mã.")
     with col_stat:
         by_signal = pd.Series([str(r.get("signal") or "NEUTRAL") for r in filtered])
@@ -620,7 +639,15 @@ def page_rankings() -> None:
 # Page 4 — Stock Detail
 # ---------------------------------------------------------------------------
 def page_stock_detail(symbol: str = "FPT") -> None:
-    st.header(f"📋 Chi tiết mã {symbol}")
+    st.markdown(
+        theme.page_header(
+            f"Chi tiết mã {symbol}",
+            "Giá & khối lượng, điểm hệ số, dự đoán ML, định giá, chất lượng dữ liệu và bằng chứng.",
+            icon=PAGE_ICONS["Chi tiết mã"],
+            eyebrow="Hồ sơ doanh nghiệp",
+        ),
+        unsafe_allow_html=True,
+    )
     c = client
     stock = c.get_stock(symbol)
     if not stock:
@@ -648,20 +675,19 @@ def page_stock_detail(symbol: str = "FPT") -> None:
                     go.Bar(
                         x=cdf["factor"],
                         y=cdf["weighted"],
-                        marker_color="#2563eb",
+                        marker_color=theme.COLORS["brand"],
                     )
                 ]
             )
             fig.update_layout(
-                title="Đóng góp điểm số",
-                xaxis_title="Hệ số",
-                yaxis_title="Điểm số",
-                height=300,
+                **theme.chart_layout(
+                    300, title="Đóng góp điểm số", xaxis_title="Hệ số", yaxis_title="Điểm số"
+                )
             )
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, width="stretch", theme=None, config=theme.PLOTLY_CONFIG)
 
     # --- ML prediction + AI analysis ---------------------------------------
-    st.subheader("🤖 Dự đoán ML & đánh giá AI")
+    st.subheader("Dự đoán ML & đánh giá AI")
     pred = c.get_prediction(symbol)
     if pred and pred.get("probability_positive") is not None:
         prob = float(pred["probability_positive"])
@@ -674,7 +700,12 @@ def page_stock_detail(symbol: str = "FPT") -> None:
     else:
         st.info("Chưa có dự đoán ML cho mã này (cần model APPROVED trong registry).")
 
-    if st.button("🧠 Chạy phân tích AI (LLM + dữ liệu tool)", key=f"ai_{symbol}"):
+    if st.button(
+        "Chạy phân tích AI (LLM + dữ liệu tool)",
+        key=f"ai_{symbol}",
+        type="primary",
+        icon=":material/psychology:",
+    ):
         with st.spinner("Đang tổng hợp luận điểm đầu tư (có thể mất ~15 giây)…"):
             analysis = c.analyze_symbol(symbol)
         if analysis.get("error"):
@@ -729,32 +760,44 @@ def page_stock_detail(symbol: str = "FPT") -> None:
                 low=view["low"],
                 close=view["close"],
                 name=symbol,
+                increasing_line_color=theme.COLORS["up"],
+                decreasing_line_color=theme.COLORS["down"],
             ),
             row=1,
             col=1,
         )
         fig.add_trace(
-            go.Scatter(x=view["date"], y=view["MA20"], name="MA20", line=dict(color="#2563eb")),
+            go.Scatter(
+                x=view["date"],
+                y=view["MA20"],
+                name="MA20",
+                line=dict(color=theme.CHART_MA20_COLOR, width=1.6),
+            ),
             row=1,
             col=1,
         )
         fig.add_trace(
-            go.Scatter(x=view["date"], y=view["MA50"], name="MA50", line=dict(color="#f59e0b")),
+            go.Scatter(
+                x=view["date"],
+                y=view["MA50"],
+                name="MA50",
+                line=dict(color=theme.CHART_MA50_COLOR, width=1.6),
+            ),
             row=1,
             col=1,
         )
         fig.add_trace(
-            go.Bar(x=view["date"], y=view["volume"], name="KL", marker_color="#94a3b8"),
+            go.Bar(
+                x=view["date"],
+                y=view["volume"],
+                name="KL",
+                marker_color=theme.CHART_VOLUME_COLOR,
+            ),
             row=2,
             col=1,
         )
-        fig.update_layout(
-            height=560,
-            xaxis_rangeslider_visible=False,
-            margin=dict(t=50, b=10),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02),
-        )
-        st.plotly_chart(fig, width="stretch")
+        fig.update_layout(**theme.chart_layout(560, xaxis_rangeslider_visible=False))
+        st.plotly_chart(fig, width="stretch", theme=None, config=theme.PLOTLY_CONFIG)
         last = view.iloc[-1]
         d1 = st.columns(4)
         d1[0].metric("Giá đóng cửa", format_price(last["close"]))
@@ -807,12 +850,14 @@ def page_stock_detail(symbol: str = "FPT") -> None:
             dims = quality_bar_labels(q)
             if dims:
                 dfig = go.Figure(data=[go.Bar(x=list(dims.keys()), y=list(dims.values()))])
-                dfig.update_layout(height=200, title="6 chiều chất lượng", showlegend=False)
-                st.plotly_chart(dfig, width="stretch")
+                dfig.update_layout(
+                    **theme.chart_layout(200, title="6 chiều chất lượng", showlegend=False)
+                )
+                st.plotly_chart(dfig, width="stretch", theme=None, config=theme.PLOTLY_CONFIG)
 
     # --- Evidence (§19) -----------------------------------------------------
     st.divider()
-    st.subheader("📎 Bằng chứng dữ liệu đáng tin cậy (§19)")
+    st.subheader("Bằng chứng dữ liệu đáng tin cậy (§19)")
     st.caption(
         "Trích đoạn có nguồn + ngày đăng + độ tin cậy, truy xuất từ chỉ mục RAG "
         "(kho tài liệu tin tức đã thu thập)."
@@ -856,8 +901,15 @@ def _format_metric(name: str, value: float) -> str:
 
 
 def page_backtests() -> None:
-    st.header("🧪 Backtest")
-    st.caption("Tạo lượt chạy mới, xem chỉ số §16 và nhật ký lệnh đã lưu trong CSDL.")
+    st.markdown(
+        theme.page_header(
+            "Backtest chiến lược",
+            "Tạo lượt chạy mới, xem chỉ số §16 và nhật ký lệnh đã lưu trong CSDL.",
+            icon=PAGE_ICONS["Backtest"],
+            eyebrow="Kiểm nghiệm chiến lược",
+        ),
+        unsafe_allow_html=True,
+    )
     c = client
 
     with st.form("create_backtest_form"):
@@ -875,7 +927,9 @@ def page_backtests() -> None:
         d1, d2 = st.columns(2)
         start = d1.date_input("Từ ngày", value=date(2025, 1, 1))
         end = d2.date_input("Đến ngày", value=date(2026, 9, 25))
-        submitted = st.form_submit_button("▶️ Tạo lượt chạy", type="primary")
+        submitted = st.form_submit_button(
+            "Tạo lượt chạy", type="primary", icon=":material/play_arrow:"
+        )
 
     if submitted:
         if end <= start:
@@ -940,7 +994,15 @@ def page_backtests() -> None:
 # Page 6 — News & RAG Evidence
 # ---------------------------------------------------------------------------
 def page_news_rag() -> None:
-    st.header("📰 Tin tức & Bằng chứng RAG")
+    st.markdown(
+        theme.page_header(
+            "Tin tức & Bằng chứng RAG",
+            "Dòng tin tài chính đã thu thập, tìm kiếm ngữ nghĩa và trích xuất bằng chứng (§19).",
+            icon=PAGE_ICONS["Tin tức & RAG"],
+            eyebrow="Tri thức & bằng chứng",
+        ),
+        unsafe_allow_html=True,
+    )
     c = client
 
     tab_news, tab_rag, tab_status = st.tabs(
@@ -1006,7 +1068,7 @@ def page_news_rag() -> None:
                 st.text_input("Mã CK (tùy chọn)", value="", key="rag_symbol").strip().upper()
             )
 
-        if st.button("🔎 Tìm kiếm bằng chứng", key="btn_rag_search"):
+        if st.button("Tìm kiếm bằng chứng", key="btn_rag_search", icon=":material/search:"):
             st.markdown("### Kết quả bằng chứng (§19 Evidence)")
             ev_items = c.get_evidence(query=query, symbol=rag_symbol or None, top_k=5)
             if ev_items:
@@ -1056,8 +1118,15 @@ def page_news_rag() -> None:
 # Page 7 — System Health
 # ---------------------------------------------------------------------------
 def page_health() -> None:
-    st.header("🩺 Sức khỏe hệ thống")
-    st.caption("Trạng thái phụ thuộc trực tiếp từ `/healthz` và `/readyz`.")
+    st.markdown(
+        theme.page_header(
+            "Sức khỏe hệ thống",
+            "Trạng thái phụ thuộc trực tiếp từ `/healthz` và `/readyz`.",
+            icon=PAGE_ICONS["Sức khỏe hệ thống"],
+            eyebrow="Vận hành",
+        ),
+        unsafe_allow_html=True,
+    )
     c = client
     ready = c.probe()
     health = c.get_health()
@@ -1133,21 +1202,52 @@ def page_health() -> None:
 # ---------------------------------------------------------------------------
 # Page 8 — Email Notification Management
 # ---------------------------------------------------------------------------
+#: Minute values offered by the schedule form (kept in sync with the cron jobs).
+SCHEDULE_MINUTE_OPTIONS: tuple[int, ...] = (0, 15, 30, 45)
+
+
+def _sched_int(cfg: dict[str, Any], key: str, default: int) -> int:
+    """Read an int from the schedule payload without trusting the API shape."""
+    try:
+        return int(cfg.get(key, default))
+    except (TypeError, ValueError):
+        return default
+
+
+def _minute_selectbox(label: str, cfg: dict[str, Any], key: str, widget_key: str) -> int:
+    """Minute dropdown; an off-grid stored value snaps to the nearest option."""
+    current = _sched_int(cfg, key, 0)
+    nearest = min(SCHEDULE_MINUTE_OPTIONS, key=lambda m: abs(m - current))
+    return int(
+        st.selectbox(
+            label,
+            options=list(SCHEDULE_MINUTE_OPTIONS),
+            index=list(SCHEDULE_MINUTE_OPTIONS).index(nearest),
+            key=widget_key,
+        )
+    )
+
+
 def page_email_notifications() -> None:
-    st.header("📧 Quản lý Gửi Email Báo Cáo Tự Động")
-    st.caption(
-        "Tự động gửi báo cáo thị trường vào lúc 08:00 sáng & 15:30 chiều "
-        "(Thứ 2 - Thứ 6) qua Gmail SMTP."
+    st.markdown(
+        theme.page_header(
+            "Quản lý email báo cáo tự động",
+            "Tự động gửi báo cáo thị trường vào 08:00 (tổng kết phiên trước), 12:30 (phiên sáng) "
+            "và 16:30 (phiên chiều) Thứ 2 – Thứ 6 qua Gmail SMTP.",
+            icon=PAGE_ICONS["Quản lý Email"],
+            eyebrow="Thông báo",
+        ),
+        unsafe_allow_html=True,
     )
     c = client
 
     tab_send, tab_recipients, tab_smtp, tab_schedule, tab_logs = st.tabs(
         [
-            "🚀 Gửi thử & Xem trước",
-            "👥 Người nhận",
-            "⚙️ Tài khoản Gmail SMTP",
-            "⏰ Lịch gửi",
-            "📋 Nhật ký gửi",
+            "Gửi thử & Xem trước",
+            "Người nhận",
+            "Tài khoản Gmail SMTP",
+            "Lịch gửi",
+            "Nhật ký gửi",
         ]
     )
 
@@ -1161,7 +1261,9 @@ def page_email_notifications() -> None:
         with col_t2:
             st.write("")
             st.write("")
-            btn_send_test = st.button("📤 Gửi Thử Ngay", type="primary", key="btn_send_test_email")
+            btn_send_test = st.button(
+                "Gửi thử ngay", type="primary", key="btn_send_test_email", icon=":material/send:"
+            )
 
         if btn_send_test:
             if not test_target or "@" not in test_target:
@@ -1170,15 +1272,15 @@ def page_email_notifications() -> None:
                 with st.spinner(f"Đang gửi email thử nghiệm đến {test_target} qua SMTP..."):
                     res = c.send_test_email(test_target)
                 if res.get("success"):
-                    st.success(f"✅ Đã gửi email thành công đến {test_target}!")
+                    st.success(f"Đã gửi email thành công đến {test_target}.")
                 else:
-                    st.error(f"❌ Gửi email thất bại: {res.get('error') or res}")
+                    st.error(f"Gửi email thất bại: {res.get('error') or res}")
 
         st.divider()
         st.subheader("Bản xem trước nội dung Email HTML")
         preview_html = c.get_email_preview_html()
         if preview_html:
-            with st.expander("👁️ Xem trước giao diện email (HTML Preview)", expanded=True):
+            with st.expander("Xem trước giao diện email (HTML Preview)", expanded=True):
                 st.components.v1.html(preview_html, height=650, scrolling=True)
         else:
             st.info("Chưa tải được bản xem trước.")
@@ -1196,7 +1298,7 @@ def page_email_notifications() -> None:
             with ar3:
                 st.write("")
                 st.write("")
-                sub_rec = st.form_submit_button("➕ Thêm", type="primary")
+                sub_rec = st.form_submit_button("Thêm", type="primary", icon=":material/add:")
 
             if sub_rec:
                 if not new_em or "@" not in new_em:
@@ -1213,10 +1315,10 @@ def page_email_notifications() -> None:
             st.write(f"Hiện có **{len(recs)}** email trong danh sách:")
             for r in recs:
                 rc1, rc2, rc3, rc4 = st.columns([3, 2, 2, 1])
-                rc1.write(f"✉️ **{r['email']}**")
+                rc1.write(f"**{r['email']}**")
                 rc2.write(r.get("name") or "—")
-                rc3.write("🟢 Đang nhận" if r.get("is_active") else "⚪ Đã tắt")
-                if rc4.button("Xóa", key=f"del_{r['id']}"):
+                rc3.write("Đang nhận" if r.get("is_active") else "Đã tắt")
+                if rc4.button("Xóa", key=f"del_{r['id']}", icon=":material/delete:"):
                     c.delete_email_recipient(r["id"])
                     st.rerun()
         else:
@@ -1255,8 +1357,10 @@ def page_email_notifications() -> None:
                     "Sử dụng TLS (STARTTLS port 587)", value=bool(smtp_cfg.get("use_tls", True))
                 )
 
-            st.caption("🔒 Mật khẩu được mã hóa và lưu trữ an toàn trong PostgreSQL.")
-            save_smtp_btn = st.form_submit_button("💾 Lưu Cấu Hình SMTP", type="primary")
+            st.caption("Mật khẩu được mã hóa và lưu trữ an toàn trong PostgreSQL.")
+            save_smtp_btn = st.form_submit_button(
+                "Lưu Cấu Hình SMTP", type="primary", icon=":material/save:"
+            )
 
             if save_smtp_btn:
                 if not sender:
@@ -1278,55 +1382,76 @@ def page_email_notifications() -> None:
                         st.error(f"Lưu thất bại: {res_s['error']}")
                     elif res_s.get("warning"):
                         # No rerun here: the warning must stay visible.
-                        st.warning(f"✅ Đã lưu. ⚠️ {res_s['warning']}")
+                        st.warning(f"Đã lưu. Lưu ý: {res_s['warning']}")
                     else:
-                        st.success("✅ Đã lưu cấu hình tài khoản gửi SMTP thành công.")
+                        st.success("Đã lưu cấu hình tài khoản gửi SMTP thành công.")
                         st.rerun()
 
     with tab_schedule:
         st.subheader("Cấu Hình Lịch Gửi Tự Động")
+        st.caption(
+            "3 khung báo cáo mỗi ngày (Thứ 2 – Thứ 6, giờ Việt Nam): **08:00** tổng kết phiên "
+            "hôm trước · **12:30** phiên sáng · **16:30** phiên chiều (sau khi chấm điểm xong)."
+        )
         sched_cfg = c.get_email_schedule()
 
         with st.form("schedule_config_form"):
-            sc1, sc2 = st.columns(2)
+            sc1, sc2, sc3 = st.columns(3)
             with sc1:
-                st.markdown("**Phiên Sáng (Trước giờ mở cửa)**")
+                st.markdown("**08:00 — Phiên sáng hôm trước**")
                 m_h = st.slider(
                     "Giờ gửi sáng",
                     min_value=6,
                     max_value=11,
-                    value=int(sched_cfg.get("morning_hour", 8)),
+                    value=_sched_int(sched_cfg, "morning_hour", 8),
+                    key="sched_morning_hour",
                 )
-                m_m = st.selectbox(
-                    "Phút gửi sáng",
-                    options=[0, 15, 30, 45],
-                    index=[0, 15, 30, 45].index(int(sched_cfg.get("morning_minute", 0))),
+                m_m = _minute_selectbox(
+                    "Phút gửi sáng", sched_cfg, "morning_minute", "sched_morning_min"
                 )
             with sc2:
-                st.markdown("**Phiên Chiều (Sau giờ đóng cửa & chấm điểm)**")
+                st.markdown("**12:30 — Phiên sáng (sau 11:30)**")
+                n_h = st.slider(
+                    "Giờ gửi trưa",
+                    min_value=11,
+                    max_value=14,
+                    value=_sched_int(sched_cfg, "noon_hour", 12),
+                    key="sched_noon_hour",
+                )
+                n_m = _minute_selectbox(
+                    "Phút gửi trưa", sched_cfg, "noon_minute", "sched_noon_min"
+                )
+            with sc3:
+                st.markdown("**16:30 — Phiên chiều (sau 15:30)**")
                 a_h = st.slider(
                     "Giờ gửi chiều",
-                    min_value=14,
+                    min_value=15,
                     max_value=18,
-                    value=int(sched_cfg.get("afternoon_hour", 15)),
+                    value=_sched_int(sched_cfg, "afternoon_hour", 16),
+                    key="sched_afternoon_hour",
                 )
-                a_m = st.selectbox(
-                    "Phút gửi chiều",
-                    options=[0, 15, 30, 45],
-                    index=[0, 15, 30, 45].index(int(sched_cfg.get("afternoon_minute", 30))),
+                a_m = _minute_selectbox(
+                    "Phút gửi chiều", sched_cfg, "afternoon_minute", "sched_afternoon_min"
                 )
 
             st.divider()
             enable_sched = st.checkbox(
                 "Bật tự động gửi báo cáo theo lịch", value=bool(sched_cfg.get("is_enabled", True))
             )
-            st.caption("Lịch gửi: Thứ 2 đến Thứ 6 (Mon-Fri) múi giờ Việt Nam (Asia/Ho_Chi_Minh).")
-            save_sc_btn = st.form_submit_button("💾 Lưu Lịch Gửi", type="primary")
+            st.caption(
+                "Lịch gửi: Thứ 2 đến Thứ 6 (Mon-Fri) múi giờ Việt Nam (Asia/Ho_Chi_Minh). "
+                "Worker tự đọc lại cấu hình này mỗi 15 phút — không cần khởi động lại."
+            )
+            save_sc_btn = st.form_submit_button(
+                "Lưu Lịch Gửi", type="primary", icon=":material/save:"
+            )
 
             if save_sc_btn:
                 sc_payload = {
                     "morning_hour": int(m_h),
                     "morning_minute": int(m_m),
+                    "noon_hour": int(n_h),
+                    "noon_minute": int(n_m),
                     "afternoon_hour": int(a_h),
                     "afternoon_minute": int(a_m),
                     "days_of_week": "mon-fri",
@@ -1336,7 +1461,7 @@ def page_email_notifications() -> None:
                 if sc_res.get("error"):
                     st.error(f"Lưu thất bại: {sc_res['error']}")
                 else:
-                    st.success("✅ Đã lưu lịch gửi tự động thành công.")
+                    st.success("Đã lưu lịch gửi tự động thành công.")
                     st.rerun()
 
     with tab_logs:
@@ -1364,27 +1489,30 @@ def page_email_notifications() -> None:
 # Navigation
 # ---------------------------------------------------------------------------
 PAGES: dict[str, Callable[[], None]] = {
-    "📈 Tổng quan": page_market_overview,
-    "🔍 Bộ lọc": page_screener,
-    "🏆 Xếp hạng": page_rankings,
-    "🧭 Chi tiết mã": lambda: page_stock_detail(
+    "Tổng quan": page_market_overview,
+    "Bộ lọc cổ phiếu": page_screener,
+    "Xếp hạng": page_rankings,
+    "Chi tiết mã": lambda: page_stock_detail(
         st.text_input("Mã cổ phiếu", value="FPT", key="detail_symbol").strip().upper()
     ),
-    "🧪 Backtest": page_backtests,
-    "📰 Tin tức & RAG": page_news_rag,
-    "📧 Quản lý Email": page_email_notifications,
-    "🩺 Sức khỏe": page_health,
+    "Backtest": page_backtests,
+    "Tin tức & RAG": page_news_rag,
+    "Quản lý Email": page_email_notifications,
+    "Sức khỏe hệ thống": page_health,
 }
 
 PAGES[page]()
 
 st.markdown(
-    '<div class="dtck-foot">'
-    f"Nguồn dữ liệu: <b>{ready.get('market_source', '?')}</b>"
-    f" · CSDL: <b>{ready.get('dependencies', {}).get('database', '?')}</b>"
-    f" · Model: <b>{ready.get('dependencies', {}).get('models', '?')}</b>"
-    f" · Tác tử: <b>{ready.get('dependencies', {}).get('agents', '?')}</b>"
-    " · DTCK hỗ trợ quyết định cho con người — không đưa lời khuyên đầu tư (§3)."
-    "</div>",
+    theme.footer(
+        (
+            ("Nguồn dữ liệu", str(ready.get("market_source", "?"))),
+            ("CSDL", str(deps.get("database", "?"))),
+            ("Model", str(deps.get("models", "?"))),
+            ("Tác tử", str(deps.get("agents", "?"))),
+        ),
+        "DTCK hỗ trợ quyết định cho con người — không đưa lời khuyên đầu tư (§3). "
+        "Số liệu do engine định lượng tất định tính; LLM không sinh số liệu tài chính.",
+    ),
     unsafe_allow_html=True,
 )

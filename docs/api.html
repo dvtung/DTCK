@@ -50,7 +50,7 @@ curl localhost:8000/healthz</pre>
 <tr><td>DELETE</td><td><code>/notifications/recipients/{recipient_id}</code></td><td>Xóa email khỏi danh sách</td></tr>
 <tr><td>GET</td><td><code>/notifications/smtp</code></td><td>Thông tin tài khoản SMTP (không bao giờ lộ mật khẩu)</td></tr>
 <tr><td>POST</td><td><code>/notifications/smtp</code></td><td>Lưu cấu hình SMTP Gmail (server/port/email/App Password); cảnh báo khi password ≠ 16 ký tự</td></tr>
-<tr><td>GET</td><td><code>/notifications/schedule</code></td><td>Lịch gửi tự động (sáng 8h, chiều 15h30, Mon–Fri)</td></tr>
+<tr><td>GET</td><td><code>/notifications/schedule</code></td><td>Lịch gửi tự động 3 khung (sáng 08:00, trưa 12:30, chiều 16:30, Mon–Fri) — worker đọc lại mỗi 15 phút</td></tr>
 <tr><td>POST</td><td><code>/notifications/schedule</code></td><td>Lưu lịch gửi tự động</td></tr>
 <tr><td>POST</td><td><code>/notifications/send-test</code></td><td>Gửi thử ngay một địa chỉ — lỗi SMTP (535/disconnect/recipient) map sang tiếng Việt hành động được</td></tr>
 <tr><td>GET</td><td><code>/notifications/preview-html</code></td><td>Xem trước toàn bộ HTML bản tin Tổng quan (KPI, Top 10, VN30 + ML, disclaimer §3)</td></tr>

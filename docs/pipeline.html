@@ -31,12 +31,14 @@ python -m apps.worker.cli ingest --dataset prices --source yahoo \
 <table>
 <tr><th>Job</th><th>Lịch</th><th>Việc làm</th></tr>
 <tr><td><code>periodic_news_ingestion</code></td><td>Interval mỗi 15 phút</td><td>Nạp tin CaféF RSS → kiểm tra → chuẩn hóa → lưu + ghép mã (<code>news</code>/<code>news_symbols</code>)</td></tr>
-<tr><td><code>daily_eod_ingestion</code></td><td>Mon–Fri 15:05</td><td>Nạp EOD <code>--source ssix_finipro</code> (tự chuyển <code>yahoo → vndirect → tcbs → dsc</code> khi lỗi/0 dòng), cửa sổ lookback 7 ngày (idempotent — re-fetch gần đây là an toàn)</td></tr>
-<tr><td><code>daily_eod_scoring</code></td><td>Mon–Fri 15:30</td><td><code>compute-scores</code> sau khi EOD xong → bảng xếp hạng luôn mới trước khi API phục vụ</td></tr>
-<tr><td><code>daily_morning_email_report</code> (T018)</td><td>Mon–Fri 08:00</td><td>Gửi bản tin HTML Tổng quan (KPI, Top 10 tăng/giảm, VN30 + P(tăng 5D), disclaimer §3) qua Gmail SMTP cho mọi email đang nhận; ghi <code>email_send_logs</code></td></tr>
-<tr><td><code>daily_afternoon_email_report</code> (T018)</td><td>Mon–Fri 15:30</td><td>Gửi lại bản tin sau giờ đóng cửa (đã có điểm ngày mới) — cùng nội dung/khách nhận như job sáng</td></tr>
+<tr><td><code>daily_eod_ingestion</code></td><td>Mon–Fri 11:30 &amp; 15:30</td><td>Nạp EOD <code>--source ssix_finipro</code> (tự chuyển <code>yahoo → vndirect → tcbs → dsc</code> khi lỗi/0 dòng), cửa sổ lookback 7 ngày (idempotent — re-fetch gần đây là an toàn); chạy sau mỗi phiên đóng cửa</td></tr>
+<tr><td><code>daily_eod_scoring</code></td><td>Mon–Fri 12:00 &amp; 16:00</td><td><code>compute-scores</code> 30 phút sau mỗi lượt nạp → bảng xếp hạng luôn mới trước khi API phục vụ</td></tr>
+<tr><td><code>daily_morning_email_report</code> (T018)</td><td>Mon–Fri 08:00</td><td>Tổng kết phiên hôm trước — bản tin HTML Tổng quan (KPI, Top 10 tăng/giảm, VN30 + P(tăng 5D), disclaimer §3) qua Gmail SMTP cho mọi email đang nhận; ghi <code>email_send_logs</code></td></tr>
+<tr><td><code>daily_noon_email_report</code> (T018)</td><td>Mon–Fri 12:30</td><td>Bản tin phiên sáng (đã có điểm của lượt nạp 11:30 → chấm 12:00) — cùng nội dung/khách nhận</td></tr>
+<tr><td><code>daily_afternoon_email_report</code> (T018)</td><td>Mon–Fri 16:30</td><td>Bản tin phiên chiều (sau lượt nạp 15:30 → chấm 16:00) — cùng nội dung/khách nhận</td></tr>
+<tr><td><code>email_schedule_sync</code></td><td>Mỗi 15 phút</td><td>Đọc lại <code>email_schedule_configs</code> và đăng ký lại 3 job email → sửa lịch trên dashboard áp dụng ngay, không cần restart worker</td></tr>
 </table>
-<p>Thứ tự 15:05 → 15:30 đảm bảo chấm điểm luôn chạy trên giá đã chốt của ngày. Job báo cáo 15:30 chạy cùng giờ chấm điểm để bản tin chiều có điểm mới nhất. Chạy nền: <code>python -m apps.worker.main</code> (hoặc <code>docker compose up worker</code>).</p>
+<p>Thứ tự 11:30 → 12:00 và 15:30 → 16:00 đảm bảo chấm điểm luôn chạy trên giá đã chốt của phiên; các mốc 12:30 / 16:30 lấy từ bảng <code>email_schedule_configs</code> (mặc định 08:00 · 12:30 · 16:30). Chạy nền: <code>python -m apps.worker.main</code> (hoặc <code>docker compose up worker</code>).</p>
 <div class="sig"><b>Yêu cầu Gmail (T018):</b> SMTP chỉ chấp nhận <b>App Password 16 ký tự</b> (tạo tại <code>myaccount.google.com/apppasswords</code>, bật Xác thực 2 bước) — mật khẩu thường → 535; thử lại nhiều lần → Gmail đóng kết nối. Dashboard cảnh báo khi password lưu ≠ 16 ký tự; lỗi SMTP được map sang tiếng Việt.</div>
 <h2 class="sec">Giai đoạn 2 — Thu thập</h2>
 <p><code>collect_eod(provider, symbols, start, end)</code>, <code>collect_index(...)</code>, <code>collect_news(provider, since)</code> — các wrapper mỏng kiểm tra <code>supports()</code> và trả về bản ghi độc lập nhà cung cấp (<code>EODBar / IndexBar / NewsItem</code>).</p>

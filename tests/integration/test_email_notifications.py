@@ -62,13 +62,25 @@ def test_schedule_config_round_trip(service: NotificationService) -> None:
     cfg = service.get_schedule_config()
     assert cfg["morning_hour"] == 8
     assert cfg["is_enabled"] is False
-    # Restore the documented default (Mon-Fri 08:00 / 15:30, enabled).
+    # Every window is persisted, including the noon slot added for the 12:30 report.
     service.save_schedule_config(
-        morning_hour=8, morning_minute=0, afternoon_hour=15, afternoon_minute=30, is_enabled=True
+        morning_hour=8,
+        morning_minute=0,
+        noon_hour=12,
+        noon_minute=30,
+        afternoon_hour=16,
+        afternoon_minute=30,
+        is_enabled=True,
     )
     restored = service.get_schedule_config()
-    assert (restored["morning_hour"], restored["afternoon_hour"]) == (8, 15)
+    assert (restored["morning_hour"], restored["morning_minute"]) == (8, 0)
+    assert (restored["noon_hour"], restored["noon_minute"]) == (12, 30)
+    assert (restored["afternoon_hour"], restored["afternoon_minute"]) == (16, 30)
     assert restored["is_enabled"] is True
+    # The API/worker contract exposes all three windows by name.
+    from src.notifications.service import DEFAULT_EMAIL_SCHEDULE
+
+    assert {"morning_hour", "noon_hour", "afternoon_hour"} <= DEFAULT_EMAIL_SCHEDULE.keys()
 
 
 def test_dispatch_without_recipients_reports_error(service: NotificationService) -> None:

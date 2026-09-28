@@ -28,7 +28,7 @@ cp .env.example .env
 | `QDRANT_URL` | ✅ | Mặc định `http://localhost:6333` |
 | `LLM_PROVIDER`, `LLM_API_KEY`, `LLM_MODEL`, `LLM_BASE_URL`, `LLM_TIMEOUT_SECONDS`, `LLM_THINK` | Tùy (T016) | `mock` để chạy offline không tốn phí (test không gọi mạng). Đã nối tầng suy luận: `local` + `LLM_MODEL=qwen3.5` + `LLM_BASE_URL=http://host.docker.internal:11434` ⇒ Ollama máy host trả `thesis` tiếng Việt cho Analysis Agent (chi tiết `docs/AGENT_ARCHITECTURE_vi.md` §8.1). `LLM_THINK=false` (mặc định) tắt khối suy luận của model hybrid để giữ độ trễ trong hạn mức §45. Chạy test với `LLM_PROVIDER=mock MARKET_DATA_SOURCE=memory` |
 | `MARKET_DATA_SOURCE` | ✅ (mới) | Chế độ đọc của API: `memory` (mặc định trong code — không cần DB) · `db` (ép đọc TimescaleDB) · `auto` (đọc DB khi bảng `prices` đã có dòng, ngược lại về memory). Compose đã đặt mặc định `auto` cho `api`/`worker` — cần **build lại image** mới có hiệu lực (xem Giai đoạn 3) |
-| `SCHEDULER_*` (10 biến) | Tùy (mới) | Job worker lập lịch: `SCHEDULER_JOBS_ENABLED` (true/false) · tin tức `SCHEDULER_NEWS_SOURCE=cafef` mỗi `SCHEDULER_NEWS_INTERVAL_MINUTES=15` phút · EOD `SCHEDULER_EOD_SOURCE=ssix_finipro` lúc `SCHEDULER_EOD_CRON_HOUR:MINUTE=15:05` T2–T6 (nguồn chính SSI, tự chuyển `yahoo → vndirect → tcbs → dsc` khi lỗi/0 dòng), cửa sổ nạp lại `SCHEDULER_EOD_LOOKBACK_DAYS=7` · chấm điểm `SCHEDULER_SCORING_CRON_HOUR:MINUTE=15:30` T2–T6 (múi giờ `Asia/Ho_Chi_Minh`) |
+| `SCHEDULER_*` (11 biến) | Tùy (mới) | Job worker lập lịch: `SCHEDULER_JOBS_ENABLED` (true/false) · tin tức `SCHEDULER_NEWS_SOURCE=cafef` mỗi `SCHEDULER_NEWS_INTERVAL_MINUTES=15` phút · nạp EOD `SCHEDULER_EOD_SOURCE=ssix_finipro` lúc `SCHEDULER_EOD_CRON_HOURS=11,15`:`SCHEDULER_EOD_CRON_MINUTE=30` T2–T6 (nguồn chính SSI, tự chuyển `yahoo → vndirect → tcbs → dsc` khi lỗi/0 dòng), cửa sổ nạp lại `SCHEDULER_EOD_LOOKBACK_DAYS=7` · chấm điểm `SCHEDULER_SCORING_CRON_HOURS=12,16`:`SCHEDULER_SCORING_CRON_MINUTE=0` T2–T6 · đồng bộ lịch email `SCHEDULER_EMAIL_SYNC_MINUTES=15` (múi giờ `Asia/Ho_Chi_Minh`) |
 | `DATA_QUALITY_THRESHOLD` | Tùy | Cổng chất lượng §39, thang 0–100 (mặc định `80.0`) |
 | `NEWS_PROVIDER`, `NEWS_API_KEY` | Cho tin tức thật | ✅ CaféF RSS đã kiểm chứng 2026-09-25 (`cafef`, anonymous, 50 bài đã nạp thử) |
 | `MARKET_DATA_PROVIDER`, `FINIPRO_ACCESS_TOKEN` | Cho dữ liệu thật | ✅ Yahoo EOD đã kiểm chứng 2026-09-25 (anonymous); FiniPro/VNDirect/TCBS vẫn chờ mạng/token (KI-006/007) |
@@ -112,11 +112,13 @@ docker compose exec db psql -U dtck -d dtck -c \
 docker compose build api worker
 docker compose up -d --no-deps api worker
 
-# 12. Xác nhận worker scheduler đã đăng ký đủ 5 job
+# 12. Xác nhận worker scheduler đã đăng ký đủ 7 job
 docker compose logs worker 2>&1 | grep -i "registered job"
-# kỳ vọng thấy: periodic_news_ingestion … daily_eod_ingestion … cron Mon-Fri 15:05 …
-#   + daily_eod_scoring … 15:30 + daily_morning_email_report … Mon-Fri 08:00
-#   + daily_afternoon_email_report … Mon-Fri 15:30
+# kỳ vọng thấy: periodic_news_ingestion … daily_eod_ingestion … hour='11,15' minute='30' …
+#   + daily_eod_scoring … hour='12,16' minute='0'
+#   + daily_morning_email_report … 08:00 + daily_noon_email_report … 12:30
+#   + daily_afternoon_email_report … 16:30 + email_schedule_sync (mỗi 15 phút)
+# Giờ email đọc từ bảng email_schedule_configs (dashboard → tab "Cài đặt lịch gửi").
 # Báo cáo email T018 ghi mọi lượt vào bảng email_send_logs (SUCCESS/FAILED).
 ```
 
@@ -212,10 +214,12 @@ Quy trình ingest chuẩn qua cổng chất lượng:
 4. **Quality gate §39**: batch dưới 80 điểm sẽ bị flag `below_threshold` và command trả exit code 1 — đây là hành vi đúng, không phải lỗi
 
 **Worker scheduler (2026-09-25, cập nhật 2026-09-28):** container `worker` (`python -m apps.worker.main`)
-chạy APScheduler blocking với **5 job thật**: tin tức mỗi N phút (`cafef`),
-EOD Mon–Fri 15:05 (`SCHEDULER_EOD_SOURCE=ssix_finipro` + chuỗi dự phòng
-`yahoo → vndirect → tcbs → dsc`, cửa sổ nạp lại 7 ngày), chấm điểm Mon–Fri 15:30,
-**báo cáo email Mon–Fri 08:00 + 15:30** (`daily_morning_email_report`/`daily_afternoon_email_report`, T018)
+chạy APScheduler blocking với **7 job thật**: tin tức mỗi N phút (`cafef`),
+nạp EOD Mon–Fri **11:30 & 15:30** (`SCHEDULER_EOD_SOURCE=ssix_finipro` + chuỗi dự phòng
+`yahoo → vndirect → tcbs → dsc`, cửa sổ nạp lại 7 ngày), chấm điểm Mon–Fri **12:00 & 16:00**
+(30 phút sau mỗi lượt nạp), **báo cáo email 08:00 / 12:30 / 16:30**
+(`daily_morning_email_report`/`daily_noon_email_report`/`daily_afternoon_email_report`, T018)
+— giờ gửi đọc từ `email_schedule_configs` và tự đồng bộ mỗi 15 phút (`email_schedule_sync`)
 — múi giờ `Asia/Ho_Chi_Minh`, fail-soft (provider lỗi chỉ ghi log).
 Tắt job bằng `SCHEDULER_JOBS_ENABLED=false` (endpoint `/news/ingest` vẫn dùng được).
 Image cũ chưa có code này → phải `docker compose build api worker` (xem 3.0).

@@ -126,7 +126,7 @@ Mẫu bất đồng bộ: POST trả `202 + { agent_run_id }`; poll GET tới `S
 | DELETE | `/notifications/recipients/{id}` | xóa email khỏi danh sách |
 | GET | `/notifications/smtp` | thông tin tài khoản SMTP gửi (mật khẩu bị ẩn) |
 | POST | `/notifications/smtp` | lưu cấu hình SMTP Gmail (server, port, email, app password) |
-| GET | `/notifications/schedule` | cấu hình giờ gửi tự động (sáng 8h, chiều 15h30, Mon-Fri) |
+| GET | `/notifications/schedule` | cấu hình giờ gửi tự động 3 khung (sáng 08:00, trưa 12:30, chiều 16:30, Mon-Fri) |
 | POST | `/notifications/schedule` | cập nhật lịch gửi tự động |
 | POST | `/notifications/send-test` | gửi email thử nghiệm ngay lập tức đến địa chỉ chỉ định |
 | GET | `/notifications/preview-html` | xem trước HTML báo cáo tổng quan thị trường |

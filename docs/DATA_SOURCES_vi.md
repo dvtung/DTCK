@@ -20,7 +20,7 @@
 > Cập nhật 2026-09-27: **`ssix_finipro` (SSI FastConnect) đã kiểm chứng trực tiếp**
 > bằng credential consumer live → trở thành nguồn **chính** cho thị trường
 > (`Market/DailyOhlc`: 68 dòng cho FPT,VCB,HPG,ACB · quality 93.74;
-> `Market/DailyIndex`: 34 dòng cho VNINDEX,VN30). Job EOD 15:05 tự chạy chuỗi
+> `Market/DailyIndex`: 34 dòng cho VNINDEX,VN30). Job nạp EOD 11:30/15:30 tự chạy chuỗi
 > `ssix_finipro → yahoo → vndirect → tcbs → dsc` (`market_provider_chain`).
 
 ---

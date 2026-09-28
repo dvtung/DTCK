@@ -2,6 +2,24 @@
 
 > Thuật ngữ chuyên môn (tên bảng, biến môi trường, lệnh, đường dẫn) giữ nguyên tiếng Anh.
 
+## Task: T019 — Thiết kế lại giao diện Dashboard chuẩn BI tài chính chuyên nghiệp
+
+**Trạng thái:** HOÀN THÀNH (2026-09-28)
+**Mục tiêu:** Nâng cấp toàn diện thẩm mỹ Streamlit dashboard DTCK sang phong cách tài chính BI chuẩn mực (Bloomberg / Refinitiv inspired, palette chuyên nghiệp, typography phân cấp rõ ràng, loại bỏ emoji chrome, SVG icons, thống nhất layout biểu đồ Plotly).
+
+### Sản phẩm:
+- [x] `apps/dashboard/theme.py`: Design tokens, dark sidebar / light surface CSS sheet, builder hàm HTML an toàn (`app_bar`, `page_header`, `section_label`, `side_card`, `brand_html`, `footer`), inline SVG icon path registry.
+- [x] `apps/dashboard/app.py`: Gỡ bỏ emoji trong danh mục trang điều hướng; tích hợp `theme.page_header` trên toàn bộ 8 trang; áp dụng `theme.chart_layout` và cấu hình token cho toàn bộ các biểu đồ Plotly (candlestick, MA lines, volume, bar chart, score breakdown); thêm `theme.footer` với disclaimer §3 và dependency chips.
+- [x] `tests/unit/test_dashboard_theme.py`: 17 unit test kiểm chứng tokens, SVG generator, HTML builders, CSS injection, Plotly config.
+- [x] `tests/unit/test_dashboard_app.py`: Cập nhật và bổ sung 9 test headless AppTest kiểm tra render 8/8 trang không lỗi và hoàn toàn sạch bóng emoji chrome.
+
+### Kiểm chứng:
+- Chạy toàn bộ test dashboard: **69/69 passed** (`test_dashboard_app.py`, `test_dashboard_theme.py`, `test_dashboard.py`).
+- Cú pháp và kiểu dữ liệu: `ruff check`, `ruff format --check`, `mypy` đạt 100% không phát sinh cảnh báo hay lỗi.
+
+---
+
+
 ## Task: T018 — Module gửi email tự động (Gmail SMTP) + Trang quản trị dashboard
 
 **Trạng thái:** HOÀN THÀNH (2026-09-28)

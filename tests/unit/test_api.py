@@ -409,6 +409,37 @@ def test_notifications_preview_html_returns_rendered_content() -> None:
     assert "DTCK" in html
 
 
+def test_notifications_schedule_exposes_three_report_windows() -> None:
+    """The schedule contract carries the 08:00 / 12:30 / 16:30 windows."""
+    payload = {
+        "morning_hour": 8,
+        "morning_minute": 0,
+        "noon_hour": 12,
+        "noon_minute": 30,
+        "afternoon_hour": 16,
+        "afternoon_minute": 30,
+        "days_of_week": "mon-fri",
+        "is_enabled": True,
+    }
+    r = client.post("/api/v1/notifications/schedule", json=payload)
+    assert r.status_code == 200, r.text
+    assert r.json().get("success") is True
+
+    saved = client.get("/api/v1/notifications/schedule")
+    assert saved.status_code == 200
+    body = saved.json()
+    for key, value in payload.items():
+        assert body.get(key) == value, f"{key} round-trip mismatch"
+
+
+def test_notifications_schedule_rejects_out_of_range_hour() -> None:
+    r = client.post(
+        "/api/v1/notifications/schedule",
+        json={"noon_hour": 24, "noon_minute": 30},
+    )
+    assert r.status_code == 422
+
+
 def test_notifications_invalid_email_returns_422() -> None:
     r = client.post(
         "/api/v1/notifications/recipients",

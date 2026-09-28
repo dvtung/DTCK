@@ -88,6 +88,9 @@ select = ["E", "F", "W", "I", "N", "B", "UP"]
 [tool.ruff.lint.per-file-ignores]
 # HTML email template: attribute-heavy markup lines stay readable un-wrapped.
 "src/notifications/report_generator.py" = ["E501"]
+# Dashboard design system: the CSS/HTML template literals are long by nature
+# (one declaration block per line) and stay readable un-wrapped.
+"apps/dashboard/theme.py" = ["E501"]
 
 [tool.mypy]
 python_version = "3.12"

@@ -59,7 +59,9 @@ class SmtpConfigIn(BaseModel):
 class ScheduleConfigIn(BaseModel):
     morning_hour: int = Field(8, ge=0, le=23)
     morning_minute: int = Field(0, ge=0, le=59)
-    afternoon_hour: int = Field(15, ge=0, le=23)
+    noon_hour: int = Field(12, ge=0, le=23)
+    noon_minute: int = Field(30, ge=0, le=59)
+    afternoon_hour: int = Field(16, ge=0, le=23)
     afternoon_minute: int = Field(30, ge=0, le=59)
     days_of_week: str = "mon-fri"
     is_enabled: bool = True
@@ -133,6 +135,8 @@ def save_schedule_config(payload: ScheduleConfigIn) -> dict[str, Any]:
     return _service.save_schedule_config(
         morning_hour=payload.morning_hour,
         morning_minute=payload.morning_minute,
+        noon_hour=payload.noon_hour,
+        noon_minute=payload.noon_minute,
         afternoon_hour=payload.afternoon_hour,
         afternoon_minute=payload.afternoon_minute,
         days_of_week=payload.days_of_week,

@@ -24,6 +24,30 @@ from src.notifications.smtp_mailer import SmtpMailer
 
 logger = logging.getLogger("dtck.notifications.service")
 
+#: Schedule used when no row exists yet — the three documented report windows
+#: (Asia/Ho_Chi_Minh, Mon–Fri): 08:00 previous-session summary, 12:30 morning
+#: session, 16:30 afternoon session.  Kept as a module constant so the API,
+#: dashboard fallback and worker scheduler can never drift apart.
+DEFAULT_EMAIL_SCHEDULE: dict[str, Any] = {
+    "morning_hour": 8,
+    "morning_minute": 0,
+    "noon_hour": 12,
+    "noon_minute": 30,
+    "afternoon_hour": 16,
+    "afternoon_minute": 30,
+    "days_of_week": "mon-fri",
+    "is_enabled": True,
+}
+
+#: Ordered ``(period_key, label, hour_field, minute_field)`` report windows.
+#: ``period_key`` travels into the subject line; ``label`` is the Vietnamese
+#: session name rendered in the email subject.
+REPORT_WINDOWS: tuple[tuple[str, str, str, str], ...] = (
+    ("morning", "sáng", "morning_hour", "morning_minute"),
+    ("noon", "trưa", "noon_hour", "noon_minute"),
+    ("afternoon", "chiều", "afternoon_hour", "afternoon_minute"),
+)
+
 
 class NotificationService:
     """Manages email recipients, SMTP configs, schedules, and report dispatching."""
@@ -173,17 +197,12 @@ class NotificationService:
                 select(EmailScheduleConfig).order_by(EmailScheduleConfig.id.desc()).limit(1)
             )
             if not row:
-                return {
-                    "morning_hour": 8,
-                    "morning_minute": 0,
-                    "afternoon_hour": 15,
-                    "afternoon_minute": 30,
-                    "days_of_week": "mon-fri",
-                    "is_enabled": True,
-                }
+                return dict(DEFAULT_EMAIL_SCHEDULE)
             return {
                 "morning_hour": row.morning_hour,
                 "morning_minute": row.morning_minute,
+                "noon_hour": row.noon_hour,
+                "noon_minute": row.noon_minute,
                 "afternoon_hour": row.afternoon_hour,
                 "afternoon_minute": row.afternoon_minute,
                 "days_of_week": row.days_of_week,
@@ -195,7 +214,9 @@ class NotificationService:
         *,
         morning_hour: int = 8,
         morning_minute: int = 0,
-        afternoon_hour: int = 15,
+        noon_hour: int = 12,
+        noon_minute: int = 30,
+        afternoon_hour: int = 16,
         afternoon_minute: int = 30,
         days_of_week: str = "mon-fri",
         is_enabled: bool = True,
@@ -208,6 +229,8 @@ class NotificationService:
                 row = EmailScheduleConfig(
                     morning_hour=morning_hour,
                     morning_minute=morning_minute,
+                    noon_hour=noon_hour,
+                    noon_minute=noon_minute,
                     afternoon_hour=afternoon_hour,
                     afternoon_minute=afternoon_minute,
                     days_of_week=days_of_week,
@@ -217,6 +240,8 @@ class NotificationService:
             else:
                 row.morning_hour = morning_hour
                 row.morning_minute = morning_minute
+                row.noon_hour = noon_hour
+                row.noon_minute = noon_minute
                 row.afternoon_hour = afternoon_hour
                 row.afternoon_minute = afternoon_minute
                 row.days_of_week = days_of_week

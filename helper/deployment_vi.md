@@ -97,10 +97,11 @@ curl -s localhost:8000/readyz        # kỳ vọng "models":"price_direction_xgb
 | Biến | Tác dụng |
 |---|---|
 | `MARKET_DATA_SOURCE` | `memory` (mặc định trong code, không cần CSDL) / `db` (ép dùng TimescaleDB) / `auto` (dùng CSDL khi `prices` có dòng; compose mặc định `auto`) |
-| `SCHEDULER_JOBS_ENABLED` | `true` chạy 5 job worker (news / EOD 15:05 / scoring 15:30 / email 08:00 + email 15:30 ICT, `Asia/Ho_Chi_Minh`); `false` = tắt scheduler, vẫn nạp thủ công được |
+| `SCHEDULER_JOBS_ENABLED` | `true` chạy 7 job worker (news / nạp EOD 11:30 + 15:30 / chấm điểm 12:00 + 16:00 / email 08:00 + 12:30 + 16:30 / đồng bộ lịch email mỗi 15', `Asia/Ho_Chi_Minh`); `false` = tắt scheduler, vẫn nạp thủ công được |
 | `SCHEDULER_NEWS_SOURCE` / `SCHEDULER_NEWS_INTERVAL_MINUTES` | mặc định `cafef` / `15` |
-| `SCHEDULER_EOD_SOURCE` / `SCHEDULER_EOD_CRON_HOUR` / `SCHEDULER_EOD_CRON_MINUTE` / `SCHEDULER_EOD_LOOKBACK_DAYS` | mặc định `ssix_finipro` (chính) / `15` / `5` / `7`; job tự chuyển `yahoo → vndirect → tcbs → dsc` khi nguồn chính lỗi hoặc trả 0 dòng |
-| `SCHEDULER_SCORING_CRON_HOUR` / `SCHEDULER_SCORING_CRON_MINUTE` | mặc định `15` / `30` |
+| `SCHEDULER_EOD_SOURCE` / `SCHEDULER_EOD_CRON_HOURS` / `SCHEDULER_EOD_CRON_MINUTE` / `SCHEDULER_EOD_LOOKBACK_DAYS` | mặc định `ssix_finipro` (chính) / `11,15` / `30` / `7` (danh sách giờ ngăn cách bởi dấu phẩy); job tự chuyển `yahoo → vndirect → tcbs → dsc` khi nguồn chính lỗi hoặc trả 0 dòng |
+| `SCHEDULER_SCORING_CRON_HOURS` / `SCHEDULER_SCORING_CRON_MINUTE` | mặc định `12,16` / `0` — chấm điểm 30 phút sau mỗi lượt nạp |
+| `SCHEDULER_EMAIL_SYNC_MINUTES` | mặc định `15` — chu kỳ worker đọc lại `email_schedule_configs` để lịch sửa trên dashboard áp dụng ngay, không cần restart |
 
 Lệch DSN của worker (không chặn nếu `.env` đặt `POSTGRES_PASSWORD`): trong compose, `worker.DATABASE_URL` dự phòng bằng `dtckpassword` còn `api` dự phòng bằng `change_me` — hãy đặt mật khẩu tường minh trong `.env` để hai dịch vụ khớp nhau.
 

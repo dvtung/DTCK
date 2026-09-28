@@ -173,14 +173,9 @@ class MarketClient:
         if key == "/notifications/smtp":
             return {}
         if key == "/notifications/schedule":
-            return {
-                "morning_hour": 8,
-                "morning_minute": 0,
-                "afternoon_hour": 15,
-                "afternoon_minute": 30,
-                "days_of_week": "mon-fri",
-                "is_enabled": True,
-            }
+            from src.notifications.service import DEFAULT_EMAIL_SCHEDULE
+
+            return dict(DEFAULT_EMAIL_SCHEDULE)
         if key == "/notifications/logs":
             return []
         if key == "/notifications/preview-html":

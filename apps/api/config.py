@@ -69,16 +69,22 @@ class Settings(BaseSettings):
 
     # Worker / Scheduler settings
     scheduler_news_interval_minutes: int = 15
-    scheduler_scoring_cron_hour: int = 15
-    scheduler_scoring_cron_minute: int = 30
+    # Two sessions per VN trading day (Asia/Ho_Chi_Minh): the morning session
+    # closes at 11:30, the afternoon at 15:00 — ingest right after each close and
+    # score 30 minutes later so ranking always reflects the freshest bars.
+    scheduler_scoring_cron_hours: str = "12,16"
+    scheduler_scoring_cron_minute: int = 0
     scheduler_news_source: str = "cafef"
-    # Daily EOD price ingestion (feeds the 15:30 scoring job with same-day bars).
+    # Daily EOD price ingestion (feeds the scoring jobs with same-session bars).
     # Primary source only — the job walks `fallback_chains.market` (Yahoo, …)
     # from `configs/sources.yaml` when the primary fails or returns no rows.
     scheduler_eod_source: str = "ssix_finipro"
-    scheduler_eod_cron_hour: int = 15
-    scheduler_eod_cron_minute: int = 5
+    scheduler_eod_cron_hours: str = "11,15"
+    scheduler_eod_cron_minute: int = 30
     scheduler_eod_lookback_days: int = 7  # idempotent window: re-fetches recent bars
+    # How often the worker re-reads `email_schedule_configs` so a schedule saved
+    # on the dashboard is applied without restarting the container.
+    scheduler_email_sync_minutes: int = 15
     scheduler_jobs_enabled: bool = True
 
     # Data quality gate (§39, T005) — datasets below this overall score are not
@@ -92,6 +98,22 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
+
+def parse_cron_hours(raw: str, fallback: tuple[int, ...]) -> tuple[int, ...]:
+    """Parse a ``"11,15"``-style hour list into a sorted, de-duplicated tuple.
+
+    Environment variables must stay simple strings (pydantic-settings would try
+    to JSON-decode a list), so the scheduler accepts a comma/semicolon separated
+    hour list here.  Out-of-range or unparsable entries are dropped; an empty
+    result falls back to the documented default.
+    """
+    hours: set[int] = set()
+    for part in str(raw or "").replace(";", ",").split(","):
+        token = part.strip()
+        if token.isdigit() and 0 <= int(token) <= 23:
+            hours.add(int(token))
+    return tuple(sorted(hours)) or fallback
 
 
 settings = get_settings()

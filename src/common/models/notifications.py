@@ -42,14 +42,21 @@ class EmailSmtpConfig(AuditMixin, Base):
 
 
 class EmailScheduleConfig(AuditMixin, Base):
-    """Schedule rules for automatic market reports (Mon-Fri 08:00 and 15:30)."""
+    """Schedule rules for the three automatic market reports.
+
+    Windows (``Asia/Ho_Chi_Minh``, Mon–Fri):
+    ``morning_*`` 08:00 (previous session summary), ``noon_*`` 12:30 (morning
+    session) and ``afternoon_*`` 16:30 (afternoon session).
+    """
 
     __tablename__ = "email_schedule_configs"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     morning_hour: Mapped[int] = mapped_column(Integer, default=8, nullable=False)
     morning_minute: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    afternoon_hour: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
+    noon_hour: Mapped[int] = mapped_column(Integer, default=12, nullable=False)
+    noon_minute: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    afternoon_hour: Mapped[int] = mapped_column(Integer, default=16, nullable=False)
     afternoon_minute: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
     days_of_week: Mapped[str] = mapped_column(String(50), default="mon-fri", nullable=False)
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

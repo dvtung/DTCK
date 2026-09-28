@@ -4,6 +4,39 @@
 
 **Cập nhật lần cuối:** 2026-09-28
 
+## 2026-09-28 — Cập nhật Lập lịch Worker, Khung giờ Email và Khắc phục Tương phản Streamlit
+
+- **Đồng bộ Lập lịch Worker đa phiên & Dynamic Email Schedule**:
+  - Cập nhật APScheduler trong `apps/worker/main.py` từ 5 job lên 7 job thực thi: nạp EOD (11:30 & 15:30), tính điểm ranking (12:00 & 16:00), 3 khung gửi email tự động (08:00 sáng, 12:30 trưa, 16:30 chiều), và job đồng bộ lịch email (`email_schedule_sync`) mỗi 15 phút.
+  - Chuyển cấu hình `SCHEDULER_EOD_CRON_HOUR` và `SCHEDULER_SCORING_CRON_HOUR` thành danh sách giờ (`SCHEDULER_EOD_CRON_HOURS="11,15"`, `SCHEDULER_SCORING_CRON_HOURS="12,16"`), phân tích qua hàm helper `parse_cron_hours`.
+  - Hỗ trợ dynamic email schedule đọc từ bảng CSDL `email_schedule_configs` (fallback sang `DEFAULT_EMAIL_SCHEDULE` khi CSDL trống hoặc ngắt kết nối).
+- **Mở rộng Migration & Dịch vụ Báo cáo Email 3 khung giờ**:
+  - Tạo migration Alembic `0004_email_schedule_noon_window.py` bổ sung cột `noon_hour` (mặc định 12) và `noon_minute` (mặc định 30) trong bảng `email_schedule_configs`.
+  - Cập nhật model, schema, `NotificationService` và API router `notifications` cho 3 khung giờ (`morning`, `noon`, `afternoon`).
+  - Nâng cấp giao diện Quản lý Email trên Streamlit dashboard: hỗ trợ cấu hình và xem trước 3 khung giờ báo cáo với nhãn rõ ràng.
+- **Sửa lỗi tương phản giao diện Streamlit (Dark/Light Mode Theme Bleed)**:
+  - Cập nhật `apps/dashboard/theme.py`: bổ sung tokens màu tương phản cao (`field`, `field_ink`, `placeholder`), ép thuộc tính nền input và form controls bề mặt mờ đục (opaque), gán các biến CSS canvas Glide Data Grid để ngăn chặn chữ trắng chìm trên nền sáng khi người dùng đặt dark mode ở trình duyệt/hệ điều hành.
+- **Tài liệu & Kiểm thử**:
+  - Cập nhật đầy đủ tài liệu vận hành và hệ thống (`helper/deployment_vi.md`, `helper/resources_vi.md`, `docs/DEPLOYMENT_vi.md`, `docs/status.html`, `docs/pipeline.html`, `docs/modules.html`, `docs/api.html`, `docs/API_SPECIFICATION_vi.md`).
+  - Toàn bộ test unit và integration liên quan đều passed; `ruff` và `mypy` đạt 100% sạch trên toàn bộ source codebase.
+
+## 2026-09-28 — T019: Thiết kế lại toàn diện Dashboard sang thẩm mỹ BI tài chính chuyên nghiệp
+
+- **Hệ thống Design System mới (`apps/dashboard/theme.py`)**:
+  - Bảng màu tài chính cao cấp (Navy `#0b1527`, Royal Blue `#1d4ed8`, Pine Green `#15803d`, Crimson `#b91c1c`, Amber `#b45309`, Sky `#0369a1`).
+  - Hỗ trợ đầy đủ CSS variables (`--dtck-*`), thẻ responsive (`.dtck-hero`, `.dtck-appbar`, `.dtck-chip`, `.dtck-sidecard`), Dark sidebar đồng bộ với Light content surface.
+  - Bộ biểu tượng vector SVG nội tuyến (thay thế triệt để toàn bộ emoji chrome trong điều hướng và tiêu đề).
+  - Khung chân trang chuẩn mực (`theme.footer`) kèm runtime dependency chips và quy định cảnh báo miễn trừ trách nhiệm pháp lý theo §3.
+- **Tái cấu trúc giao diện `apps/dashboard/app.py`**:
+  - Chuẩn hoá danh sách trang điều hướng: loại bỏ tiền tố emoji, chuyển thành nhãn văn bản thuần khiết.
+  - Tích hợp `theme.page_header` cho toàn bộ 8 trang ứng dụng.
+  - Cập nhật tất cả biểu đồ Plotly (VNINDEX, cổ phiếu, nến OHLC, khối lượng, MA20/MA50, phân rã đóng góp hệ số, thanh đo chất lượng dữ liệu) dùng chung `theme.chart_layout`, bảng màu `theme.PLOTLY_CONFIG` và `theme=None` để tránh xung đột Streamlit theme.
+- **Kiểm thử tự động**:
+  - Tạo mới `tests/unit/test_dashboard_theme.py` (17 tests) kiểm chứng tokens, SVG icon generator, HTML builders, layout helpers, CSS token sheet injection.
+  - Nâng cấp `tests/unit/test_dashboard_app.py` (9 tests) chạy headless AppTest: kiểm tra render không lỗi trên cả 8 trang, bảo đảm không còn emoji chrome nào xuất hiện.
+  - Bộ test dashboard đạt 69/69 test pass (`test_dashboard.py` + `test_dashboard_app.py` + `test_dashboard_theme.py`). Toàn bộ mã nguồn đạt chuẩn `ruff` và `mypy` nghiêm ngặt.
+
+
 ## 2026-09-28 — T018 (bổ sung): Map lỗi SMTP Gmail sang hướng dẫn App Password + cảnh báo password
 
 - `src/notifications/smtp_mailer.py` — map `SMTPServerDisconnected` (Gmail đóng kết nối sau lần AUTH hỏng lặp lại) và `SMTPRecipientsRefused` sang tiếng Việt hành động được.
