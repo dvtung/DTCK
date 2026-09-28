@@ -1,6 +1,6 @@
 # Hướng dẫn triển khai DTCK (Tiếng Việt)
 
-> Phiên bản: 2026-09-28 · nhánh `vndocver` — scheduler 5 job, API 48/53, 42 bảng (head 0003), test 551 passed
+> Phiên bản: 2026-09-28 · nhánh `vndocver` — scheduler 5 job, API 48/53, 42 bảng (head 0003), test 595 passed
 > Trạng thái: **bạn đang ở bước 3** — kiểm tra API/DB trong container + nạp dữ liệu thật.
 
 Dựa trên cấu hình thực tế của repo (docker-compose, Alembic, seeds, các KI đã biết).
@@ -284,8 +284,13 @@ curl -s http://localhost:8000/metrics
 
 ```bash
 # 19. Chạy toàn bộ test suite (trên máy chủ — thư mục `tests/` không nằm trong image api)
-LLM_PROVIDER=mock MARKET_DATA_SOURCE=memory pytest -q   # kỳ vọng 2026-09-28: 551 passed, 3 skipped (unit 523 + integration 28 liền một lệnh)
-LLM_PROVIDER=mock MARKET_DATA_SOURCE=db pytest tests/integration -q  # kỳ vọng: 28 passed (CSDL đang chạy)
+LLM_PROVIDER=mock MARKET_DATA_SOURCE=memory pytest -q   # kỳ vọng 2026-09-28: 595 passed, 3 skipped (unit 569 + integration 29 liền một lệnh)
+LLM_PROVIDER=mock MARKET_DATA_SOURCE=db pytest tests/integration -q  # kỳ vọng: 29 passed (CSDL đang chạy)
+
+# LƯU Ý (2026-09-28): test integration chạy trên `DATABASE_URL` thật (cùng CSDL với
+# api/worker). Fixture `isolated_session_factory` (tests/integration/conftest.py) buộc
+# mọi ghi của service vào một transaction bị rollback ⇒ test không bao giờ sửa/xoá dữ
+# liệu thật (xem KI-013: một `DELETE` toàn bảng trong test từng xoá cấu hình SMTP thật).
 
 # 20. Lint + type check (image API cài kèm dev deps)
 docker compose exec -T api ruff check .

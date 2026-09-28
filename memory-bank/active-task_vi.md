@@ -33,7 +33,8 @@
 - [x] Dashboard **📧 Quản lý Email** (5 tab: gửi thử/preview HTML, người nhận, SMTP Gmail, lịch gửi, logs); validation regex stdlib (không `email-validator`); cảnh báo password ≠ 16 ký tự (không phải App Password).
 
 ### Kiểm chứng (fact, 2026-09-28):
-- **523 unit passed, 3 skipped** + **28 integration passed**; `ruff check` + `mypy` (**138 tệp**) sạch.
+- **566 unit passed + 3 skipped** (569 thu thập) và **29 integration passed**; `ruff check` + `mypy` (**139 tệp**) sạch.
+- Test integration ghi trong transaction rollback (`isolated_session_factory`) ⇒ **không** sửa/xoá dữ liệu thật; regression `test_isolated_writes_never_reach_the_shared_database` bảo vệ (KI-013).
 - Live trong container: build HTML 16 KB từ service thật, worker đăng ký đủ 5 job (`daily_morning_email_report`, `daily_afternoon_email_report`), trace SMTP đến AUTH rồi 535 → map sang hướng dẫn App Password.
 - **Còn chặn vận hành (phía người dùng, không phải bug repo):** Gmail yêu cầu App Password 16 ký tự cho SMTP (mật khẩu thường → 535; thử lại nhiều lần → Gmail đóng kết nối `SMTPServerDisconnected`). Người dùng tự tạo tại `myaccount.google.com/apppasswords` rồi lưu trên dashboard.
 

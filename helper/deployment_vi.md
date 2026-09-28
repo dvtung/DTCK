@@ -7,7 +7,7 @@
 Tài liệu triển khai chính: `docs/DEPLOYMENT.md`.
 
 > **Hướng dẫn triển khai chi tiết từng bước bằng tiếng Việt: [`docs/DEPLOYMENT_vi.md`](../docs/DEPLOYMENT_vi.md)** — 6 giai đoạn (chuẩn bị → hạ tầng → migration/seed → kiểm tra + dữ liệu thật → kiểm thử → vận hành) + troubleshooting. Bạn đang ở **giai đoạn 3**.
-> Cập nhật 2026-09-28 (T018): scheduler **5 job** (thêm 2 cron email Mon–Fri 08:00/15:30), router `notifications` (11 thao tác); test `LLM_PROVIDER=mock MARKET_DATA_SOURCE=memory pytest -q` → kỳ vọng **551 passed, 3 skipped** (unit 523 + integration 28 liền một lệnh; chạy trên máy chủ — `tests/` không nằm trong image `api`).
+> Cập nhật 2026-09-28 (T018): scheduler **5 job** (thêm 2 cron email Mon–Fri 08:00/15:30), router `notifications` (11 thao tác); test `LLM_PROVIDER=mock MARKET_DATA_SOURCE=memory pytest -q` → kỳ vọng **595 passed, 3 skipped** (unit 569 + integration 29 liền một lệnh; chạy trên máy chủ — `tests/` không nằm trong image `api`). Test integration ghi trong transaction rollback (`isolated_session_factory`) nên **không** chạm dữ liệu thật (KI-013).
 > Cập nhật 2026-09-27: `ssix_finipro` (SSI FastConnect) là **nguồn chính** đã kiểm chứng (68 dòng giá + 34 dòng chỉ số); job EOD tự chuyển sang `yahoo → vndirect → tcbs → dsc` khi nguồn chính lỗi/0 dòng; `/readyz` dò thật `database`/`qdrant`/`agents` + `market_source`; image api/worker đã cài `qdrant-client` (extra `[qdrant]`).
 > Cập nhật 2026-09-26: rebuild `api`/`worker` trước (scheduler 3 job + đường đọc CSDL), nạp Yahoo EOD + `compute-scores`; ĐÃ NỐI tầng suy luận LLM local (`src/agents/llm/`).
 
@@ -58,8 +58,8 @@ Endpoint:
 
 ```bash
 docker compose logs -f api            # theo dõi log API
-LLM_PROVIDER=mock MARKET_DATA_SOURCE=memory pytest -q       # kỳ vọng 2026-09-28: 551 passed, 3 skipped (chạy trên máy chủ)
-LLM_PROVIDER=mock MARKET_DATA_SOURCE=db pytest tests/integration -q   # kỳ vọng: 28 passed (cần CSDL đang chạy)
+LLM_PROVIDER=mock MARKET_DATA_SOURCE=memory pytest -q       # kỳ vọng 2026-09-28: 595 passed, 3 skipped (chạy trên máy chủ)
+LLM_PROVIDER=mock MARKET_DATA_SOURCE=db pytest tests/integration -q   # kỳ vọng: 29 passed (cần CSDL đang chạy)
 ./scripts/backup_db.sh                # sao lưu CSDL (backups/dtck_<timestamp>.sql.gz, giữ 14 ngày)
 ./scripts/health_alert.sh             # kiểm tra /healthz + /readyz (dùng cho cron/cảnh báo)
 docker compose down                   # dừng (giữ volume)

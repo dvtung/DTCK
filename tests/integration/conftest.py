@@ -13,11 +13,11 @@ Documented runner (see ``helper/deployment.md``):
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 
 import pytest
 from sqlalchemy import text
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from apps.api.db import get_engine, session_factory
 
@@ -53,3 +53,26 @@ def db_service(db_ready: None):
     from apps.api.services.db_market import DbMarketService
 
     return DbMarketService()
+
+
+@pytest.fixture
+def isolated_session_factory(db_ready: None) -> Iterator[Callable[[], Session]]:
+    """Service session factory whose writes are rolled back at teardown.
+
+    Integration tests run against the developer's ``DATABASE_URL`` — the same
+    database the API and worker use.  Writes issued through the app's global
+    ``session_factory`` therefore survive the run and can destroy real
+    configuration (T018 regression: an unconditional
+    ``DELETE FROM email_smtp_configs`` inside a test wiped the configured Gmail
+    account).  This fixture binds services to a single connection inside an
+    outer transaction that is **always rolled back**, so the suite still
+    exercises real SQL while leaving the shared database untouched.
+    """
+    connection = get_engine().connect()
+    trans = connection.begin()
+    maker = sessionmaker(bind=connection, autoflush=False, expire_on_commit=False)
+    try:
+        yield maker
+    finally:
+        trans.rollback()
+        connection.close()

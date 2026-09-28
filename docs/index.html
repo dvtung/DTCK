@@ -30,7 +30,7 @@
       <span class="badge">Python 3.12 · FastAPI · Streamlit</span>
       <span class="badge">TimescaleDB · Qdrant · Redis</span>
       <span class="badge">Tác tử LangGraph · XGBoost / LightGBM</span>
-      <span class="badge">551 kiểm thử đạt · 138 mã · 48 API · ruff + mypy sạch</span>
+      <span class="badge">595 kiểm thử đạt · 139 mã · 48 API · ruff + mypy sạch</span>
     </div>
   </div>
   <div class="grid">
@@ -67,7 +67,7 @@
     <tr><td>Chế độ nguồn dữ liệu của API</td><td><code>MARKET_DATA_SOURCE=memory</code> (mặc định) · <code>db</code> đọc thẳng TimescaleDB qua <code>DbMarketService</code> · <code>auto</code> dùng CSDL khi kết nối được và đã có dòng <code>prices</code>. Cùng một bộ router/kiểm thử cho cả ba chế độ (<code>apps/api/dependencies.py</code>, <code>apps/api/db.py</code>)</td></tr>
 <tr><td>Bảng điều khiển (T011 + T016 + T018)</td><td>Tổng quan (nến VNINDEX + Top 10) · <b>📧 Quản lý Email</b> (T018, 5 tab) · bộ lọc (3 sàn, cột VN100) · xếp hạng (30 mã) · chi tiết mã (nến + MA + ML + RAG) · backtest (form tạo) · <b>Tin tức &amp; RAG</b> · sức khỏe + JWT ở sidebar · nối API thật (gỡ bao phân trang) · <code>apps/dashboard/</code> + AppTest</td></tr>
     <tr><td>RAG + bằng chứng (T012)</td><td><code>src/rag/</code> (nhúng hash, chunking, kho trong bộ nhớ + Qdrant best-effort, truy xuất hybrid, rerank) + <code>src/evidence/</code> (§19) + 3 endpoint API + 23 kiểm thử</td></tr>
-    <tr><td>Kiểm thử</td><td><b>551 đạt · 3 bỏ qua</b> (unit 523 + integration 28: email 21 · api · market-source · db-market; live 2) · ruff + mypy (138 tệp) sạch. Lệnh: <code>LLM_PROVIDER=mock MARKET_DATA_SOURCE=memory pytest</code> · báo cáo email Gmail SMTP + App Password (kẻ chữ ký gửi luôn từ DB, không từ worker)</td></tr>
+    <tr><td>Kiểm thử</td><td><b>595 đạt · 3 bỏ qua</b> (598 thu thập: unit 569 + integration 29) · ruff + mypy (139 tệp) sạch. Test integration ghi trong transaction rollback nên không chạm CSDL thật (KI-013). Lệnh: <code>LLM_PROVIDER=mock MARKET_DATA_SOURCE=memory pytest</code></td></tr>
     <tr><td>Tài liệu</td><td>15 đặc tả markdown trong <code>docs/</code> + 8 trang HTML tĩnh (site này) — cùng thư mục <code>docs/</code></td></tr>
   </table>
 </div>

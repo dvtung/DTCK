@@ -46,7 +46,7 @@ Thông báo email:████████████████████ 1
 - **Engine backtesting** (`src/backtesting/`, T009) — `models.py`, `metrics.py` (total return, CAGR, volatility, Sharpe, Sortino, max drawdown, Calmar, win rate, profit factor, turnover, transaction-cost total), `engine.py` (`run_backtest`, `select_window`, logic rebalance/close-leg), `walkforward.py`. Tất định, tính chi phí, không look-ahead.
 - **REST API** (`apps/api/`, T010 + T016 + T018; **48 đường dẫn / 53 thao tác** trên `/api/v1/*`, kiểm chứng 2026-09-28 bằng `app.openapi()`: **13 tệp router** gồm `notifications`; không tính `/healthz`+`/readyz`+`/metrics`) — FastAPI với các nhóm router theo `docs/API_SPECIFICATION.md` (phân trang dùng chung + phong bì lỗi `not_found`; 24 schema Pydantic; `/healthz` + `/readyz` với `market_source=auto->db`; DI `MarketDep` chọn `MarketSource`).
 - **Dashboard Streamlit** (`apps/dashboard/`, T011 + T015c + T016 + T018) — `client.py` (HTTP-first, mở phong bì phân trang, RAG/bằng chứng + **email notifications** + **đăng nhập JWT**), `app.py` (**8 trang**: tổng quan + nến VNINDEX + Top 10 tăng/giảm, bộ lọc 3 sàn, xếp hạng 30 mã, chi tiết mã, backtests, Tin tức & RAG, **Quản lý Email**, sức khỏe; AppTest 8 trang).
-- Kiểm thử **(2026-09-28):** riêng `tests/unit` = **523 passed, 3 skipped** (thêm T016 `?vn100=`/index-prices/movers/sidebar-login, T018 9+4 bài email/scheduler/API) và `tests/integration` = **28 passed** (thêm email persistence/dispatch mock); ruff + mypy (**138 tệp**) sạch. Các cột mốc trước: 499 (T015c) · 510 (T016 + 2 bài AppTest) · 521 (T018 mailer/service/API).
+- Kiểm thử **(2026-09-28):** riêng `tests/unit` = **569 thu thập (566 passed, 3 skipped)** và `tests/integration` = **29 passed**; ruff + mypy (**139 tệp**) sạch. Test integration chạy qua fixture `isolated_session_factory` (transaction rollback) nên **không** sửa/xoá dữ liệu thật — xem KI-013. Các cột mốc trước: 499 (T015c) · 510 (T016 + 2 bài AppTest) · 521 (T018 mailer/service/API) · 523 (T018 +2 bài hint SMTP).
 - **Hệ số cơ bản** (`src/market/fundamental/factors.py`) — tăng trưởng doanh thu/EPS, ROE, ROA, biên lợi nhuận, D/E, FCF (tỉ lệ 0–100); trả `None` khi mẫu số bằng 0 (không bịa số).
 - **Định giá** (`src/market/valuation/valuation.py`) — P/E, forward P/E, P/B, EV/EBITDA, EV/Sales, tỉ suất cổ tức, PEG, enterprise value + hạng percentile (ngành/lịch sử).
 - **Động lượng** (`src/market/momentum/momentum.py`) — lợi nhuận n ngày, đa khung, mở rộng khối lượng, động lượng tương đối so với benchmark.
@@ -73,7 +73,7 @@ Thông báo email:████████████████████ 1
 - Dashboard trang **📧 Quản lý Email** (5 tab: gửi thử + preview, người nhận, SMTP Gmail, lịch gửi, logs).
 - Validation: regex email stdlib (không thêm `email-validator`); cảnh báo khi password Gmail khác 16 ký tự (không phải App Password).
 
-**Kiểm chứng:** unit **523 passed** · integration **28 passed** · ruff + mypy (**138 tệp**) sạch · live: preview 16 KB, trace SMTP đến AUTH, map lỗi 535 sang hướng dẫn App Password.
+**Kiểm chứng:** unit **569 thu thập (566 passed, 3 skipped)** · integration **29 passed** (fixture rollback ⇒ không chạm CSDL thật) · ruff + mypy (**139 tệp**) sạch · live: preview 16 KB, trace SMTP đến AUTH, map lỗi 535 sang hướng dẫn App Password.
 
 **Quy ước mới ghi nhận:** Lỗi SMTP từ Gmail khi ngắt kết nối sau lần AUTH hỏng lặp lại (`SMTPServerDisconnected`) → luôn hiển thị hướng dẫn App Password, không để lộ exception thô.
 

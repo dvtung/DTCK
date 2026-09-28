@@ -4,6 +4,17 @@
 
 **Cập nhật lần cuối:** 2026-09-28
 
+## 2026-09-28 — Sửa lỗi mất cấu hình SMTP: test integration từng xoá dữ liệu thật (KI-013)
+
+- **Triệu chứng:** bảng `email_smtp_configs` luôn trống dù đã lưu tài khoản gửi trên dashboard.
+- **Gốc rễ (`FACT`, truy vết bằng mã + CSDL):** `.env` trỏ `DATABASE_URL` vào chính CSDL mà `api`/`worker` dùng; `tests/integration/test_email_notifications.py` gọi `_clear_smtp_configs()` → `DELETE FROM email_smtp_configs` **không WHERE** trong `finally` của bài `test_dispatch_report_sends_via_mocked_smtp` ⇒ mỗi lần chạy `pytest` xoá sạch cấu hình SMTP thật. Bài round-trip còn **ghi** tài khoản giả (`sender@gmail.com` / `app-password-123`) vào bảng thật và không dọn ⇒ bảng dao động giữa "rỗng" và "tài khoản giả".
+- **Sửa:**
+  - `tests/integration/conftest.py` — thêm fixture `isolated_session_factory`: buộc service vào **một connection trong transaction ngoài luôn `rollback()`** (`sessionmaker(bind=conn)`, `expire_on_commit=False`), nên test vẫn chạy SQL thật nhưng không để lại dấu vết.
+  - `tests/integration/test_email_notifications.py` — fixture `service` dùng `isolated_session_factory`; **xoá** `_clear_smtp_configs` và khối `try/finally`; thêm bài regression `test_isolated_writes_never_reach_the_shared_database` (ghi qua fixture → xác nhận kết nối độc lập `session_factory()` thấy **0** dòng).
+- **Kiểm chứng (`FACT`):** `pytest tests/integration -q` → **29 passed**; đếm `email_smtp_configs` / `email_recipients` / `email_send_logs` **không đổi** trước–sau khi chạy (0 / 3 / 75). Full suite: `pytest -q` → **595 passed, 3 skipped** (598 thu thập), exit 0. Live: `POST /api/v1/notifications/smtp` → `{"success":true}` + row `id=37` + `GET` báo `is_configured=true`, sau đó đã xoá row thử nghiệm để trả CSDL về nguyên trạng.
+- **Hệ quả không khôi phục được:** backup duy nhất `backups/dtck_20260927_110245.sql.gz` được tạo **trước** migration `0003` nên không chứa `email_smtp_configs` ⇒ App Password đã mất phải nhập lại (Gmail App Password 16 ký tự, `myaccount.google.com/apppasswords`).
+- **Tài liệu cập nhật:** `docs/DEPLOYMENT_vi.md`, `helper/deployment_vi.md`, `helper/resources_vi.md`, `memory-bank/known-issues_vi.md` (KI-013), `memory-bank/current-state_vi.md`, `docs/index.html`, `docs/structure.html`.
+
 ## 2026-09-28 — Cập nhật Lập lịch Worker, Khung giờ Email và Khắc phục Tương phản Streamlit
 
 - **Đồng bộ Lập lịch Worker đa phiên & Dynamic Email Schedule**:
@@ -64,7 +75,7 @@
   - Thêm trang **"📧 Quản lý Email"** gồm 5 tab: 🚀 Gửi thử & Xem trước (xem trước HTML trực tiếp, nút gửi thử ngay), 👥 Quản lý người nhận (thêm/xóa), ⚙️ Cấu hình Gmail SMTP (Server, Port, Email, App Password, TLS), ⏰ Cài đặt lịch gửi (giờ/phút sáng & chiều, bật/tắt), 📋 Nhật ký gửi.
 - **Kiểm thử**:
   - `tests/unit/test_email_notifications.py` (9 tests: render HTML, headline VNINDEX, dữ liệu rỗng trung thực, STARTTLS, SSL, báo lỗi auth/disconnect/recipient), `tests/integration/test_email_notifications.py` (8 tests: persistence DB, CRUD, send log, mock dispatch), `tests/unit/test_api.py` (+4 tests API notifications), `tests/unit/test_worker_scheduler.py` (đã cập nhật 5 jobs), `tests/unit/test_dashboard_app.py` (PAGES có 📧 Quản lý Email).
-  - Kết quả **HIỆN TẠI (2026-09-28):** **523 unit tests passed, 3 skipped**, **28 integration tests passed**, `ruff` và `mypy` (138 source files) hoàn toàn sạch.
+  - Kết quả **HIỆN TẠI (2026-09-28):** **595 passed, 3 skipped** (598 thu thập: unit 569 + integration 29 — xem mục KI-013 về fixture rollback), `ruff` và `mypy` (139 source files) hoàn toàn sạch.
 
 
 ## 2026-09-27 — T016: VN100 + 3 sàn, nến VNINDEX, bảng tăng/giảm MA20/MA50, đăng nhập JWT
