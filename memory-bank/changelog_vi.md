@@ -2,7 +2,24 @@
 
 > Thuật ngữ chuyên môn (tên bảng, biến môi trường, lệnh, đường dẫn) giữ nguyên tiếng Anh.
 
-**Cập nhật lần cuối:** 2026-09-28
+**Cập nhật lần cuối:** 2026-09-29
+
+## 2026-09-29 — Worker: mất giá đóng cửa 2026-09-29 + index_prices đóng băng (KI-014)
+
+- **Triệu chứng người dùng:** "daily_eod_ingestion không chạy hôm nay, dữ liệu là của hôm qua".
+- **Gốc rễ (`FACT`, truy vết từ `docker compose logs worker` + SQL):**
+  - Lượt **11:30** chạy tốt (`ssix_finipro fetched=820 written=820`) nhưng chỉ ghi **ảnh chụp phiên sáng** (FPT 2026-09-29 close 63.300 / vol 1.467.200 — vol cả ngày 09-28 là 5.148.700).
+  - Lượt **15:30 (giá đóng cửa) thất bại toàn bộ**: SSI `502 Bad Gateway` trên `Market/AccessToken` → Yahoo `404` (ACV.VN) → vndirect timeout → tcbs/dsc `endpoints must be verified`; kết thúc bằng `ERROR: Scheduled EOD ingestion failed: no provider … returned rows`. **Không có retry** → đóng băng tới tận lượt 11:30 hôm sau.
+  - Lượt **16:00 chấm điểm thành công** trên chính dữ liệu chưa hoàn chỉnh (`scored=136`) và báo `executed successfully` ⇒ **lỗi vô hình**; email 16:30 gửi theo dữ liệu phiên sáng.
+  - **`index_prices` không nằm trong scheduler** — `scheduled_eod_ingestion` chỉ gọi `ingest_eod`; `ingest_index` chỉ chạy tay → VNINDEX/VN30 đóng băng ở **2026-09-25** (cũ hơn cổ phiếu 4 ngày).
+- **Sửa (code):**
+  - `src/data/freshness.py` (mới): `expected_session_date()` (phiên ICT đã đóng, bỏ T7/CN), `stale_datasets()`, `is_intraday_snapshot()` (hàm thuần) + `latest_trade_dates()`/`latest_ingested_at()` (SQL mỏng, `max(trade_date)`/`max(ingested_at)`).
+  - `apps/worker/main.py`: EOD nạp **kèm `index_prices`** (`SCHEDULER_EOD_INDICES=VNINDEX,VN30`, chỉ khi `provider.supports("index_prices")`); job mới **`daily_eod_catchup` Mon–Fri 15:50** (chạy trước chấm điểm 16:00, chỉ nạp khi dữ liệu cũ hơn phiên đã đóng); `scheduled_scoring_job` cảnh báo `intraday snapshot` / `no stock bars`; log freshness sau mỗi lượt nạp (cả nhánh thành công lẫn thất bại).
+  - `apps/api/config.py`: `scheduler_eod_indices`, `scheduler_eod_include_intraday_session` (mặc định `true` — giữ ảnh sáng cho báo 12:30, luôn bị 15:30 ghi đè; `false` = chỉ nạp phiên đã đóng), `scheduler_eod_catchup_hour/minute` (15/50), `scheduler_session_close_hour/minute` (15/15) + `parse_codes()`.
+- **Kiểm chứng (`FACT`):** `ruff check .` + `mypy apps src` (140 tệp) sạch; `pytest -q` → **617 passed, 3 skipped** (620 thu thập: unit 589 + integration 31), exit 0. Live trong container worker: đăng ký `daily_eod_catchup`; catch-up bỏ qua khi mới (`all scheduled datasets current for 2026-09-29`, không gọi vendor); lượt EOD đầy đủ → `prices fetched=820 written=820` + `index_prices fetched=12 written=12`; mô phỏng phiên chưa đóng → cảnh báo `index_prices, prices behind the last closed session …`.
+- **Backfill khi điều tra (live, trước khi sửa code):** nạp lại EOD (`prices` 2026-09-29 = 136 dòng, FPT close **63.200** vol **3.118.000**), nạp `index_prices` 09-25→09-29 (6 dòng: VNINDEX 1777,73 / VN30 1914,35), `compute-scores --as-of 2026-09-29` → 136 dòng; `GET /api/v1/market/indices` trả `trade_date=2026-09-29`.
+- **Còn mở (không nằm trong lần sửa này):** `market_regimes` 0 dòng → `/api/v1/market/regime` luôn `UNKNOWN` (chưa có job viết bảng); SSI `Market/DailyIndex` không trả OHLC ⇒ `open=high=low=close` (không bịa dữ liệu, nhưng biểu đồ nến chỉ số phẳng).
+- **Tài liệu cập nhật:** `docs/DEPLOYMENT_vi.md` (8 job, test 617), `helper/deployment_vi.md`, `helper/resources_vi.md` (env vars mới), `.env.example`, `memory-bank/known-issues_vi.md` (KI-014), `memory-bank/active-task_vi.md`, `docs/index.html`, `docs/structure.html`.
 
 ## 2026-09-28 — Sửa lỗi mất cấu hình SMTP: test integration từng xoá dữ liệu thật (KI-013)
 

@@ -6,10 +6,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from apps.api.config import parse_cron_hours
+from apps.api.config import parse_codes, parse_cron_hours
 from apps.worker.main import (
+    EOD_CATCHUP_JOB_ID,
     _build_scheduler,
     read_email_schedule,
+    scheduled_eod_catchup,
     scheduled_eod_ingestion,
     scheduled_news_ingestion,
     scheduled_scoring_job,
@@ -38,6 +40,7 @@ def test_worker_scheduler_registers_jobs() -> None:
     job_ids = {j.id for j in jobs}
     assert "periodic_news_ingestion" in job_ids
     assert "daily_eod_ingestion" in job_ids
+    assert EOD_CATCHUP_JOB_ID in job_ids
     assert "daily_eod_scoring" in job_ids
     assert "daily_morning_email_report" in job_ids
     assert "daily_noon_email_report" in job_ids
@@ -198,12 +201,14 @@ def test_scheduled_scoring_job_executes(mock_engine, mock_compute_scores) -> Non
     assert mock_compute_scores.called
 
 
+@patch("src.data.pipelines.ingest_index")
 @patch("src.data.pipelines.ingest_eod")
 @patch("src.data.providers.create_provider")
 @patch("apps.worker.main.get_engine")
 @patch("apps.worker.cli._active_symbols")
 def test_scheduled_eod_ingestion_executes(
-    mock_symbols, mock_engine, mock_create_provider, mock_ingest_eod  # type: ignore[no-untyped-def]
+    mock_symbols, mock_engine, mock_create_provider, mock_ingest_eod,  # type: ignore[no-untyped-def]
+    mock_ingest_index,  # type: ignore[no-untyped-def]
 ) -> None:
     mock_symbols.return_value = {"FPT", "VCB"}
     mock_res = MagicMock()
@@ -230,12 +235,14 @@ def test_scheduled_eod_ingestion_skips_empty_universe(
     assert not mock_ingest_eod.called
 
 
+@patch("src.data.pipelines.ingest_index")
 @patch("src.data.pipelines.ingest_eod")
 @patch("src.data.providers.create_provider")
 @patch("apps.worker.main.get_engine")
 @patch("apps.worker.cli._active_symbols")
 def test_scheduled_eod_ingestion_falls_back_when_the_primary_is_unusable(
     mock_symbols, mock_engine, mock_create_provider, mock_ingest_eod,  # type: ignore[no-untyped-def]
+    mock_ingest_index,  # type: ignore[no-untyped-def]
     monkeypatch,  # type: ignore[no-untyped-def]
 ) -> None:
     """SSI primary without credentials must fall back to Yahoo, not abort the run."""
@@ -258,12 +265,14 @@ def test_scheduled_eod_ingestion_falls_back_when_the_primary_is_unusable(
     assert mock_ingest_eod.call_count == 1
 
 
+@patch("src.data.pipelines.ingest_index")
 @patch("src.data.pipelines.ingest_eod")
 @patch("src.data.providers.create_provider")
 @patch("apps.worker.main.get_engine")
 @patch("apps.worker.cli._active_symbols")
 def test_scheduled_eod_ingestion_falls_back_when_fetch_itself_raises(
     mock_symbols, mock_engine, mock_create_provider, mock_ingest_eod,  # type: ignore[no-untyped-def]
+    mock_ingest_index,  # type: ignore[no-untyped-def]
     monkeypatch,  # type: ignore[no-untyped-def]
 ) -> None:
     """Credentials are checked lazily: SSI builds fine but raises at token
@@ -286,12 +295,14 @@ def test_scheduled_eod_ingestion_falls_back_when_fetch_itself_raises(
     assert mock_ingest_eod.call_count == 2
 
 
+@patch("src.data.pipelines.ingest_index")
 @patch("src.data.pipelines.ingest_eod")
 @patch("src.data.providers.create_provider")
 @patch("apps.worker.main.get_engine")
 @patch("apps.worker.cli._active_symbols")
 def test_scheduled_eod_ingestion_falls_back_when_the_primary_returns_no_rows(
     mock_symbols, mock_engine, mock_create_provider, mock_ingest_eod,  # type: ignore[no-untyped-def]
+    mock_ingest_index,  # type: ignore[no-untyped-def]
     monkeypatch,  # type: ignore[no-untyped-def]
 ) -> None:
     """An empty batch from the primary is a failure signal, not a silent no-op."""
@@ -312,3 +323,185 @@ def test_scheduled_eod_ingestion_falls_back_when_the_primary_returns_no_rows(
         "ssix_finipro",
         "yahoo",
     ]
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("VNINDEX,VN30", ("VNINDEX", "VN30")),
+        ("vnindex, vn30 ", ("VNINDEX", "VN30")),
+        ("VNINDEX;VN30;VNINDEX", ("VNINDEX", "VN30")),
+        ("", ()),
+        ("   ", ()),
+    ],
+)
+def test_parse_codes(raw: str, expected: tuple[str, ...]) -> None:
+    assert parse_codes(raw) == expected
+
+
+def test_eod_catchup_runs_before_the_afternoon_scoring_slot() -> None:
+    """A failed 15:30 close must be repaired before the 16:00 scoring (KI-014)."""
+    from apps.api.config import Settings, settings
+
+    defaults = {name: field.default for name, field in Settings.model_fields.items()}
+    assert defaults["scheduler_eod_catchup_hour"] == 15
+    assert defaults["scheduler_eod_catchup_minute"] == 50
+    assert defaults["scheduler_eod_indices"] == "VNINDEX,VN30"
+    assert defaults["scheduler_eod_include_intraday_session"] is True
+
+    jobs = {j.id: j for j in _build_scheduler().get_jobs()}
+    catchup = str(jobs[EOD_CATCHUP_JOB_ID].trigger)
+    score = str(jobs["daily_eod_scoring"].trigger)
+    catchup_minutes = (
+        settings.scheduler_eod_catchup_hour * 60 + settings.scheduler_eod_catchup_minute
+    )
+    last_score_hour = max(parse_cron_hours(settings.scheduler_scoring_cron_hours, (12, 16)))
+    score_minutes = last_score_hour * 60 + settings.scheduler_scoring_cron_minute
+    assert catchup_minutes < score_minutes
+    assert f"hour='{settings.scheduler_eod_catchup_hour}'" in catchup
+    assert f"minute='{settings.scheduler_eod_catchup_minute}'" in catchup
+    assert "day_of_week='mon-fri'" in catchup and "day_of_week='mon-fri'" in score
+
+
+@patch("src.data.pipelines.ingest_index")
+@patch("src.data.pipelines.ingest_eod")
+@patch("src.data.providers.create_provider")
+@patch("apps.worker.main.get_engine")
+@patch("apps.worker.cli._active_symbols")
+def test_eod_ingestion_refreshes_the_configured_indices(
+    mock_symbols, mock_engine, mock_create_provider, mock_ingest_eod,  # type: ignore[no-untyped-def]
+    mock_ingest_index,  # type: ignore[no-untyped-def]
+) -> None:
+    """``index_prices`` must be ingested by the same job as the stock bars (KI-014)."""
+    from apps.api.config import settings
+
+    mock_symbols.return_value = {"FPT"}
+    provider = MagicMock()
+    provider.supports.return_value = True
+    provider.id = "ssix_finipro"
+    mock_create_provider.return_value = provider
+    mock_ingest_eod.return_value = IngestResult(
+        dataset="prices", source="ssix_finipro", rows_fetched=2, rows_written=2
+    )
+    mock_ingest_index.return_value = IngestResult(
+        dataset="index_prices", source="ssix_finipro", rows_fetched=2, rows_written=2
+    )
+
+    scheduled_eod_ingestion()
+
+    assert mock_ingest_index.call_count == 1
+    args, kwargs = mock_ingest_index.call_args
+    assert args[2] == list(parse_codes(settings.scheduler_eod_indices))
+    assert kwargs["start"] <= kwargs["end"]
+    # The same provider serves both datasets — no second build.
+    assert mock_create_provider.call_count == 1
+
+
+@patch("src.data.pipelines.ingest_index")
+@patch("src.data.pipelines.ingest_eod")
+@patch("src.data.providers.create_provider")
+@patch("apps.worker.main.get_engine")
+@patch("apps.worker.cli._active_symbols")
+def test_eod_ingestion_skips_indices_when_the_provider_cannot_serve_them(
+    mock_symbols, mock_engine, mock_create_provider, mock_ingest_eod,  # type: ignore[no-untyped-def]
+    mock_ingest_index,  # type: ignore[no-untyped-def]
+) -> None:
+    """A price-only provider (Yahoo) must not be asked for index bars."""
+    mock_symbols.return_value = {"FPT"}
+    provider = MagicMock()
+    provider.supports.return_value = False
+    provider.id = "yahoo"
+    mock_create_provider.return_value = provider
+    mock_ingest_eod.return_value = IngestResult(
+        dataset="prices", source="yahoo", rows_fetched=2, rows_written=2
+    )
+
+    scheduled_eod_ingestion()
+
+    assert mock_ingest_index.call_count == 0
+
+
+@patch("src.data.pipelines.ingest_index")
+@patch("src.data.pipelines.ingest_eod")
+@patch("src.data.providers.create_provider")
+@patch("apps.worker.main.get_engine")
+@patch("apps.worker.cli._active_symbols")
+def test_eod_catchup_ingests_only_when_a_dataset_is_stale(
+    mock_symbols, mock_engine, mock_create_provider, mock_ingest_eod,  # type: ignore[no-untyped-def]
+    mock_ingest_index,  # type: ignore[no-untyped-def]
+) -> None:
+    """The 15:50 catch-up is a no-op on a healthy day and a repair when not (KI-014)."""
+    from datetime import date
+
+    mock_symbols.return_value = {"FPT"}
+    expected = date(2026, 9, 29)
+
+    with patch("apps.worker.main.expected_session_date", return_value=expected):
+        # Fresh: prices + index_prices both at the last closed session.
+        with patch(
+            "src.data.freshness.latest_trade_dates",
+            return_value={"prices": expected, "index_prices": expected},
+        ):
+            scheduled_eod_catchup()
+        assert mock_ingest_eod.call_count == 0
+        assert mock_create_provider.call_count == 0
+
+        # The 2026-09-29 outage shape: indices (and prices) behind → repair both.
+        provider = MagicMock()
+        provider.supports.return_value = True
+        provider.id = "ssix_finipro"
+        mock_create_provider.return_value = provider
+        mock_ingest_eod.return_value = IngestResult(
+            dataset="prices", source="ssix_finipro", rows_fetched=1, rows_written=1
+        )
+        mock_ingest_index.return_value = IngestResult(
+            dataset="index_prices", source="ssix_finipro", rows_fetched=1, rows_written=1
+        )
+        with patch(
+            "src.data.freshness.latest_trade_dates",
+            return_value={"prices": expected, "index_prices": date(2026, 9, 25)},
+        ):
+            scheduled_eod_catchup()
+        assert mock_ingest_eod.call_count == 1
+        assert mock_ingest_index.call_count == 1
+
+
+def _scoring_job_with_bar_written_at(
+    written_at: str, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> str:
+    """Run the scoring job with a stubbed newest write time; return the log text."""
+    from datetime import datetime, time
+
+    from apps.worker.main import expected_session_date, scheduled_scoring_job
+    from src.data.freshness import ICT
+
+    trade_date = expected_session_date()
+    hour, minute = (int(part) for part in written_at.split(":"))
+    ingested_at = datetime.combine(trade_date, time(hour, minute), tzinfo=ICT)
+    summary = MagicMock()
+    summary.summary.return_value = f"scores trade_date={trade_date} scored=136"
+
+    monkeypatch.setattr("apps.worker.main.get_engine", lambda: MagicMock())
+    monkeypatch.setattr(
+        "src.data.freshness.latest_ingested_at",
+        lambda _engine, _trade_date: ingested_at,
+    )
+    with patch("src.quant.scoring.job.compute_and_store_scores", return_value=summary):
+        with caplog.at_level("WARNING", logger="dtck.worker"):
+            scheduled_scoring_job()
+    return "\n".join(record.getMessage() for record in caplog.records)
+
+
+def test_scoring_job_warns_when_scores_use_an_intraday_snapshot(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Silently re-scoring the 11:30 snapshot is what hid the 2026-09-29 outage (KI-014)."""
+    logged = _scoring_job_with_bar_written_at("11:30", monkeypatch, caplog)
+    assert "intraday snapshot" in logged
+
+
+def test_scoring_job_is_quiet_when_the_close_was_ingested(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    logged = _scoring_job_with_bar_written_at("15:35", monkeypatch, caplog)
+    assert "intraday snapshot" not in logged

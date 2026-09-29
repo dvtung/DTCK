@@ -82,6 +82,24 @@ class Settings(BaseSettings):
     scheduler_eod_cron_hours: str = "11,15"
     scheduler_eod_cron_minute: int = 30
     scheduler_eod_lookback_days: int = 7  # idempotent window: re-fetches recent bars
+    # Index codes ingested by the same EOD job (SSI `Market/DailyIndex`). Without
+    # this the index chart/regime inputs lag the stock universe (KI-014: they were
+    # frozen 2026-09-25 → 09-29). Comma/semicolon separated; empty disables it.
+    scheduler_eod_indices: str = "VNINDEX,VN30"
+    # The morning run stores the current session's snapshot (it powers the 12:30
+    # report) and the close run overwrites it. Set false to only ever ingest
+    # sessions that have already closed, at the cost of a live noon report.
+    scheduler_eod_include_intraday_session: bool = True
+    # Retry window: when `prices`/`index_prices` are still behind the last closed
+    # session here, the EOD ingestion runs again — a transient vendor outage (SSI
+    # 502 on 2026-09-29) must not lose the close of day before scoring/email.
+    scheduler_eod_catchup_hour: int = 15
+    scheduler_eod_catchup_minute: int = 50
+    # ICT cutoff marking the afternoon session as closed (ATC ends 14:45; vendor
+    # EOD data settles a little later). Drives both the catch-up window and the
+    # "provisional scores" warning in the scoring job.
+    scheduler_session_close_hour: int = 15
+    scheduler_session_close_minute: int = 15
     # How often the worker re-reads `email_schedule_configs` so a schedule saved
     # on the dashboard is applied without restarting the container.
     scheduler_email_sync_minutes: int = 15
@@ -114,6 +132,21 @@ def parse_cron_hours(raw: str, fallback: tuple[int, ...]) -> tuple[int, ...]:
         if token.isdigit() and 0 <= int(token) <= 23:
             hours.add(int(token))
     return tuple(sorted(hours)) or fallback
+
+
+def parse_codes(raw: str) -> tuple[str, ...]:
+    """Parse a ``"VNINDEX,VN30"``-style code list for the scheduler.
+
+    Upper-cased, whitespace-stripped, de-duplicated and order-preserving (the
+    vendor expects codes in the order it was given). Blank input yields an empty
+    tuple, which callers treat as "this dataset is not scheduled".
+    """
+    codes: list[str] = []
+    for part in str(raw or "").replace(";", ",").split(","):
+        token = part.strip().upper()
+        if token and token not in codes:
+            codes.append(token)
+    return tuple(codes)
 
 
 settings = get_settings()

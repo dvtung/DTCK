@@ -2,6 +2,26 @@
 
 > Thuật ngữ chuyên môn (tên bảng, biến môi trường, lệnh, đường dẫn) giữ nguyên tiếng Anh.
 
+## Task: MAINT-2026-09-29 — Sửa test xoá dữ liệu thật (KI-013) + Worker mất giá đóng cửa (KI-014)
+
+**Trạng thái:** HOÀN THÀNH (2026-09-29)
+**Mục tiêu:** (1) `pytest` không bao giờ được sửa/xoá dữ liệu CSDL phát triển; (2) `daily_eod_ingestion` phải nạp đủ **cổ phiếu + chỉ số** cho phiên hôm nay và tự vá khi nhà cung cấp lỗi lúc 15:30.
+
+### Sản phẩm:
+- [x] `tests/integration/conftest.py` — fixture `isolated_session_factory` (service ghi trong transaction luôn rollback); `tests/integration/test_email_notifications.py` bỏ `_clear_smtp_configs()` + thêm bài regression `test_isolated_writes_never_reach_the_shared_database` (KI-013).
+- [x] `src/data/freshness.py` (mới) — `expected_session_date`, `stale_datasets`, `is_intraday_snapshot`, `latest_trade_dates`, `latest_ingested_at` (hàm thuần thuần để test được, SQL mỏng).
+- [x] `apps/worker/main.py` — `scheduled_eod_ingestion` nạp kèm `index_prices` (qua `SCHEDULER_EOD_INDICES` + `provider.supports`), job **`daily_eod_catchup` 15:50** (chỉ nạp khi `prices`/`index_prices` cũ hơn phiên đã đóng), cảnh báo `intraday snapshot` trong `scheduled_scoring_job`, log freshness sau mỗi lượt nạp (KI-014).
+- [x] `apps/api/config.py` — `scheduler_eod_indices`, `scheduler_eod_include_intraday_session`, `scheduler_eod_catchup_hour/minute`, `scheduler_session_close_hour/minute` + helper `parse_codes`.
+- [x] `.env.example`, `helper/deployment_vi.md`, `helper/resources_vi.md`, `docs/DEPLOYMENT_vi.md`, `memory-bank/known-issues_vi.md` (KI-013/KI-014), `docs/index.html`, `docs/structure.html`.
+
+### Kiểm chứng (fact, 2026-09-29):
+- `ruff check .` + `mypy apps src` (**140 tệp**) sạch; `pytest -q` → **617 passed, 3 skipped** (620 thu thập: unit 589 + integration 31), exit 0.
+- Live: `daily_eod_catchup` đăng ký trong worker; catch-up khi dữ liệu mới → bỏ qua không gọi vendor; lượt EOD đầy đủ → `prices fetched=820` + `index_prices fetched=12` + `all scheduled datasets current for 2026-09-29`; khi mô phỏng phiên chưa đóng → cảnh báo `prices, index_prices behind the last closed session …`.
+- Backfill trong lúc điều tra: `prices` 2026-09-29 (136 dòng, giá đóng cửa thật), `index_prices` VNINDEX/VN30 2026-09-29, `factor_scores` 136 dòng — trước đó chỉ có ảnh chụp 11:30 và chỉ số đóng băng từ 2026-09-25.
+- **Còn mở:** `market_regimes` vẫn 0 dòng → `/api/v1/market/regime` trả `UNKNOWN` (không có job nào viết bảng này — cần quyết định thiết kế riêng); chỉ số SSI lưu OHLC phẳng vì `Market/DailyIndex` không trả về OHLC.
+
+---
+
 ## Task: T019 — Thiết kế lại giao diện Dashboard chuẩn BI tài chính chuyên nghiệp
 
 **Trạng thái:** HOÀN THÀNH (2026-09-28)

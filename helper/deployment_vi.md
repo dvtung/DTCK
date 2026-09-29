@@ -7,7 +7,7 @@
 Tài liệu triển khai chính: `docs/DEPLOYMENT.md`.
 
 > **Hướng dẫn triển khai chi tiết từng bước bằng tiếng Việt: [`docs/DEPLOYMENT_vi.md`](../docs/DEPLOYMENT_vi.md)** — 6 giai đoạn (chuẩn bị → hạ tầng → migration/seed → kiểm tra + dữ liệu thật → kiểm thử → vận hành) + troubleshooting. Bạn đang ở **giai đoạn 3**.
-> Cập nhật 2026-09-28 (T018): scheduler **5 job** (thêm 2 cron email Mon–Fri 08:00/15:30), router `notifications` (11 thao tác); test `LLM_PROVIDER=mock MARKET_DATA_SOURCE=memory pytest -q` → kỳ vọng **595 passed, 3 skipped** (unit 569 + integration 29 liền một lệnh; chạy trên máy chủ — `tests/` không nằm trong image `api`). Test integration ghi trong transaction rollback (`isolated_session_factory`) nên **không** chạm dữ liệu thật (KI-013).
+> Cập nhật 2026-09-29 (KI-013/KI-014): scheduler **8 job** (EOD 11:30 + 15:30, **catch-up 15:50**, scoring 12:00 + 16:00, 3 cron email, sync lịch email), test `LLM_PROVIDER=mock MARKET_DATA_SOURCE=memory pytest -q` → kỳ vọng **617 passed, 3 skipped** (unit 589 + integration 31 liền một lệnh; chạy trên máy chủ — `tests/` không nằm trong image `api`). Test integration ghi trong transaction rollback (`isolated_session_factory`) nên **không** chạm dữ liệu thật (KI-013); job EOD nạp kèm `index_prices` (`SCHEDULER_EOD_INDICES`) và cảnh báo khi dữ liệu cũ hơn phiên đã đóng (KI-014).
 > Cập nhật 2026-09-27: `ssix_finipro` (SSI FastConnect) là **nguồn chính** đã kiểm chứng (68 dòng giá + 34 dòng chỉ số); job EOD tự chuyển sang `yahoo → vndirect → tcbs → dsc` khi nguồn chính lỗi/0 dòng; `/readyz` dò thật `database`/`qdrant`/`agents` + `market_source`; image api/worker đã cài `qdrant-client` (extra `[qdrant]`).
 > Cập nhật 2026-09-26: rebuild `api`/`worker` trước (scheduler 3 job + đường đọc CSDL), nạp Yahoo EOD + `compute-scores`; ĐÃ NỐI tầng suy luận LLM local (`src/agents/llm/`).
 
@@ -27,7 +27,7 @@ docker compose ps
 # 0. Rebuild api + worker (BẮT BUỘC — scheduler + DbMarketService + SCHEDULER_*/MARKET_DATA_SOURCE mới hơn image cũ)
 docker compose build api worker
 docker compose up -d --no-deps api worker
-docker compose logs worker 2>&1 | grep -i "registered job"   # kỳ vọng 5 job: news / EOD 15:05 / scoring 15:30 / email 08:00 / email 15:30 (T018)
+docker compose logs worker 2>&1 | grep -i "registered job"   # kỳ vọng 8 job: news / EOD 11:30 + 15:30 / catch-up 15:50 / scoring 12:00 + 16:00 / email 08:00 + 12:30 + 16:30 / sync 15' (T018 + KI-014)
 
 # 1. EOD Việt Nam trực tiếp qua SSI FastConnect — nguồn CHÍNH (2026-09-27: fetched=68 written=68 quality=93.74)
 docker compose exec -T worker python -m apps.worker.cli ingest --dataset prices \
@@ -58,8 +58,8 @@ Endpoint:
 
 ```bash
 docker compose logs -f api            # theo dõi log API
-LLM_PROVIDER=mock MARKET_DATA_SOURCE=memory pytest -q       # kỳ vọng 2026-09-28: 595 passed, 3 skipped (chạy trên máy chủ)
-LLM_PROVIDER=mock MARKET_DATA_SOURCE=db pytest tests/integration -q   # kỳ vọng: 29 passed (cần CSDL đang chạy)
+LLM_PROVIDER=mock MARKET_DATA_SOURCE=memory pytest -q       # kỳ vọng 2026-09-29: 617 passed, 3 skipped (chạy trên máy chủ)
+LLM_PROVIDER=mock MARKET_DATA_SOURCE=db pytest tests/integration -q   # kỳ vọng: 31 passed (cần CSDL đang chạy)
 ./scripts/backup_db.sh                # sao lưu CSDL (backups/dtck_<timestamp>.sql.gz, giữ 14 ngày)
 ./scripts/health_alert.sh             # kiểm tra /healthz + /readyz (dùng cho cron/cảnh báo)
 docker compose down                   # dừng (giữ volume)
@@ -97,9 +97,12 @@ curl -s localhost:8000/readyz        # kỳ vọng "models":"price_direction_xgb
 | Biến | Tác dụng |
 |---|---|
 | `MARKET_DATA_SOURCE` | `memory` (mặc định trong code, không cần CSDL) / `db` (ép dùng TimescaleDB) / `auto` (dùng CSDL khi `prices` có dòng; compose mặc định `auto`) |
-| `SCHEDULER_JOBS_ENABLED` | `true` chạy 7 job worker (news / nạp EOD 11:30 + 15:30 / chấm điểm 12:00 + 16:00 / email 08:00 + 12:30 + 16:30 / đồng bộ lịch email mỗi 15', `Asia/Ho_Chi_Minh`); `false` = tắt scheduler, vẫn nạp thủ công được |
+| `SCHEDULER_JOBS_ENABLED` | `true` chạy 8 job worker (news / nạp EOD 11:30 + 15:30 / **catch-up 15:50** / chấm điểm 12:00 + 16:00 / email 08:00 + 12:30 + 16:30 / đồng bộ lịch email mỗi 15', `Asia/Ho_Chi_Minh`); `false` = tắt scheduler, vẫn nạp thủ công được |
 | `SCHEDULER_NEWS_SOURCE` / `SCHEDULER_NEWS_INTERVAL_MINUTES` | mặc định `cafef` / `15` |
 | `SCHEDULER_EOD_SOURCE` / `SCHEDULER_EOD_CRON_HOURS` / `SCHEDULER_EOD_CRON_MINUTE` / `SCHEDULER_EOD_LOOKBACK_DAYS` | mặc định `ssix_finipro` (chính) / `11,15` / `30` / `7` (danh sách giờ ngăn cách bởi dấu phẩy); job tự chuyển `yahoo → vndirect → tcbs → dsc` khi nguồn chính lỗi hoặc trả 0 dòng |
+| `SCHEDULER_EOD_INDICES` / `SCHEDULER_EOD_INCLUDE_INTRADAY_SESSION` | mã chỉ số nạp kèm EOD (mặc định `VNINDEX,VN30`, rỗng = bỏ qua) / `true` = giữ ảnh chụp phiên sáng 11:30 (đổ cho báo 12:30, luôn bị lượt 15:30 ghi đè), `false` = chỉ nạp phiên đã đóng |
+| `SCHEDULER_EOD_CATCHUP_HOUR` / `SCHEDULER_EOD_CATCHUP_MINUTE` | mặc định `15` / `50` — job `daily_eod_catchup` chỉ nạp lại khi `prices`/`index_prices` còn cũ hơn phiên đã đóng (vá lỗi nhà cung cấp lúc 15:30 trước khi chấm điểm 16:00, KI-014) |
+| `SCHEDULER_SESSION_CLOSE_HOUR` / `SCHEDULER_SESSION_CLOSE_MINUTE` | mặc định `15` / `15` — mốc đóng phiên (ICT) quyết định "phiên đã đóng", cửa sổ catch-up và cảnh báo `intraday snapshot` |
 | `SCHEDULER_SCORING_CRON_HOURS` / `SCHEDULER_SCORING_CRON_MINUTE` | mặc định `12,16` / `0` — chấm điểm 30 phút sau mỗi lượt nạp |
 | `SCHEDULER_EMAIL_SYNC_MINUTES` | mặc định `15` — chu kỳ worker đọc lại `email_schedule_configs` để lịch sửa trên dashboard áp dụng ngay, không cần restart |
 

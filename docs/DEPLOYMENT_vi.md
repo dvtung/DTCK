@@ -1,6 +1,6 @@
 # Hướng dẫn triển khai DTCK (Tiếng Việt)
 
-> Phiên bản: 2026-09-28 · nhánh `vndocver` — scheduler 5 job, API 48/53, 42 bảng (head 0003), test 595 passed
+> Phiên bản: 2026-09-29 · nhánh `vndocver` — scheduler 8 job (EOD 11:30/15:30 + catch-up 15:50), API 48/53, 42 bảng (head 0003), test 617 passed
 > Trạng thái: **bạn đang ở bước 3** — kiểm tra API/DB trong container + nạp dữ liệu thật.
 
 Dựa trên cấu hình thực tế của repo (docker-compose, Alembic, seeds, các KI đã biết).
@@ -108,13 +108,14 @@ docker compose exec db psql -U dtck -d dtck -c \
 ### 3.0. Rebuild trước (bắt buộc — code mới sau lần build image cũ)
 
 ```bash
-# 11. Build lại api + worker (scheduler 5 job, DbMarketService, SCHEDULER_*/MARKET_DATA_SOURCE)
+# 11. Build lại api + worker (scheduler 8 job, DbMarketService, SCHEDULER_*/MARKET_DATA_SOURCE)
 docker compose build api worker
 docker compose up -d --no-deps api worker
 
-# 12. Xác nhận worker scheduler đã đăng ký đủ 7 job
+# 12. Xác nhận worker scheduler đã đăng ký đủ 8 job
 docker compose logs worker 2>&1 | grep -i "registered job"
 # kỳ vọng thấy: periodic_news_ingestion … daily_eod_ingestion … hour='11,15' minute='30' …
+#   + daily_eod_catchup … 15:50 (chỉ nạp khi prices/index_prices cũ hơn phiên đã đóng — KI-014)
 #   + daily_eod_scoring … hour='12,16' minute='0'
 #   + daily_morning_email_report … 08:00 + daily_noon_email_report … 12:30
 #   + daily_afternoon_email_report … 16:30 + email_schedule_sync (mỗi 15 phút)
@@ -213,11 +214,14 @@ Quy trình ingest chuẩn qua cổng chất lượng:
 3. Chạy lại ingest với `--source yahoo` khi SSI lỗi/hết hạn ngạch (job 15:05 tự làm việc này)
 4. **Quality gate §39**: batch dưới 80 điểm sẽ bị flag `below_threshold` và command trả exit code 1 — đây là hành vi đúng, không phải lỗi
 
-**Worker scheduler (2026-09-25, cập nhật 2026-09-28):** container `worker` (`python -m apps.worker.main`)
-chạy APScheduler blocking với **7 job thật**: tin tức mỗi N phút (`cafef`),
+**Worker scheduler (2026-09-25, cập nhật 2026-09-29):** container `worker` (`python -m apps.worker.main`)
+chạy APScheduler blocking với **8 job thật**: tin tức mỗi N phút (`cafef`),
 nạp EOD Mon–Fri **11:30 & 15:30** (`SCHEDULER_EOD_SOURCE=ssix_finipro` + chuỗi dự phòng
-`yahoo → vndirect → tcbs → dsc`, cửa sổ nạp lại 7 ngày), chấm điểm Mon–Fri **12:00 & 16:00**
-(30 phút sau mỗi lượt nạp), **báo cáo email 08:00 / 12:30 / 16:30**
+`yahoo → vndirect → tcbs → dsc`, cửa sổ nạp lại 7 ngày, **kèm `index_prices` cho
+`SCHEDULER_EOD_INDICES`**), **catch-up Mon–Fri 15:50** (`daily_eod_catchup` — chỉ nạp lại
+khi `prices`/`index_prices` còn cũ hơn phiên đã đóng, vá lỗi nhà cung cấp làm mất giá đóng
+cửa, KI-014), chấm điểm Mon–Fri **12:00 & 16:00**
+(30 phút sau mỗi lượt nạp; cảnh báo `intraday snapshot` nếu giá phiên chưa được nạp), **báo cáo email 08:00 / 12:30 / 16:30**
 (`daily_morning_email_report`/`daily_noon_email_report`/`daily_afternoon_email_report`, T018)
 — giờ gửi đọc từ `email_schedule_configs` và tự đồng bộ mỗi 15 phút (`email_schedule_sync`)
 — múi giờ `Asia/Ho_Chi_Minh`, fail-soft (provider lỗi chỉ ghi log).
@@ -284,8 +288,8 @@ curl -s http://localhost:8000/metrics
 
 ```bash
 # 19. Chạy toàn bộ test suite (trên máy chủ — thư mục `tests/` không nằm trong image api)
-LLM_PROVIDER=mock MARKET_DATA_SOURCE=memory pytest -q   # kỳ vọng 2026-09-28: 595 passed, 3 skipped (unit 569 + integration 29 liền một lệnh)
-LLM_PROVIDER=mock MARKET_DATA_SOURCE=db pytest tests/integration -q  # kỳ vọng: 29 passed (CSDL đang chạy)
+LLM_PROVIDER=mock MARKET_DATA_SOURCE=memory pytest -q   # kỳ vọng 2026-09-29: 617 passed, 3 skipped (unit 589 + integration 31 liền một lệnh)
+LLM_PROVIDER=mock MARKET_DATA_SOURCE=db pytest tests/integration -q  # kỳ vọng: 31 passed (CSDL đang chạy)
 
 # LƯU Ý (2026-09-28): test integration chạy trên `DATABASE_URL` thật (cùng CSDL với
 # api/worker). Fixture `isolated_session_factory` (tests/integration/conftest.py) buộc
@@ -308,7 +312,7 @@ docker compose exec -T api mypy apps src    # kỳ vọng 2026-09-28: 138 tệp,
 # App Password; khi lưu password ≠ 16 ký tự, API trả thêm cảnh báo "warning".
 # Gửi thử: nút "Gửi Thử Ngay" → POST /api/v1/notifications/send-test → xem kết quả.
 # Tự động: worker chạy 2 cron Mon–Fri 08:00 (sáng) + 15:30 (chiều) ICT.
-docker compose logs worker 2>&1 | grep -i "Registered job"   # kỳ vọng 5 job: news / EOD 15:05 / scoring 15:30 / email 08:00 / email 15:30
+docker compose logs worker 2>&1 | grep -i "Registered job"   # kỳ vọng 8 job: news / EOD 11:30 + 15:30 / catch-up 15:50 / scoring 12:00 + 16:00 / email 08:00 + 12:30 + 16:30 / đồng bộ lịch email 15'
 ```
 ```
 
