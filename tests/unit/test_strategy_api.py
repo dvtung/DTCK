@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from datetime import date
 from typing import Any
 
@@ -26,6 +27,9 @@ FIXTURE_ROW: dict[str, Any] = {
     "target_price": 65000.0,
     "rr_ratio": 1.5,
     "confidence": 0.7,
+    "price": 61500.0,
+    "current_price": 61500.0,
+    "change": 500.0,
     "reasons": ["Nhóm 'technical' đóng góp 62% điểm"],
     "risks": [],
     "data_flags": {"missing_groups": ["quality"]},
@@ -64,7 +68,7 @@ def client() -> TestClient:
 
 
 @pytest.fixture
-def stub_client() -> TestClient:
+def stub_client() -> Iterator[TestClient]:
     app.dependency_overrides[get_strategy_service] = lambda: _StubStrategyService()
     try:
         yield TestClient(app)
@@ -99,6 +103,8 @@ class TestRankingsEndpoint:
         assert row["grade"] == "B"
         assert row["overall_score"] == 72.5
         assert row["rr_ratio"] == 1.5
+        assert row["price"] == 61500.0
+        assert row["change"] == 500.0
         assert row["disclaimer"]  # §3 always present
         assert set(body) == {"items", "total", "limit", "offset"}
 

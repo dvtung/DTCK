@@ -79,19 +79,45 @@ class TestDateFormat:
 class TestRankingRows:
     def test_basic(self) -> None:
         ranked = [
-            {"rank": 1, "symbol": "FPT", "overall_score": 72.5,
-             "signal": "POSITIVE", "confidence": 0.88},
-            {"rank": 2, "symbol": "VCB", "overall_score": 66.0,
-             "signal": "NEUTRAL", "confidence": 0.72},
+            {
+                "rank": 1,
+                "symbol": "FPT",
+                "overall_score": 72.5,
+                "signal": "POSITIVE",
+                "confidence": 0.88,
+                "price": 105.5,
+                "change": 2.0,
+                "price_vs_sma20": 3.5,
+                "price_vs_sma50": 6.8,
+            },
+            {
+                "rank": 2,
+                "symbol": "VCB",
+                "overall_score": 66.0,
+                "signal": "NEUTRAL",
+                "confidence": 0.72,
+                "price": 92.0,
+                "change": -0.5,
+                "price_vs_sma20": -1.2,
+                "price_vs_sma50": 0.4,
+            },
         ]
         rows = c.ranking_rows(ranked)
         assert rows[0]["symbol"] == "FPT"
         assert rows[0]["overall_score"] == 72.5
+        assert rows[0]["price"] == 105.5
+        assert rows[0]["change"] == 2.0
+        assert rows[0]["price_vs_sma20"] == 3.5
+        assert rows[0]["price_vs_sma50"] == 6.8
         assert rows[1]["rank"] == 2
+        assert rows[1]["price"] == 92.0
+        assert rows[1]["change"] == -0.5
 
     def test_missing_score(self) -> None:
         rows = c.ranking_rows([{"symbol": "X", "overall_score": None}])
         assert rows[0]["overall_score"] == 0.0
+        assert rows[0]["price"] is None
+        assert rows[0]["change"] is None
 
     def test_empty(self) -> None:
         assert c.ranking_rows([]) == []

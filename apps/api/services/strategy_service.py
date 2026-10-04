@@ -15,12 +15,13 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
+from src.common.models.market import Price
 from src.quant.strategy.groups import GROUPS, PROFILES
 from src.quant.strategy.job import SCORING_VERSION
 from src.quant.strategy.recommend import DISCLAIMER
@@ -71,7 +72,7 @@ def _num(value: Any) -> float | None:
 
 
 _SELECT_RANKING = (
-    "select st.symbol, st.company_name, sc.strategy, sc.overall_score, "
+    "select st.id as stock_id, st.symbol, st.company_name, sc.strategy, sc.overall_score, "
     "sc.technical_score, sc.moneyflow_score, sc.growth_score, sc.quality_score, "
     "sc.valuation_score, sc.macro_score, sc.governance_score, sc.data_flags, "
     "rc.grade, rc.buy_zone_low, rc.buy_zone_high, rc.stop_loss, rc.target_price, "
@@ -126,10 +127,55 @@ class DbStrategyService(StrategySource):
             rows = session.execute(
                 text(sql), {"as_of": as_of, "strategy": strategy}
             ).mappings().all()
-        return [self._ranking_row(dict(row), as_of) for row in rows]
+            if not rows:
+                return []
+
+            stock_ids = [int(r["stock_id"]) for r in rows if r.get("stock_id")]
+            price_map: dict[int, tuple[float | None, float | None]] = {}
+            if stock_ids:
+                cutoff = as_of - timedelta(days=14)
+                prices_stmt = (
+                    select(Price.stock_id, Price.trade_date, Price.close)
+                    .where(
+                        Price.stock_id.in_(stock_ids),
+                        Price.trade_date >= cutoff,
+                        Price.trade_date <= as_of,
+                    )
+                    .order_by(Price.stock_id, Price.trade_date.asc())
+                )
+                stock_prices: dict[int, list[float]] = {}
+                for sid, _dt, close in session.execute(prices_stmt).all():
+                    stock_prices.setdefault(int(sid), []).append(float(close))
+
+                for sid, closes in stock_prices.items():
+                    if closes:
+                        curr = closes[-1]
+                        prev = closes[-2] if len(closes) >= 2 else None
+                        chg = round(curr - prev, 2) if prev is not None else None
+                        price_map[sid] = (curr, chg)
+
+        return [
+            self._ranking_row(
+                dict(row),
+                as_of,
+                price=price_map.get(int(row["stock_id"]), (None, None))[0]
+                if row.get("stock_id")
+                else None,
+                change=price_map.get(int(row["stock_id"]), (None, None))[1]
+                if row.get("stock_id")
+                else None,
+            )
+            for row in rows
+        ]
 
     @staticmethod
-    def _ranking_row(row: dict[str, Any], as_of: date) -> dict[str, Any]:
+    def _ranking_row(
+        row: dict[str, Any],
+        as_of: date,
+        *,
+        price: float | None = None,
+        change: float | None = None,
+    ) -> dict[str, Any]:
         return {
             "symbol": row["symbol"],
             "company_name": row["company_name"],
@@ -138,6 +184,9 @@ class DbStrategyService(StrategySource):
             "overall_score": _num(row["overall_score"]),
             "grade": row["grade"],
             "group_scores": {group: _num(row[f"{group}_score"]) for group in GROUPS},
+            "price": price,
+            "current_price": price,
+            "change": change,
             "buy_zone_low": _num(row["buy_zone_low"]),
             "buy_zone_high": _num(row["buy_zone_high"]),
             "stop_loss": _num(row["stop_loss"]),
@@ -171,11 +220,36 @@ class DbStrategyService(StrategySource):
                 ),
                 {"id": stock["id"], "as_of": as_of},
             ).mappings().all()
+
+            price_val: float | None = None
+            chg_val: float | None = None
+            if stock["id"] is not None:
+                cutoff = as_of - timedelta(days=14)
+                p_stmt = (
+                    select(Price.close)
+                    .where(
+                        Price.stock_id == stock["id"],
+                        Price.trade_date >= cutoff,
+                        Price.trade_date <= as_of,
+                    )
+                    .order_by(Price.trade_date.asc())
+                )
+                closes = [float(c) for c in session.scalars(p_stmt).all()]
+                if closes:
+                    price_val = closes[-1]
+                    prev = closes[-2] if len(closes) >= 2 else None
+                    chg_val = round(price_val - prev, 2) if prev is not None else None
+
         return {
             "symbol": stock["symbol"],
             "company_name": stock["company_name"],
             "trade_date": as_of,
-            "profiles": [self._ranking_row(dict(row), as_of) for row in profiles],
+            "price": price_val,
+            "change": chg_val,
+            "profiles": [
+                self._ranking_row(dict(row), as_of, price=price_val, change=chg_val)
+                for row in profiles
+            ],
         }
 
     # ---------------------------------------------------------------- history

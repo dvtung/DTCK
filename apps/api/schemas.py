@@ -114,6 +114,10 @@ class RankingOut(BaseModel):
     rank: int
     total: int
     contributions: list[FactorContributionOut]
+    price: float | None = None
+    change: float | None = None
+    price_vs_sma20: float | None = None
+    price_vs_sma50: float | None = None
 
 
 class StatementOut(BaseModel):

@@ -84,8 +84,20 @@ def ranking_rows(ranked: list[dict[str, Any]]) -> list[dict[str, Any]]:
             {
                 "rank": r.get("rank", 0),
                 "symbol": r.get("symbol", ""),
+                "price": round(float(r["price"]), 2) if r.get("price") is not None else None,
+                "change": round(float(r["change"]), 2) if r.get("change") is not None else None,
                 "overall_score": round(float(r.get("overall_score") or 0), 2),
                 "signal": r.get("signal", "NEUTRAL"),
+                "price_vs_sma20": (
+                    round(float(r["price_vs_sma20"]), 2)
+                    if r.get("price_vs_sma20") is not None
+                    else None
+                ),
+                "price_vs_sma50": (
+                    round(float(r["price_vs_sma50"]), 2)
+                    if r.get("price_vs_sma50") is not None
+                    else None
+                ),
                 "confidence": float(r.get("confidence", 0)),
             }
         )

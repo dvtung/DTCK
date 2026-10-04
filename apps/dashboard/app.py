@@ -257,7 +257,9 @@ def page_market_overview() -> None:
             else:
                 p_bars = c.get_index_prices(code)
                 if p_bars and len(p_bars) >= 2:
-                    diff = float(p_bars[-1].get("close", close)) - float(p_bars[-2].get("close", close))
+                    p1 = float(p_bars[-1].get("close", close))
+                    p2 = float(p_bars[-2].get("close", close))
+                    diff = p1 - p2
                     delta_str = f"{diff:+.2f} điểm"
                 else:
                     base = float(str(ix.get("open", close))) or close
@@ -659,6 +661,33 @@ def page_rankings() -> None:
         st.info("Chưa có xếp hạng — chạy `compute-scores` trước.")
         return
 
+    if any(r.get("price") is None for r in rows):
+        try:
+            movers = c.get_movers(universe="ALL", limit=200)
+            all_movers = (movers.get("gainers") or []) + (movers.get("decliners") or [])
+            movers_by_sym = {m["symbol"]: m for m in all_movers if "symbol" in m}
+            for r in rows:
+                sym = r.get("symbol")
+                if sym in movers_by_sym:
+                    m = movers_by_sym[sym]
+                    if r.get("price") is None and m.get("close") is not None:
+                        r["price"] = round(float(m["close"]), 2)
+                    if (
+                        r.get("change") is None
+                        and m.get("close") is not None
+                        and m.get("change_pct") is not None
+                    ):
+                        pct = float(m["change_pct"])
+                        close = float(m["close"])
+                        prev = close / (1.0 + pct / 100.0)
+                        r["change"] = round(close - prev, 2)
+                    if r.get("price_vs_sma20") is None and m.get("price_vs_sma20") is not None:
+                        r["price_vs_sma20"] = round(float(m["price_vs_sma20"]), 2)
+                    if r.get("price_vs_sma50") is None and m.get("price_vs_sma50") is not None:
+                        r["price_vs_sma50"] = round(float(m["price_vs_sma50"]), 2)
+        except Exception:
+            pass
+
     signals = sorted({str(r.get("signal") or "NEUTRAL") for r in rows})
     chosen = st.multiselect("Lọc theo tín hiệu", options=signals, default=signals)
     filtered = [r for r in rows if str(r.get("signal") or "NEUTRAL") in chosen]
@@ -689,13 +718,29 @@ def page_rankings() -> None:
             {signal_label(k): int(v) for k, v in sorted(counts.items(), key=lambda kv: -kv[1])}
         )
 
+    cols = [
+        "rank",
+        "symbol",
+        "price",
+        "change",
+        "overall_score",
+        "signal",
+        "price_vs_sma20",
+        "price_vs_sma50",
+        "confidence",
+    ]
     st.dataframe(
         pd.DataFrame(filtered),
+        column_order=cols,
         column_config={
             "rank": st.column_config.NumberColumn("Hạng", width="small"),
             "symbol": st.column_config.TextColumn("Mã", width="small"),
+            "price": st.column_config.NumberColumn("Giá hiện tại", format="%,.1f"),
+            "change": st.column_config.NumberColumn("+/- Phiên", format="%+.2f"),
             "overall_score": st.column_config.NumberColumn("Điểm", format="%.1f"),
             "signal": st.column_config.TextColumn("Tín hiệu"),
+            "price_vs_sma20": st.column_config.NumberColumn("vs MA20 %", format="%+.2f"),
+            "price_vs_sma50": st.column_config.NumberColumn("vs MA50 %", format="%+.2f"),
             "confidence": st.column_config.NumberColumn("Độ tin cậy", format="%.0%"),
         },
         hide_index=True,
@@ -1770,10 +1815,27 @@ def page_strategy_scores() -> None:
         st.plotly_chart(fig, width="stretch", theme=None, config=theme.PLOTLY_CONFIG)
         st.caption("30 mã điểm cao nhất — nhãn A–D trên cột; màu xanh = A/B, đỏ = D.")
 
+    if any(r.get("price") is None for r in items):
+        try:
+            ranked_list = c.get_ranked()
+            ranked_by_sym = {x["symbol"]: x for x in ranked_list if "symbol" in x}
+            for r in items:
+                sym = r.get("symbol")
+                if sym in ranked_by_sym:
+                    rx = ranked_by_sym[sym]
+                    if r.get("price") is None:
+                        r["price"] = rx.get("price")
+                    if r.get("change") is None:
+                        r["change"] = rx.get("change")
+        except Exception:
+            pass
+
     table = [
         {
             "Mã": r["symbol"],
             "Tên": (r.get("company_name") or "")[:40],
+            "Giá hiện tại": r.get("price"),
+            "+/- Phiên": r.get("change"),
             "Điểm": r.get("overall_score"),
             "Xếp hạng": r.get("grade"),
             "Vùng mua (thấp)": r.get("buy_zone_low"),
@@ -1788,7 +1850,14 @@ def page_strategy_scores() -> None:
     st.dataframe(
         pd.DataFrame(table),
         column_config={
+            "Mã": st.column_config.TextColumn("Mã", width="small"),
+            "Giá hiện tại": st.column_config.NumberColumn("Giá hiện tại", format="%,.1f"),
+            "+/- Phiên": st.column_config.NumberColumn("+/- Phiên", format="%+.2f"),
             "Điểm": st.column_config.NumberColumn("Điểm", format="%.1f"),
+            "Vùng mua (thấp)": st.column_config.NumberColumn("Vùng mua (thấp)", format="%,.1f"),
+            "Vùng mua (cao)": st.column_config.NumberColumn("Vùng mua (cao)", format="%,.1f"),
+            "Cắt lỗ": st.column_config.NumberColumn("Cắt lỗ", format="%,.1f"),
+            "Mục tiêu": st.column_config.NumberColumn("Mục tiêu", format="%,.1f"),
             "Độ tin cậy": st.column_config.NumberColumn("Độ tin cậy", format="%.0%"),
             "R/R": st.column_config.NumberColumn("R/R", format="%.2f"),
         },

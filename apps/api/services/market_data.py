@@ -246,8 +246,34 @@ class MarketService:
             }
             universe[sym] = {k: float(v) for k, v in values.items()}
         rankings = score_universe(universe)
+
+        price_metrics: dict[str, dict[str, float | None]] = {}
+        for sym in symbols:
+            prices = self._prices.get(sym) or []
+            if prices:
+                closes = [float(str(p["close"])) for p in prices]
+                curr = closes[-1]
+                prev = closes[-2] if len(closes) >= 2 else None
+                chg = round(curr - prev, 2) if prev is not None else None
+                sma20 = round(sum(closes[-20:]) / 20, 2) if len(closes) >= 20 else None
+                sma50 = round(sum(closes[-50:]) / 50, 2) if len(closes) >= 50 else None
+                p_vs_sma20 = round((curr / sma20 - 1.0) * 100, 2) if sma20 else None
+                p_vs_sma50 = round((curr / sma50 - 1.0) * 100, 2) if sma50 else None
+                price_metrics[sym] = {
+                    "price": curr,
+                    "change": chg,
+                    "price_vs_sma20": p_vs_sma20,
+                    "price_vs_sma50": p_vs_sma50,
+                }
+
         return [
-            to_ranking_payload(r, i, len(rankings)) for i, r in enumerate(rankings, start=1)
+            to_ranking_payload(
+                r,
+                i,
+                len(rankings),
+                **price_metrics.get(r.stock_id, {}),
+            )
+            for i, r in enumerate(rankings, start=1)
         ]
 
     # -------------------------------------------------- fundamentals/tech

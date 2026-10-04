@@ -13,7 +13,16 @@ from typing import Any
 from src.quant.scoring.engine import StockRanking
 
 
-def to_ranking_payload(ranking: StockRanking, rank: int, total: int) -> dict[str, Any]:
+def to_ranking_payload(
+    ranking: StockRanking,
+    rank: int,
+    total: int,
+    *,
+    price: float | None = None,
+    change: float | None = None,
+    price_vs_sma20: float | None = None,
+    price_vs_sma50: float | None = None,
+) -> dict[str, Any]:
     """Serialize one ``StockRanking`` into the ``RankingOut`` payload shape.
 
     ``contribution_pct`` is a share vector that sums to 1 before rounding;
@@ -64,6 +73,10 @@ def to_ranking_payload(ranking: StockRanking, rank: int, total: int) -> dict[str
             }
             for i, c in enumerate(contributions)
         ],
+        "price": price,
+        "change": change,
+        "price_vs_sma20": price_vs_sma20,
+        "price_vs_sma50": price_vs_sma50,
     }
 
 

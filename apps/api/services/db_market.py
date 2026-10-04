@@ -469,7 +469,7 @@ class DbMarketService:
                 return []
 
             stmt = (
-                select(Stock.symbol, FactorScore)
+                select(Stock.id, Stock.symbol, FactorScore)
                 .join(Stock, FactorScore.stock_id == Stock.id)
                 .where(
                     FactorScore.trade_date == latest,
@@ -477,16 +477,54 @@ class DbMarketService:
                 )
             )
             universe: dict[str, dict[str, float | None]] = {}
-            for symbol, score in session.execute(stmt):
-                # ``factor_scores`` stores one column per dimension, suffixed
-                # ``_score`` (technical_score, momentum_score, …).
-                universe[str(symbol)] = {
+            stock_ids: list[int] = []
+            id_to_symbol: dict[int, str] = {}
+            for stock_id, symbol, score in session.execute(stmt):
+                sym_str = str(symbol)
+                universe[sym_str] = {
                     factor: _f(getattr(score, f"{factor}_score")) for factor in FACTOR_COLUMNS
                 }
+                stock_ids.append(int(stock_id))
+                id_to_symbol[int(stock_id)] = sym_str
+
+            price_metrics: dict[str, dict[str, float | None]] = {}
+            if stock_ids:
+                cutoff = latest - timedelta(days=100)
+                prices_stmt = (
+                    select(Price.stock_id, Price.trade_date, Price.close)
+                    .where(Price.stock_id.in_(stock_ids), Price.trade_date >= cutoff)
+                    .order_by(Price.stock_id, Price.trade_date.asc())
+                )
+                stock_prices: dict[int, list[float]] = {}
+                for sid, _dt, close in session.execute(prices_stmt).all():
+                    stock_prices.setdefault(int(sid), []).append(float(close))
+
+                for sid, sym in id_to_symbol.items():
+                    closes = stock_prices.get(sid) or []
+                    if not closes:
+                        continue
+                    curr = closes[-1]
+                    prev = closes[-2] if len(closes) >= 2 else None
+                    chg = round(curr - prev, 2) if prev is not None else None
+                    sma20 = round(sum(closes[-20:]) / 20, 2) if len(closes) >= 20 else None
+                    sma50 = round(sum(closes[-50:]) / 50, 2) if len(closes) >= 50 else None
+                    p_vs_sma20 = round((curr / sma20 - 1.0) * 100, 2) if sma20 else None
+                    p_vs_sma50 = round((curr / sma50 - 1.0) * 100, 2) if sma50 else None
+                    price_metrics[sym] = {
+                        "price": curr,
+                        "change": chg,
+                        "price_vs_sma20": p_vs_sma20,
+                        "price_vs_sma50": p_vs_sma50,
+                    }
 
         rankings = score_universe(universe)
         return [
-            to_ranking_payload(ranking, rank, len(rankings))
+            to_ranking_payload(
+                ranking,
+                rank,
+                len(rankings),
+                **price_metrics.get(ranking.stock_id, {}),
+            )
             for rank, ranking in enumerate(rankings, start=1)
         ]
 

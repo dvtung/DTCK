@@ -113,7 +113,15 @@ def test_auto_mode_falls_back_when_the_database_is_empty(
 
 def test_ranking_payload_matches_the_api_contract() -> None:
     rankings = score_universe({"FPT": {"technical": 80.0, "valuation": 60.0}})
-    payload = to_ranking_payload(rankings[0], 1, len(rankings))
+    payload = to_ranking_payload(
+        rankings[0],
+        1,
+        len(rankings),
+        price=105.0,
+        change=1.5,
+        price_vs_sma20=2.3,
+        price_vs_sma50=5.1,
+    )
     assert set(payload) == {
         "symbol",
         "overall_score",
@@ -122,9 +130,17 @@ def test_ranking_payload_matches_the_api_contract() -> None:
         "rank",
         "total",
         "contributions",
+        "price",
+        "change",
+        "price_vs_sma20",
+        "price_vs_sma50",
     }
     assert payload["symbol"] == "FPT"
     assert payload["rank"] == 1 and payload["total"] == 1
+    assert payload["price"] == 105.0
+    assert payload["change"] == 1.5
+    assert payload["price_vs_sma20"] == 2.3
+    assert payload["price_vs_sma50"] == 5.1
 
 
 def test_ranking_payload_contributions_sum_exactly_to_one() -> None:
