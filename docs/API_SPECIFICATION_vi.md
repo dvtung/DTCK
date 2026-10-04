@@ -138,6 +138,17 @@ Mẫu bất đồng bộ: POST trả `202 + { agent_run_id }`; poll GET tới `S
 
 ---
 
+## 2.13. `/api/v1/strategy` (GĐ 6)
+
+| Method | Đường dẫn | Mô tả |
+|---|---|---|
+| GET | `/api/v1/strategy/rankings?strategy=&universe=&limit=&offset=` | Xếp hạng theo hồ sơ (`short`\|`mid`\|`long`) ở **phiên chấm điểm gần nhất**; `universe` = `vn30`\|`vn100` (bỏ trống = toàn bộ). Phong bì `{items,total,limit,offset}` |
+| GET | `/api/v1/strategy/{symbol}` | Cả 3 hồ sơ của 1 mã: điểm 7 nhóm, grade, vùng mua/cắt lỗ/mục tiêu, R/R, confidence, lý do/rủi ro, `data_flags`, `disclaimer` §3 |
+| GET | `/api/v1/strategy/{symbol}/history?strategy=&limit=` | Lịch sử điểm + grade của 1 mã theo hồ sơ (cũ → mới) |
+
+Hồ sơ không hợp lệ → **422**; mã chưa có điểm → **404**. Không có CSDL → `items: []`
+(trung thực, không bịa). Mọi payload kèm chuỗi miễn trừ §3.
+
 # 3. Xác thực & Phân quyền (Production)
 
 - `POST /api/v1/auth/login` → JWT (access + refresh). Sai credential → **401** với

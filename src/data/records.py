@@ -54,4 +54,46 @@ class NewsItem:
     importance: Decimal | None = None
 
 
-Dataset = str  # "prices" | "index_prices" | "news"
+@dataclass(frozen=True, slots=True)
+class FinancialRow:
+    """One raw financial-statement line item (§5.1).
+
+    ``published_at`` is when the filing became public and is the look-ahead
+    guard: ``None`` means the vendor did not disclose it — the value is stored
+    as NULL, never guessed (spec §31 honesty rule).
+    """
+
+    symbol: str
+    period_type: str  # QUARTER | YEAR
+    fiscal_year: int
+    fiscal_period: int  # 1-4 for quarters, 0 for a full year
+    statement_type: str  # INCOME | BALANCE | CASHFLOW
+    line_item: str
+    value: Decimal
+    report_date: date
+    published_at: datetime | None = None
+    currency: str = "VND"
+
+
+@dataclass(frozen=True, slots=True)
+class EventRow:
+    """One raw corporate action/event (§7.1)."""
+
+    symbol: str
+    event_type: str  # DIVIDEND | SPLIT | EARNINGS | AGM | M&A | ...
+    event_date: date
+    announced_date: date | None = None
+    details: dict[str, object] | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class MacroPoint:
+    """One raw macro series observation (§8.1)."""
+
+    indicator_code: str  # CPI, GDP, FX_USDVND, ...
+    period_date: date
+    value: Decimal
+    unit: str
+
+
+Dataset = str  # "prices" | "index_prices" | "news" | "financials" | "events" | "macro"

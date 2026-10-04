@@ -51,6 +51,10 @@ class FinancialStatement(TimestampMixin, Base):
     value: Mapped[Decimal] = mapped_column(Numeric(24, 4), nullable=False)
     currency: Mapped[str] = mapped_column(Text, nullable=False, server_default="VND")
     report_date: Mapped[date] = mapped_column(Date, nullable=False)
+    #: When the statement was PUBLISHED (look-ahead guard: features may only
+    #: use this row from ``published_at`` onward). NULL = unknown publish date
+    #: (honest placeholder — never backfilled with a guess, spec §31).
+    published_at: Mapped[datetime | None] = mapped_column(TIMESTAMPTZ, nullable=True)
     valid_from: Mapped[datetime] = mapped_column(TIMESTAMPTZ, nullable=False)
     valid_to: Mapped[datetime | None] = mapped_column(TIMESTAMPTZ, nullable=True)
     source: Mapped[str] = mapped_column(Text, nullable=False)

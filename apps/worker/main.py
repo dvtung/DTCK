@@ -286,6 +286,55 @@ def scheduled_scoring_job() -> None:
         logger.exception("Scheduled scoring job failed: %s", exc)
 
 
+def scheduled_strategy_scoring_job() -> None:
+    """Score the 3 strategy profiles + persist recommendations (GĐ 4).
+
+    Runs at 17:00 daily (Mon–Fri) in Asia/Ho_Chi_Minh.
+    Pipeline:
+      1. Ensure related EOD market data (prices, indices) is up to date (catch-up if stale).
+      2. Compute and store 24 raw features + 7 group scores.
+      3. Compute and store 3 strategy profile scores (short/mid/long) + A-D recommendations.
+      4. Dispatch grade-change alerts if any grades changed.
+    """
+    from src.quant.strategy.feature_engine import compute_and_store_features
+    from src.quant.strategy.job import compute_and_store_strategy_scores
+
+    as_of = expected_session_date()
+    logger.info("Executing scheduled strategy-scoring job (GĐ 4) as_of=%s", as_of)
+    try:
+        # Step 1: Ensure EOD market data (prices, indices) is fresh before computing features
+        scheduled_eod_ingestion(only_if_stale=True)
+
+        engine = get_engine()
+        _warn_if_scores_are_provisional(engine)
+
+        # Step 2: Refresh features across the active stock universe
+        features_written = compute_and_store_features(engine, as_of, None)
+        logger.info("Strategy features refreshed: written=%d", features_written)
+
+        # Step 3: Compute strategy profile scores and recommendation levels
+        result = compute_and_store_strategy_scores(engine, as_of)
+        logger.info("Strategy scoring job finished: %s", result.summary())
+        if result.rows_written == 0:
+            logger.warning(
+                "Strategy scoring wrote nothing — check `prices` freshness for %s", as_of
+            )
+            return
+        # Step 4: GĐ 6: alert only when a grade actually moved (quiet days stay quiet).
+        from src.quant.strategy.alerts import send_grade_change_alert
+
+        with engine.connect() as conn:
+            alert = send_grade_change_alert(conn)
+        if alert.get("changes"):
+            logger.info(
+                "Strategy grade-change alert: changes=%s sent=%s",
+                alert.get("changes"),
+                alert.get("sent"),
+            )
+    except Exception as exc:
+        logger.exception("Scheduled strategy scoring job failed: %s", exc)
+
+
 def scheduled_email_report(period_label: str = "sáng") -> None:
     """Send automated market overview email report to active subscribers."""
     from apps.api.dependencies import get_market_service
@@ -300,11 +349,16 @@ def scheduled_email_report(period_label: str = "sáng") -> None:
             return
 
         m_svc = get_market_service()
+        from apps.api.dependencies import get_strategy_service
+
+        strat_svc = get_strategy_service()
         subject = (
             f"[DTCK] Báo Cáo Tổng Quan Thị Trường Phiên {period_label.title()}"
             f" — {datetime.now(UTC).strftime('%d/%m/%Y')}"
         )
-        res = notif_svc.dispatch_report(m_svc, subject=subject)
+        res = notif_svc.dispatch_report(
+            m_svc, subject=subject, strategy_service=strat_svc
+        )
         logger.info(
             "Scheduled email report (%s) finished: sent=%s/%s",
             period_label,
@@ -486,6 +540,28 @@ def _build_scheduler() -> BlockingScheduler:
             "Registered job 'daily_eod_scoring' cron Mon-Fri %s:%02d Asia/Ho_Chi_Minh",
             "/".join(f"{h:02d}" for h in scoring_hours),
             settings.scheduler_scoring_cron_minute,
+        )
+
+        # 3b. Strategy scoring (17:00): 3 profiles + recommendations, updating
+        #     related EOD data before feature extraction and strategy scoring.
+        scheduler.add_job(
+            scheduled_strategy_scoring_job,
+            trigger=CronTrigger(
+                day_of_week="mon-fri",
+                hour=settings.scheduler_strategy_hour,
+                minute=settings.scheduler_strategy_minute,
+                timezone="Asia/Ho_Chi_Minh",
+            ),
+            id="daily_strategy_scoring",
+            name="Strategy Profile Scoring (GĐ 4)",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
+        logger.info(
+            "Registered job 'daily_strategy_scoring' cron Mon-Fri %02d:%02d Asia/Ho_Chi_Minh",
+            settings.scheduler_strategy_hour,
+            settings.scheduler_strategy_minute,
         )
 
         # 4. Email report windows (08:00 / 12:30 / 16:30) read from the database

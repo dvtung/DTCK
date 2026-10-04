@@ -23,11 +23,13 @@ PAGES = (
     "Tổng quan",
     "Bộ lọc cổ phiếu",
     "Xếp hạng",
+    "Chấm điểm chiến lược",
     "Chi tiết mã",
     "Backtest",
     "Tin tức & RAG",
     "Quản lý Email",
     "Sức khỏe hệ thống",
+    "Lịch sử Worker",
 )
 
 
@@ -84,6 +86,19 @@ def test_overview_renders_index_chart_and_movers_sections(app_test) -> None:  # 
     assert any("MA20" in h for h in headers)
     # Universe selector for the gainers/decliners tables.
     assert any("Universe" in s.label for s in app_test.selectbox)
+
+
+def test_overview_vnindex_timeframe_selector(app_test) -> None:  # type: ignore[no-untyped-def]
+    """VNINDEX candlestick chart allows selecting multiple timeframes."""
+    app_test.run()
+    assert not app_test.exception, [str(e) for e in app_test.exception]
+    tf_radios = [r for r in app_test.radio if r.key == "vnindex_timeframe"]
+    assert tf_radios, "vnindex_timeframe radio selector not found"
+    tf_radio = tf_radios[0]
+    assert tf_radio.value == "2 năm"
+    for tf in ("1 tuần", "1 tháng", "6 tháng", "1 năm", "Tất cả"):
+        tf_radio.set_value(tf).run()
+        assert not app_test.exception, f"Failed on {tf}: {[str(e) for e in app_test.exception]}"
 
 
 # ---------------------------------------------------------------------------

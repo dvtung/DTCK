@@ -66,6 +66,10 @@ class HttpJsonProvider(DataProvider):
     """Fetches EOD OHLCV from a configurable JSON endpoint."""
 
     id: str
+    #: Declared at class level so subclasses can widen it (Yahoo also serves
+    #: corporate actions) — an instance attribute in ``__init__`` would shadow
+    #: the subclass declaration.
+    SUPPORTED_DATASETS = frozenset({"prices"})
 
     def __init__(
         self,
@@ -87,7 +91,6 @@ class HttpJsonProvider(DataProvider):
         self._credential = credential
         self._auth = auth
         self._transport = transport  # injectable for tests (httpx.MockTransport)
-        self.SUPPORTED_DATASETS = frozenset({"prices"})
 
     # --- request building -----------------------------------------------------------------
 
@@ -117,7 +120,10 @@ class HttpJsonProvider(DataProvider):
         return httpx.Client(timeout=self._timeout, transport=self._transport)
 
     def _get_json(self, symbol: str, start: date, end: date) -> Any:
-        request = self._build_request(symbol, start, end)
+        return self._send_json(self._build_request(symbol, start, end))
+
+    def _send_json(self, request: httpx.Request) -> Any:
+        """Execute ``request`` with the configured retry/backoff policy."""
         last_error: Exception | None = None
         with self._client() as client:
             for attempt in range(self._max_retries + 1):

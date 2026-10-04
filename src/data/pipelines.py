@@ -9,14 +9,25 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
+from typing import Any, cast
 
-from sqlalchemy import Connection, Engine, insert, select
+from sqlalchemy import Connection, Engine, insert, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from src.data.collectors import collect_eod, collect_index, collect_news
+from src.data.collectors import (
+    collect_eod,
+    collect_events,
+    collect_financials,
+    collect_index,
+    collect_macro,
+    collect_news,
+)
 from src.data.normalizers import (
     normalize_eod,
+    normalize_events,
+    normalize_financials,
     normalize_index,
+    normalize_macro,
     normalize_news,
     resolve_stock_ids,
 )
@@ -25,11 +36,16 @@ from src.data.quality import QualityScore, compute_quality, persist_quality
 from src.data.records import EODBar, IndexBar, NewsItem
 from src.data.validators import (
     ValidationIssue,
+    corrupt_financial_keys,
     corrupt_keys,
     eod_key,
+    financial_key,
     index_key,
     validate_eod,
+    validate_events,
+    validate_financials,
     validate_index,
+    validate_macro,
     validate_news,
 )
 
@@ -336,4 +352,251 @@ def ingest_news(
     return result
 
 
-__all__ = ["IngestResult", "ingest_eod", "ingest_index", "ingest_news"]
+def ingest_financials(
+    engine: Engine,
+    provider: DataProvider,
+    symbols: list[str],
+    *,
+    period_types: tuple[str, ...] = ("QUARTER", "YEAR"),
+    source: str | None = None,
+    threshold: float | None = None,
+) -> IngestResult:
+    """Ingest financial-statement line items into ``financial_statements`` (§5.1).
+
+    Bitemporal upsert keyed on the model's unique constraint
+    ``(stock_id, period_type, fiscal_year, fiscal_period, statement_type,
+    line_item, valid_from)``. ``published_at`` is stored exactly as reported
+    (NULL when the vendor did not disclose it) — the look-ahead guard for every
+    fundamental feature built on this table.
+    """
+    from src.common.models.fundamental import FinancialStatement
+
+    src = source or provider.id
+    rows = collect_financials(provider, symbols, period_types=period_types)
+    issues = validate_financials(rows)
+    result = IngestResult(dataset="financials", source=src, rows_fetched=len(rows), issues=issues)
+    if not rows:
+        return result
+
+    # Same guard as EOD bars: rows whose value cannot fit the column are
+    # flagged (so the quality score penalises the batch) and dropped, never
+    # rescaled or truncated (live finding: CafeF cash-flow outliers).
+    bad_keys = corrupt_financial_keys(issues)
+    kept_rows = rows
+    if bad_keys:
+        kept_rows = [r for r in rows if financial_key(r) not in bad_keys]
+
+    with engine.begin() as conn:
+        stock_ids = resolve_stock_ids(conn, [row.symbol for row in kept_rows])
+        normalized, normalize_issues = normalize_financials(kept_rows, stock_ids, source=src)
+        result.issues.extend(normalize_issues)
+        result.rows_skipped = (len(rows) - len(kept_rows)) + (len(kept_rows) - len(normalized))
+
+        if normalized:
+            # Bitemporal snapshot-diff (memory-bank decision 2026-09-13): a
+            # changed restatement CLOSES the open row (valid_to) and opens a new
+            # one; an unchanged restatement is a no-op. Inserting every run
+            # without closing would duplicate rows, because valid_from is part
+            # of the unique key.
+            stock_id_list = sorted({cast(int, r["stock_id"]) for r in normalized})
+            open_maps = conn.execute(
+                select(
+                    FinancialStatement.id,
+                    FinancialStatement.stock_id,
+                    FinancialStatement.period_type,
+                    FinancialStatement.fiscal_year,
+                    FinancialStatement.fiscal_period,
+                    FinancialStatement.statement_type,
+                    FinancialStatement.line_item,
+                    FinancialStatement.value,
+                    FinancialStatement.published_at,
+                ).where(
+                    FinancialStatement.stock_id.in_(stock_id_list),
+                    FinancialStatement.valid_to.is_(None),
+                )
+            ).mappings().all()
+            open_by_key: dict[tuple[int, str, int, int, str, str], tuple[int, Any, Any]] = {
+                (
+                    m["stock_id"],
+                    m["period_type"],
+                    m["fiscal_year"],
+                    m["fiscal_period"],
+                    m["statement_type"],
+                    m["line_item"],
+                ): (m["id"], m["value"], m["published_at"])
+                for m in open_maps
+            }
+
+            now = datetime.now().astimezone()
+            written = 0
+            for row in normalized:
+                key = (
+                    cast(int, row["stock_id"]),
+                    cast(str, row["period_type"]),
+                    cast(int, row["fiscal_year"]),
+                    cast(int, row["fiscal_period"]),
+                    cast(str, row["statement_type"]),
+                    cast(str, row["line_item"]),
+                )
+                previous = open_by_key.get(key)
+                if previous is not None:
+                    previous_id, previous_value, previous_published = previous
+                    if previous_value == row["value"]:
+                        if previous_published != row["published_at"]:
+                            # Publication timestamp corrected without a
+                            # restatement: metadata fix in place, no new version.
+                            conn.execute(
+                                update(FinancialStatement)
+                                .where(FinancialStatement.id == previous_id)
+                                .values(published_at=row["published_at"], source=src)
+                            )
+                        continue
+                    conn.execute(
+                        update(FinancialStatement)
+                        .where(FinancialStatement.id == previous_id)
+                        .values(valid_to=now)
+                    )
+                conn.execute(insert(FinancialStatement).values(**row))
+                written += 1
+            result.rows_written = written
+            result.rows_skipped += len(normalized) - written
+
+        result.quality = _score_and_persist(
+            conn,
+            dataset="financials",
+            rows_total=len(rows),
+            issues=result.issues,
+            end=max((row.report_date for row in rows), default=_now().date()),
+            latest_date=max((row.report_date for row in rows), default=None),
+            expected_keys=None,
+            present_keys=None,
+            threshold=threshold,
+        )
+    return result
+
+
+def ingest_events(
+    engine: Engine,
+    provider: DataProvider,
+    symbols: list[str],
+    *,
+    since: date,
+    source: str | None = None,
+    threshold: float | None = None,
+) -> IngestResult:
+    """Ingest corporate events into ``corporate_events`` (§7.1).
+
+    ``corporate_events`` has no natural unique key, so deduplication is
+    application-level on ``(stock_id, event_type, event_date)`` — re-runs stay
+    idempotent without a schema change (mirrors ``ingest_news``).
+    """
+    from src.common.models.events import CorporateEvent
+
+    src = source or provider.id
+    rows = collect_events(provider, symbols, since=since)
+    issues = validate_events(rows, since=since)
+    result = IngestResult(dataset="events", source=src, rows_fetched=len(rows), issues=issues)
+    if not rows:
+        return result
+
+    with engine.begin() as conn:
+        stock_ids = resolve_stock_ids(conn, [row.symbol for row in rows])
+        normalized, normalize_issues = normalize_events(rows, stock_ids, source=src)
+        result.issues.extend(normalize_issues)
+        result.rows_skipped = len(rows) - len(normalized)
+
+        existing: set[tuple[int, str, date]] = set()
+        if normalized:
+            stock_id_list = [cast(int, r["stock_id"]) for r in normalized]
+            for chunk_start in range(0, len(stock_id_list), 500):
+                chunk = stock_id_list[chunk_start : chunk_start + 500]
+                found = conn.execute(
+                    select(
+                        CorporateEvent.stock_id,
+                        CorporateEvent.event_type,
+                        CorporateEvent.event_date,
+                    ).where(CorporateEvent.stock_id.in_(chunk))
+                ).fetchall()
+                existing.update((int(a), str(b), c) for a, b, c in found)
+
+        inserted = 0
+        for row in normalized:
+            key = (
+                cast(int, row["stock_id"]),
+                cast(str, row["event_type"]),
+                cast(date, row["event_date"]),
+            )
+            if key in existing:
+                continue
+            conn.execute(insert(CorporateEvent).values(**row))
+            inserted += 1
+        result.rows_written = inserted
+        result.rows_skipped += len(normalized) - inserted
+
+    return result
+
+
+def ingest_macro(
+    engine: Engine,
+    provider: DataProvider,
+    indicators: list[str],
+    *,
+    start: date,
+    end: date,
+    source: str | None = None,
+    threshold: float | None = None,
+) -> IngestResult:
+    """Ingest macro series observations into ``macro_indicators`` (§8.1).
+
+    Upsert on the table's ``(indicator_code, period_date)`` primary key, so a
+    refreshed vintage of the same year overwrites the previous value.
+    """
+    from src.common.models.macro import MacroIndicator
+
+    src = source or provider.id
+    rows = collect_macro(provider, indicators, start=start, end=end)
+    issues = validate_macro(rows, start=start, end=end)
+    result = IngestResult(dataset="macro", source=src, rows_fetched=len(rows), issues=issues)
+    if not rows:
+        return result
+
+    normalized = normalize_macro(rows, source=src)
+
+    with engine.begin() as conn:
+        for chunk_start in range(0, len(normalized), _UPSERT_CHUNK):
+            chunk = normalized[chunk_start : chunk_start + _UPSERT_CHUNK]
+            stmt = pg_insert(MacroIndicator).values(chunk)
+            stmt = stmt.on_conflict_do_update(
+                index_elements=[MacroIndicator.indicator_code, MacroIndicator.period_date],
+                set_={
+                    "value": stmt.excluded.value,
+                    "unit": stmt.excluded.unit,
+                    "source": stmt.excluded.source,
+                },
+            )
+            conn.execute(stmt)
+        result.rows_written = len(normalized)
+
+        result.quality = _score_and_persist(
+            conn,
+            dataset="macro",
+            rows_total=len(rows),
+            issues=issues,
+            end=max((row.period_date for row in rows), default=end),
+            latest_date=max((row.period_date for row in rows), default=None),
+            expected_keys=None,
+            present_keys=None,
+            threshold=threshold,
+        )
+    return result
+
+
+__all__ = [
+    "IngestResult",
+    "ingest_eod",
+    "ingest_events",
+    "ingest_financials",
+    "ingest_index",
+    "ingest_macro",
+    "ingest_news",
+]

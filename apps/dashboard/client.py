@@ -369,6 +369,41 @@ class MarketClient:
         res = self._get("/api/v1/rag/status")
         return res if isinstance(res, dict) else {}
 
+    # -- strategy scoring (GĐ 6) ------------------------------------------------
+    def get_strategy_rankings(
+        self, strategy: str = "mid", universe: str | None = None, limit: int = 100
+    ) -> dict[str, Any]:
+        """Ranking envelope ``{items, total, limit, offset}``.
+
+        Falls back to an honest empty envelope when the API is unreachable —
+        there is no in-process strategy source, and inventing scores is
+        explicitly out of the question (§3).
+        """
+        params: dict[str, Any] = {"strategy": strategy, "limit": limit}
+        if universe:
+            params["universe"] = universe
+        res = self._get("/api/v1/strategy/rankings", **params)
+        if isinstance(res, dict) and "items" in res:
+            return res
+        return {"items": [], "total": 0, "limit": limit, "offset": 0}
+
+    def get_strategy_symbol(self, symbol: str) -> dict[str, Any] | None:
+        res = self._get(f"/api/v1/strategy/{symbol.upper()}", symbol=symbol)
+        return res if isinstance(res, dict) and res.get("profiles") else None
+
+    def get_strategy_history(
+        self, symbol: str, strategy: str = "mid", limit: int = 60
+    ) -> list[dict[str, Any]]:
+        res = self._get(
+            f"/api/v1/strategy/{symbol.upper()}/history",
+            symbol=symbol,
+            strategy=strategy,
+            limit=limit,
+        )
+        if isinstance(res, dict):
+            return list(res.get("items") or [])
+        return []
+
     def get_evidence(
         self,
         query: str,

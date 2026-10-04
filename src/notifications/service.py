@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from sqlalchemy import select
@@ -13,6 +13,9 @@ from sqlalchemy.orm import Session
 
 from apps.api.db import session_factory
 from apps.api.services.market_source import MarketSource
+
+if TYPE_CHECKING:
+    from apps.api.services.strategy_service import StrategySource
 from src.common.models.notifications import (
     EmailRecipient,
     EmailScheduleConfig,
@@ -299,12 +302,37 @@ class NotificationService:
                 use_ssl=row.use_ssl,
             )
 
-    def build_current_overview_html(self, market_service: MarketSource) -> str:
+    def build_current_overview_html(
+        self,
+        market_service: MarketSource,
+        strategy_service: StrategySource | None = None,
+    ) -> str:
         indices = market_service.list_indices()
         breadth = market_service.get_breadth()
         regime = market_service.get_regime()
         ranked = market_service.get_ranked()
         movers = market_service.get_movers(universe="VN100", limit=10)
+
+        strat_rankings: dict[str, list[dict[str, Any]]] = {}
+        if strategy_service is None:
+            try:
+                from apps.api.dependencies import get_strategy_service
+
+                strategy_service = get_strategy_service()
+            except Exception:
+                strategy_service = None
+
+        if strategy_service is not None:
+            for profile_name in ("short", "mid", "long"):
+                try:
+                    strat_rankings[profile_name] = strategy_service.rankings(
+                        profile_name, universe="vn30"
+                    )[:10]
+                except Exception as exc:
+                    logger.debug(
+                        "Failed to fetch strategy rankings for %s: %s", profile_name, exc
+                    )
+                    strat_rankings[profile_name] = []
 
         preds: dict[str, dict[str, Any]] = {}
         try:
@@ -332,6 +360,7 @@ class NotificationService:
             ranked=ranked,
             predictions=preds,
             movers=movers,
+            strategy_rankings=strat_rankings,
         )
 
     def dispatch_report(
@@ -339,6 +368,7 @@ class NotificationService:
         market_service: MarketSource,
         recipients: list[str] | None = None,
         subject: str | None = None,
+        strategy_service: StrategySource | None = None,
     ) -> dict[str, Any]:
         mailer = self.get_mailer()
         if not mailer:
@@ -355,7 +385,9 @@ class NotificationService:
         if not target_emails:
             return {"success": False, "error": "Danh sách người nhận đang trống."}
 
-        html = self.build_current_overview_html(market_service)
+        html = self.build_current_overview_html(
+            market_service, strategy_service=strategy_service
+        )
         subj = (
             subject
             or f"[DTCK] Báo Cáo Tổng Quan Thị Trường — {datetime.now(UTC).strftime('%d/%m/%Y')}"

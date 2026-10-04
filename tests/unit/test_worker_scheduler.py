@@ -42,10 +42,26 @@ def test_worker_scheduler_registers_jobs() -> None:
     assert "daily_eod_ingestion" in job_ids
     assert EOD_CATCHUP_JOB_ID in job_ids
     assert "daily_eod_scoring" in job_ids
+    assert "daily_strategy_scoring" in job_ids  # GĐ 4
     assert "daily_morning_email_report" in job_ids
     assert "daily_noon_email_report" in job_ids
     assert "daily_afternoon_email_report" in job_ids
     assert "email_schedule_sync" in job_ids
+
+
+def test_strategy_scoring_runs_after_the_1600_factor_scoring() -> None:
+    """GĐ 4: the strategy job must read the same closed session (after 16:00)."""
+    from apps.api.config import settings
+
+    jobs = {j.id: j for j in _build_scheduler().get_jobs()}
+    strategy = jobs["daily_strategy_scoring"]
+    scoring_hours = parse_cron_hours(settings.scheduler_scoring_cron_hours, (12, 16))
+    last_scoring = (max(scoring_hours), settings.scheduler_scoring_cron_minute)
+    strategy_slot = (settings.scheduler_strategy_hour, settings.scheduler_strategy_minute)
+    assert strategy_slot > last_scoring, "strategy scoring must follow factor scoring"
+    assert strategy.max_instances == 1
+    assert f"hour='{settings.scheduler_strategy_hour}'" in str(strategy.trigger)
+    assert f"minute='{settings.scheduler_strategy_minute}'" in str(strategy.trigger)
 
 
 def test_eod_ingestion_is_scheduled_before_scoring() -> None:
@@ -505,3 +521,71 @@ def test_scoring_job_is_quiet_when_the_close_was_ingested(
 ) -> None:
     logged = _scoring_job_with_bar_written_at("15:35", monkeypatch, caplog)
     assert "intraday snapshot" not in logged
+
+
+@patch("src.quant.strategy.alerts.send_grade_change_alert")
+@patch("src.quant.strategy.job.compute_and_store_strategy_scores")
+@patch("src.quant.strategy.feature_engine.compute_and_store_features")
+@patch("apps.worker.main._warn_if_scores_are_provisional")
+@patch("apps.worker.main.scheduled_eod_ingestion")
+@patch("apps.worker.main.get_engine")
+def test_scheduled_strategy_scoring_job_executes(
+    mock_get_engine: MagicMock,
+    mock_ingest: MagicMock,
+    mock_warn: MagicMock,
+    mock_compute_features: MagicMock,
+    mock_compute_scores: MagicMock,
+    mock_alerts: MagicMock,
+) -> None:
+    """17:00 strategy scoring: updates EOD data if stale, computes features and scores."""
+    from apps.worker.main import scheduled_strategy_scoring_job
+
+    mock_engine = MagicMock()
+    mock_get_engine.return_value = mock_engine
+    mock_compute_features.return_value = 100
+    mock_res = MagicMock()
+    mock_res.rows_written = 30
+    mock_res.summary.return_value = "strategy scores scored=30 written=30"
+    mock_compute_scores.return_value = mock_res
+    mock_alerts.return_value = {"changes": 2, "sent": True}
+
+    scheduled_strategy_scoring_job()
+
+    mock_ingest.assert_called_once_with(only_if_stale=True)
+    mock_warn.assert_called_once_with(mock_engine)
+    mock_compute_features.assert_called_once()
+    mock_compute_scores.assert_called_once()
+    mock_alerts.assert_called_once()
+
+
+@patch("src.quant.strategy.alerts.send_grade_change_alert")
+@patch("src.quant.strategy.job.compute_and_store_strategy_scores")
+@patch("src.quant.strategy.feature_engine.compute_and_store_features")
+@patch("apps.worker.main._warn_if_scores_are_provisional")
+@patch("apps.worker.main.scheduled_eod_ingestion")
+@patch("apps.worker.main.get_engine")
+def test_scheduled_strategy_scoring_job_skips_alerts_on_zero_rows(
+    mock_get_engine: MagicMock,
+    mock_ingest: MagicMock,
+    mock_warn: MagicMock,
+    mock_compute_features: MagicMock,
+    mock_compute_scores: MagicMock,
+    mock_alerts: MagicMock,
+) -> None:
+    """When scoring writes 0 rows (e.g. market data missing), alert dispatch is skipped."""
+    from apps.worker.main import scheduled_strategy_scoring_job
+
+    mock_engine = MagicMock()
+    mock_get_engine.return_value = mock_engine
+    mock_compute_features.return_value = 0
+    mock_res = MagicMock()
+    mock_res.rows_written = 0
+    mock_res.summary.return_value = "strategy scores scored=0 written=0"
+    mock_compute_scores.return_value = mock_res
+
+    scheduled_strategy_scoring_job()
+
+    mock_ingest.assert_called_once_with(only_if_stale=True)
+    mock_compute_features.assert_called_once()
+    mock_compute_scores.assert_called_once()
+    assert not mock_alerts.called

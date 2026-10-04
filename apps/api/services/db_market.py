@@ -24,7 +24,7 @@ from decimal import Decimal
 from typing import Any, cast
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from apps.api.services.ranking_payload import to_ranking_payload
@@ -157,24 +157,83 @@ class DbMarketService:
 
     # ---------------------------------------------------------------- market
     def list_indices(self) -> list[dict[str, Any]]:
-        stmt = (
-            select(IndexPrice)
-            .distinct(IndexPrice.index_code)
-            .order_by(IndexPrice.index_code, IndexPrice.trade_date.desc())
-        )
+        sql = text("""
+            with ranked as (
+                select index_code, trade_date, open, high, low, close, volume,
+                       lag(close) over (
+                           partition by index_code order by trade_date asc
+                       ) as prev_close,
+                       row_number() over (
+                           partition by index_code order by trade_date desc
+                       ) as rn
+                from index_prices
+            )
+            select index_code, trade_date, open, high, low, close, volume,
+                   (close - prev_close) as change,
+                   case when prev_close is not null and prev_close > 0
+                        then (close - prev_close) / prev_close
+                        else null end as change_pct
+            from ranked
+            where rn = 1
+            order by index_code;
+        """)
         with self._scope() as session:
-            return [_index_row(row) for row in session.scalars(stmt)]
+            rows = session.execute(sql).all()
+            return [
+                {
+                    "index_code": str(r.index_code),
+                    "trade_date": r.trade_date,
+                    "open": float(r.open),
+                    "high": float(r.high),
+                    "low": float(r.low),
+                    "close": float(r.close),
+                    "volume": int(r.volume),
+                    "change": round(float(r.change), 2) if r.change is not None else None,
+                    "change_pct": (
+                        round(float(r.change_pct), 6) if r.change_pct is not None else None
+                    ),
+                }
+                for r in rows
+            ]
 
     def get_index(self, code: str) -> dict[str, Any] | None:
-        stmt = (
-            select(IndexPrice)
-            .where(func.upper(IndexPrice.index_code) == code.upper())
-            .order_by(IndexPrice.trade_date.desc())
-            .limit(1)
-        )
+        sql = text("""
+            with ranked as (
+                select index_code, trade_date, open, high, low, close, volume,
+                       lag(close) over (
+                           partition by index_code order by trade_date asc
+                       ) as prev_close,
+                       row_number() over (
+                           partition by index_code order by trade_date desc
+                       ) as rn
+                from index_prices
+                where upper(index_code) = upper(:code)
+            )
+            select index_code, trade_date, open, high, low, close, volume,
+                   (close - prev_close) as change,
+                   case when prev_close is not null and prev_close > 0
+                        then (close - prev_close) / prev_close
+                        else null end as change_pct
+            from ranked
+            where rn = 1;
+        """)
         with self._scope() as session:
-            row = session.scalars(stmt).first()
-            return _index_row(row) if row else None
+            r = session.execute(sql, {"code": code}).first()
+            if not r:
+                return None
+            return {
+                "index_code": str(r.index_code),
+                "trade_date": r.trade_date,
+                "open": float(r.open),
+                "high": float(r.high),
+                "low": float(r.low),
+                "close": float(r.close),
+                "volume": int(r.volume),
+                "change": round(float(r.change), 2) if r.change is not None else None,
+                "change_pct": (
+                    round(float(r.change_pct), 6) if r.change_pct is not None else None
+                ),
+            }
 
     def get_index_prices(self, code: str) -> list[dict[str, Any]] | None:
         stmt = (

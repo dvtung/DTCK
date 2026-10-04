@@ -148,7 +148,7 @@ curl "http://localhost:8000/api/v1/stocks/FPT/ranking"
 curl "http://localhost:8000/api/v1/rag/search?query=VNINDEX&top_k=3"
 
 # Swagger UI tương tác → http://localhost:8000/docs
-# Dashboard (8 trang gồm "Tin tức & RAG" + "📧 Quản lý Email" T018) → http://localhost:8501
+# Dashboard (9 trang gồm "Tin tức & RAG", "📧 Quản lý Email", "Lịch sử Worker") → http://localhost:8501
 # Qdrant dashboard → http://localhost:6333/dashboard
 ```
 
@@ -300,7 +300,7 @@ LLM_PROVIDER=mock MARKET_DATA_SOURCE=db pytest tests/integration -q  # kỳ vọ
 docker compose exec -T api ruff check .
 docker compose exec -T api mypy apps src    # kỳ vọng 2026-09-28: 138 tệp, no issues
 
-# 21. Xem dashboard (http://localhost:8501) — 8 trang gồm 📧 Quản lý Email (T018)
+# 21. Xem dashboard (http://localhost:8501) — 9 trang gồm Tin tức & RAG, 📧 Quản lý Email, Lịch sử Worker
 
 **Thông báo email tự động (T018, 2026-09-28):**
 

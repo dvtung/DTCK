@@ -66,11 +66,15 @@ def _build_provider(source: str, args: argparse.Namespace) -> DataProvider:
 
         # ``indexes`` matters for `--dataset index_prices`; without it the fixture
         # provider returns no index bars and the run would report a silent no-op.
+        # ``include_financials``/``include_events`` do the same for the GĐ 2
+        # datasets (a fixture provider with no financial rows would also no-op).
         return build_fixture_provider(
             symbols=args.symbols or [],
             start=args.start,
             end=args.end,
             indexes=args.indexes or [],
+            include_financials=args.dataset == "financials",
+            include_events=args.dataset == "events",
         )
     universe = _active_symbols() if args.dataset == "news" else set()
     return create_provider(source, universe=frozenset(universe))
@@ -84,11 +88,18 @@ def _engine() -> Engine:
 
 def run_ingest(args: argparse.Namespace) -> int:
     """Execute one pipeline run and print its summary + quality gate verdict."""
-    from src.data.pipelines import ingest_eod, ingest_index, ingest_news
+    from src.data.pipelines import (
+        ingest_eod,
+        ingest_events,
+        ingest_financials,
+        ingest_index,
+        ingest_macro,
+        ingest_news,
+    )
 
-    if args.dataset == "prices" and not args.symbols:
+    if args.dataset in ("prices", "financials", "events") and not args.symbols:
         # An empty universe would "succeed" while ingesting nothing — fail loudly.
-        logger.error("--symbols is required for --dataset prices")
+        logger.error("--symbols is required for --dataset %s", args.dataset)
         return 2
     engine = _engine()
     provider = _build_provider(args.source, args)
@@ -107,6 +118,27 @@ def run_ingest(args: argparse.Namespace) -> int:
         )
     elif args.dataset == "news":
         result = ingest_news(engine, provider, since=args.since, threshold=args.threshold)
+    elif args.dataset == "financials":
+        result = ingest_financials(
+            engine,
+            provider,
+            args.symbols,
+            period_types=tuple(args.period_types),
+            threshold=args.threshold,
+        )
+    elif args.dataset == "events":
+        result = ingest_events(
+            engine, provider, args.symbols, since=args.since.date(), threshold=args.threshold
+        )
+    elif args.dataset == "macro":
+        result = ingest_macro(
+            engine,
+            provider,
+            list(args.indicators or []),
+            start=args.start,
+            end=args.end,
+            threshold=args.threshold,
+        )
     else:
         raise ValueError(f"unknown dataset '{args.dataset}'")
 
@@ -138,6 +170,110 @@ def compute_scores(args: argparse.Namespace) -> int:
     logger.info("%s", result.summary())
     if result.scored == 0:
         logger.error("no symbols scored — is `prices` populated for the as-of date?")
+        return 1
+    return 0
+
+
+def notify_strategy_changes_command(args: argparse.Namespace) -> int:
+    """Email the grade changes between the last two scored sessions (GĐ 6)."""
+    from src.quant.strategy.alerts import send_grade_change_alert
+
+    engine = _engine()
+    with engine.connect() as conn:
+        result = send_grade_change_alert(conn, dry_run=bool(args.dry_run))
+    logger.info(
+        "strategy alerts: changes=%s sent=%s error=%s",
+        result.get("changes"),
+        result.get("sent"),
+        result.get("error"),
+    )
+    if args.dry_run and result.get("html"):
+        logger.info("preview length=%d chars", len(str(result["html"])))
+    return 0 if result.get("success") or result.get("changes") == 0 else 1
+
+
+def backtest_strategy_command(args: argparse.Namespace) -> int:
+    """Backtest the strategy-scoring module (GĐ 5, §16/§43).
+
+    Prints the report (strategy vs VNINDEX buy-and-hold) and exits non-zero only
+    when the run produced no equity curve (a configuration/data problem).
+    """
+    from src.quant.strategy.backtest import run_strategy_backtest
+
+    symbols = [str(s) for s in args.symbols] if args.symbols else list(_active_symbols())
+    if not symbols:
+        logger.error("--symbols is required (no active universe available)")
+        return 2
+    report = run_strategy_backtest(
+        _engine(),
+        symbols,
+        args.start,
+        args.end,
+        profile=args.profile,
+        top_n=args.top_n,
+        rebalance_days=args.rebalance_days,
+    )
+    logger.info("%s", report.summary())
+    for key in (
+        "total_return",
+        "cagr",
+        "annualized_volatility",
+        "sharpe_ratio",
+        "sortino_ratio",
+        "max_drawdown",
+        "calmar_ratio",
+        "win_rate",
+        "profit_factor",
+        "turnover",
+        "transaction_cost",
+    ):
+        value = report.metrics.get(key)
+        bench = report.benchmark_metrics.get(key)
+        logger.info(
+            "  %-24s strategy=%s benchmark=%s",
+            key,
+            f"{value:.4f}" if value is not None else "n/a",
+            f"{bench:.4f}" if bench is not None else "n/a",
+        )
+    if not report.result.equity_curve:
+        logger.error("backtest produced no equity curve")
+        return 1
+    return 0
+
+
+def strategy_scores_command(args: argparse.Namespace) -> int:
+    """Score the 3 strategy profiles + persist recommendations (GĐ 4, §12/§16)."""
+    from src.quant.strategy.job import compute_and_store_strategy_scores
+
+    symbols = [str(s) for s in args.symbols] if args.symbols else None
+    as_of = args.as_of or datetime.now(tz=UTC).date()
+    result = compute_and_store_strategy_scores(_engine(), as_of, symbols)
+    logger.info("%s", result.summary())
+    if result.rows_written == 0:
+        logger.error("no strategy scores written — run compute-features/prices first?")
+        return 1
+    return 0
+
+
+def compute_features_command(args: argparse.Namespace) -> int:
+    """Compute + persist strategy features and group scores (GĐ 3, §12/§43)."""
+    from src.quant.strategy.feature_engine import compute_and_store_features
+
+    symbols = [str(s) for s in args.symbols] if args.symbols else sorted(_active_symbols())
+    if not symbols:
+        logger.error("--symbols is required (no active universe available)")
+        return 2
+    as_of = args.as_of or datetime.now(tz=UTC).date()
+    written = compute_and_store_features(_engine(), as_of, symbols)
+    logger.info(
+        "features version=%s as_of=%s symbols=%d written=%d",
+        "strategy_features_v1.0",
+        as_of,
+        len(symbols),
+        written,
+    )
+    if written == 0:
+        logger.error("no features written — are `prices` populated as of %s?", as_of)
         return 1
     return 0
 
@@ -288,13 +424,29 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     ingest = sub.add_parser("ingest", help="run a data collector pipeline")
-    ingest.add_argument("--dataset", default="prices", choices=["prices", "index_prices", "news"])
+    ingest.add_argument(
+        "--dataset",
+        default="prices",
+        choices=["prices", "index_prices", "news", "financials", "events", "macro"],
+    )
     ingest.add_argument("--source", default="fixture", help="provider id or 'fixture' (offline)")
     ingest.add_argument("--start", help="window start (YYYY-MM-DD)")
     ingest.add_argument("--end", help="window end (YYYY-MM-DD); default = today")
     ingest.add_argument("--symbols", help="comma-separated tickers for --dataset prices")
     ingest.add_argument("--indexes", help="comma-separated index codes for index_prices")
     ingest.add_argument("--since", help="news: fetch items published after this ISO timestamp")
+    ingest.add_argument(
+        "--period-types",
+        nargs="+",
+        default=["QUARTER", "YEAR"],
+        help="financials: period types to fetch (default: QUARTER YEAR)",
+    )
+    ingest.add_argument(
+        "--indicators",
+        nargs="+",
+        default=None,
+        help="macro: indicator codes (default: every code configured for the provider)",
+    )
     ingest.add_argument(
         "--threshold", type=float, help="override the data-quality gate threshold (§39)"
     )
@@ -306,6 +458,8 @@ def build_parser() -> argparse.ArgumentParser:
         indexes=None,
         since=None,
         threshold=None,
+        period_types=["QUARTER", "YEAR"],
+        indicators=None,
     )
 
     scores = sub.add_parser(
@@ -329,6 +483,81 @@ def build_parser() -> argparse.ArgumentParser:
         since=None,
         threshold=None,
         as_of=None,
+    )
+
+    alerts = sub.add_parser(
+        "notify-strategy-changes",
+        help="email grade changes between the last two scored sessions (GĐ 6)",
+    )
+    alerts.add_argument(
+        "--dry-run", action="store_true", help="build the digest but do not send"
+    )
+    alerts.set_defaults(
+        func=notify_strategy_changes_command,
+        symbols=None,
+        start=None,
+        end=None,
+        indexes=None,
+        since=None,
+        as_of=None,
+        dry_run=False,
+    )
+
+    backtest = sub.add_parser(
+        "backtest-strategy",
+        help="backtest the strategy-scoring module vs VNINDEX (GĐ 5, §16)",
+    )
+    backtest.add_argument("--profile", default="mid", choices=["short", "mid", "long"])
+    backtest.add_argument("--top-n", type=int, default=5, help="positions per rebalance")
+    backtest.add_argument(
+        "--rebalance-days", type=int, default=21, help="trading days between rebalances"
+    )
+    backtest.add_argument("--start", required=True, help="window start (YYYY-MM-DD)")
+    backtest.add_argument("--end", required=True, help="window end (YYYY-MM-DD)")
+    backtest.add_argument("--symbols", help="comma-separated tickers (default: all active)")
+    backtest.set_defaults(
+        func=backtest_strategy_command,
+        symbols=None,
+        start=None,
+        end=None,
+        indexes=None,
+        since=None,
+        as_of=None,
+        profile="mid",
+        top_n=5,
+        rebalance_days=21,
+    )
+
+    strategy = sub.add_parser(
+        "strategy-scores",
+        help="score 3 strategy profiles + recommendations (GĐ 4, §12/§16)",
+    )
+    strategy.add_argument("--as-of", default=None, help="YYYY-MM-DD; default = today")
+    strategy.add_argument("--symbols", help="comma-separated tickers (default: all active)")
+    strategy.set_defaults(
+        func=strategy_scores_command,
+        as_of=None,
+        symbols=None,
+        start=None,
+        end=None,
+        indexes=None,
+        since=None,
+    )
+
+    features = sub.add_parser(
+        "compute-features",
+        help="compute + persist strategy features & group scores (GĐ 3, §12/§43)",
+    )
+    features.add_argument("--as-of", default=None, help="YYYY-MM-DD; default = today")
+    features.add_argument("--symbols", help="comma-separated tickers (default: active universe)")
+    features.set_defaults(
+        func=compute_features_command,
+        as_of=None,
+        symbols=None,
+        start=None,
+        end=None,
+        indexes=None,
+        since=None,
     )
 
     train = sub.add_parser(

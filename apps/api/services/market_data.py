@@ -94,11 +94,36 @@ class MarketService:
 
     # ---------------------------------------------------------- market
     def list_indices(self) -> list[dict[str, object]]:
-        return [{"index_code": code, **rows[-1]} for code, rows in self._index_prices.items()]
+        out: list[dict[str, object]] = []
+        for code, rows in self._index_prices.items():
+            last = dict(rows[-1])
+            prev = dict(rows[-2]) if len(rows) >= 2 else None
+            change = (float(str(last["close"])) - float(str(prev["close"]))) if prev else None
+            prev_close = float(str(prev.get("close", 0))) if prev else 0.0
+            change_pct = (change / prev_close) if (prev_close > 0 and change is not None) else None
+            out.append({
+                "index_code": code,
+                **last,
+                "change": round(change, 2) if change is not None else None,
+                "change_pct": round(change_pct, 6) if change_pct is not None else None,
+            })
+        return out
 
     def get_index(self, code: str) -> dict[str, object] | None:
         rows = self._index_prices.get(code)
-        return dict(rows[-1]) if rows else None
+        if not rows:
+            return None
+        last = dict(rows[-1])
+        prev = dict(rows[-2]) if len(rows) >= 2 else None
+        change = (float(str(last["close"])) - float(str(prev["close"]))) if prev else None
+        prev_close = float(str(prev.get("close", 0))) if prev else 0.0
+        change_pct = (change / prev_close) if (prev_close > 0 and change is not None) else None
+        return {
+            "index_code": code,
+            **last,
+            "change": round(change, 2) if change is not None else None,
+            "change_pct": round(change_pct, 6) if change_pct is not None else None,
+        }
 
     def get_index_prices(self, code: str) -> list[dict[str, object]] | None:
         rows = self._index_prices.get(code.upper())

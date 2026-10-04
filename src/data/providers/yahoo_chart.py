@@ -41,7 +41,7 @@ import httpx
 
 from src.data.providers.http_json import HttpJsonProvider, _substitute
 from src.data.providers.rss import DEFAULT_USER_AGENT
-from src.data.records import EODBar
+from src.data.records import EODBar, EventRow
 
 _ONE = Decimal("1")
 _QUOTE_KEYS = ("open", "high", "low", "close", "volume")
@@ -75,6 +75,10 @@ class YahooChartProvider(HttpJsonProvider):
     ``timezone_offset_hours``.
     """
 
+    #: Besides bars, the same chart payload carries corporate actions
+    #: (``events=div,split``) — see :meth:`fetch_events`.
+    SUPPORTED_DATASETS = frozenset({"prices", "events"})
+
     def _build_request(self, symbol: str, start: date, end: date) -> httpx.Request:
         cfg = self._cfg
         suffix = str(cfg.get("symbol_suffix", ".VN"))
@@ -105,6 +109,93 @@ class YahooChartProvider(HttpJsonProvider):
             params["apikey"] = self._credential
         headers.update(cfg.get("headers") or {})
         return httpx.Request("GET", url, params=params, headers=headers)
+
+    # --- corporate actions (GĐ 2) --------------------------------------------------------------
+    def _build_events_request(self, symbol: str, since: date) -> httpx.Request:
+        """Chart request covering ``[since, now]`` with ``div`` + ``split`` events."""
+        cfg = self._cfg
+        suffix = str(cfg.get("symbol_suffix", ".VN"))
+        ticker = symbol.upper()
+        if suffix and not ticker.endswith(suffix):
+            ticker += suffix
+        url = _substitute(str(cfg["url"]), {"{symbol}": ticker})
+        tz = timezone(timedelta(hours=int(cfg.get("timezone_offset_hours", 7))))
+        period1 = int(datetime(since.year, since.month, since.day, tzinfo=tz).timestamp())
+        today = datetime.now(tz=UTC).astimezone(tz).date()
+        period2 = int(datetime(today.year, today.month, today.day, tzinfo=tz).timestamp()) + 86400
+        params = {
+            "period1": str(period1),
+            "period2": str(period2),
+            "interval": str(cfg.get("interval", "1mo")),
+            "events": "div,split",
+        }
+        headers = {
+            "User-Agent": str(cfg.get("user_agent", DEFAULT_USER_AGENT)),
+            "Accept": "application/json",
+        }
+        headers.update(cfg.get("headers") or {})
+        return httpx.Request("GET", url, params=params, headers=headers)
+
+    def fetch_events(self, symbols: list[str], *, since: date) -> list[EventRow]:
+        """Corporate actions (cash dividends + stock splits) for ``symbols``.
+
+        Yahoo's chart payload carries the *distribution history* the exchange
+        produced, with the payment/ex-date timestamp — real data, verified live
+        on 2026-10-03 (FPT ``amount=597.742`` @ 2022-06-13, split ``6:5``).
+        ``announced_date`` is not published by Yahoo → ``None`` (never guessed).
+        """
+        rows: list[EventRow] = []
+        for symbol in symbols:
+            payload = self._send_json(self._build_events_request(symbol, since))
+            rows.extend(self._map_event_rows(payload, symbol.upper(), since))
+        return rows
+
+    def _map_event_rows(self, payload: Any, symbol: str, since: date) -> list[EventRow]:
+        chart = payload.get("chart") if isinstance(payload, dict) else None
+        if not isinstance(chart, dict):
+            raise ValueError(f"provider '{self.id}': malformed payload (missing 'chart')")
+        results = chart.get("result") or []
+        if not results:
+            return []
+        events = (results[0].get("events") or {}) if isinstance(results[0], dict) else {}
+        rows: list[EventRow] = []
+
+        for raw in (events.get("dividends") or {}).values():
+            event_date = datetime.fromtimestamp(
+                int(raw["date"]), tz=UTC
+            ).astimezone(timezone(timedelta(hours=7))).date()
+            if event_date < since:
+                continue
+            rows.append(
+                EventRow(
+                    symbol=symbol,
+                    event_type="DIVIDEND",
+                    event_date=event_date,
+                    announced_date=None,
+                    details={"cash_amount": Decimal(str(raw.get("amount", 0)))},
+                )
+            )
+
+        for raw in (events.get("splits") or {}).values():
+            event_date = datetime.fromtimestamp(
+                int(raw["date"]), tz=UTC
+            ).astimezone(timezone(timedelta(hours=7))).date()
+            if event_date < since:
+                continue
+            rows.append(
+                EventRow(
+                    symbol=symbol,
+                    event_type="SPLIT",
+                    event_date=event_date,
+                    announced_date=None,
+                    details={
+                        "numerator": int(raw["numerator"]),
+                        "denominator": int(raw["denominator"]),
+                        "ratio": str(raw.get("splitRatio", "")),
+                    },
+                )
+            )
+        return rows
 
     def _map_rows(self, payload: Any) -> list[EODBar]:
         cfg = self._cfg

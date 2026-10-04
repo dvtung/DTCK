@@ -56,6 +56,8 @@ EXPECTED_TABLES = {
     "email_smtp_configs",
     "email_schedule_configs",
     "email_send_logs",
+    "strategy_scores",
+    "strategy_recommendations",
 }
 
 

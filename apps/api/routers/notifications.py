@@ -8,7 +8,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field, field_validator
 
-from apps.api.dependencies import MarketDep
+from apps.api.dependencies import MarketDep, StrategyDep
 from src.notifications.service import NotificationService
 
 router = APIRouter(prefix="/api/v1/notifications", tags=["notifications"])
@@ -146,18 +146,21 @@ def save_schedule_config(payload: ScheduleConfigIn) -> dict[str, Any]:
 
 # --- Send Test & Dispatch ---
 @router.post("/send-test")
-def send_test_email(payload: SendTestRequest, market_dep: MarketDep) -> dict[str, Any]:
+def send_test_email(
+    payload: SendTestRequest, market_dep: MarketDep, strategy_dep: StrategyDep
+) -> dict[str, Any]:
     res = _service.dispatch_report(
         market_service=market_dep,
         recipients=[payload.recipient_email],
         subject=payload.subject or "[DTCK TEST] Báo Cáo Tổng Quan Thị Trường",
+        strategy_service=strategy_dep,
     )
     return res
 
 
 @router.get("/preview-html")
-def preview_html(market_dep: MarketDep) -> dict[str, str]:
-    html = _service.build_current_overview_html(market_dep)
+def preview_html(market_dep: MarketDep, strategy_dep: StrategyDep) -> dict[str, str]:
+    html = _service.build_current_overview_html(market_dep, strategy_service=strategy_dep)
     return {"html": html}
 
 

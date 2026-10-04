@@ -13,7 +13,7 @@ from decimal import Decimal
 
 from sqlalchemy import Connection, select
 
-from src.data.records import EODBar, IndexBar, NewsItem
+from src.data.records import EODBar, EventRow, FinancialRow, IndexBar, MacroPoint, NewsItem
 from src.data.validators import ValidationIssue
 
 
@@ -151,10 +151,116 @@ def as_decimal(value: Decimal | None) -> Decimal | None:
     return value
 
 
+def normalize_financials(
+    rows: list[FinancialRow],
+    stock_ids: dict[str, int],
+    *,
+    source: str,
+) -> tuple[list[dict[str, object]], list[ValidationIssue]]:
+    """Convert raw financial rows to ``financial_statements`` rows.
+
+    ``published_at`` is carried through verbatim: when the vendor did not
+    disclose it the column stays ``NULL`` — never backfilled with a guess, so
+    as-of queries cannot accidentally see a filing before it was public (§31).
+    """
+    out: list[dict[str, object]] = []
+    issues: list[ValidationIssue] = []
+    for row in rows:
+        stock_id = stock_ids.get(row.symbol.upper())
+        if stock_id is None:
+            issues.append(
+                ValidationIssue(
+                    "financials",
+                    f"{row.symbol}@{row.report_date}",
+                    "symbol",
+                    "not in reference universe (stocks)",
+                )
+            )
+            continue
+        out.append(
+            {
+                "stock_id": stock_id,
+                "period_type": row.period_type,
+                "fiscal_year": row.fiscal_year,
+                "fiscal_period": row.fiscal_period,
+                "statement_type": row.statement_type,
+                "line_item": row.line_item,
+                "value": row.value,
+                "currency": row.currency,
+                "report_date": row.report_date,
+                "published_at": row.published_at,
+                # Bitemporal validity: a fresh ingestion is valid from now on.
+                "valid_from": datetime.now().astimezone(),
+                "valid_to": None,
+                "source": source,
+            }
+        )
+    return out, issues
+
+
+def normalize_events(
+    rows: list[EventRow],
+    stock_ids: dict[str, int],
+    *,
+    source: str,
+) -> tuple[list[dict[str, object]], list[ValidationIssue]]:
+    """Convert raw corporate events to ``corporate_events`` rows."""
+    out: list[dict[str, object]] = []
+    issues: list[ValidationIssue] = []
+    for row in rows:
+        stock_id = stock_ids.get(row.symbol.upper())
+        if stock_id is None:
+            issues.append(
+                ValidationIssue(
+                    "events",
+                    f"{row.symbol}@{row.event_date}",
+                    "symbol",
+                    "not in reference universe (stocks)",
+                )
+            )
+            continue
+        out.append(
+            {
+                "stock_id": stock_id,
+                "event_type": row.event_type,
+                "event_date": row.event_date,
+                "announced_date": row.announced_date,
+                # JSONB cannot serialise Decimal — store amounts as numbers.
+                "details": (
+                    {
+                        str(k): (float(v) if isinstance(v, Decimal) else v)
+                        for k, v in row.details.items()
+                    }
+                    if row.details
+                    else None
+                ),
+                "source": source,
+            }
+        )
+    return out, issues
+
+
+def normalize_macro(rows: list[MacroPoint], *, source: str) -> list[dict[str, object]]:
+    """Convert raw macro observations to ``macro_indicators`` rows (no FK)."""
+    return [
+        {
+            "indicator_code": row.indicator_code,
+            "period_date": row.period_date,
+            "value": row.value,
+            "unit": row.unit,
+            "source": source,
+        }
+        for row in rows
+    ]
+
+
 __all__ = [
     "resolve_stock_ids",
     "normalize_eod",
+    "normalize_events",
+    "normalize_financials",
     "normalize_index",
+    "normalize_macro",
     "normalize_news",
     "expected_eod_keys",
     "as_decimal",

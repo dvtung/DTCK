@@ -2,7 +2,59 @@
 
 > Thuật ngữ chuyên môn (tên bảng, biến môi trường, lệnh, đường dẫn) giữ nguyên tiếng Anh.
 
-**Cập nhật lần cuối:** 2026-09-29
+**Cập nhật lần cuối:** 2026-10-04
+
+## 2026-10-04 — Đổi Delta Chỉ số VN30/VNINDEX từ % sang Số điểm Tăng/Giảm
+
+- **Sửa hiển thị Delta Chỉ số Thị trường (`apps/dashboard/`, `apps/api/`)**:
+  - Gốc rễ: Nguồn EOD chỉ số SSI FastConnect lưu `open = close`, dẫn đến công thức `(close - open) / open` luôn bằng `0.0%`, không phản ánh được mức tăng giảm thực tế của phiên.
+  - `apps/api/schemas.py`: Mở rộng `IndexPriceOut` thêm 2 trường `change: float | None` và `change_pct: float | None`.
+  - `apps/api/services/db_market.py` & `market_data.py`: Cập nhật `list_indices` và `get_index` sử dụng window function `lag(close)` để tính toán mức thay đổi số điểm (`change = close - prev_close`) và tỷ lệ (`change_pct`) so với phiên đóng cửa liền trước.
+  - `apps/dashboard/app.py`:
+    - Thẻ KPI metric **VN30**: Chuyển delta từ tỷ lệ % (`0.0%`) sang hiển thị **số điểm tăng/giảm** (ví dụ: `-14.58 điểm`).
+    - Bảng **Chỉ số**: Bổ sung cột `"+/- điểm"` hiển thị biến động điểm số thực tế của từng chỉ số.
+    - Thẻ metric **VNINDEX** dưới biểu đồ nến ngày: Hiển thị biến động điểm số so với phiên trước (`-11.59 điểm`).
+  - Kiểm thử: `ruff check` và `mypy` 100% sạch, unit tests pass 46/46. Recreate/restart container `dtck-api` và `dtck-dashboard`.
+
+## 2026-10-04 — Worker Schedule 17:00 Hàng Ngày: Cập nhật Dữ liệu & Chấm điểm Chiến lược
+
+- **Worker Scheduler — Lịch trình 17:00 Hàng Ngày (`Asia/Ho_Chi_Minh`)**:
+  - `apps/api/config.py`: Cập nhật cấu hình mặc định `scheduler_strategy_hour: int = 17`, `scheduler_strategy_minute: int = 0`. Hỗ trợ cấu hình qua biến môi trường `SCHEDULER_STRATEGY_HOUR` và `SCHEDULER_STRATEGY_MINUTE`.
+  - `.env.example` & `docker-compose.yml`: Bổ sung `SCHEDULER_STRATEGY_HOUR=17` và `SCHEDULER_STRATEGY_MINUTE=0` cho cả hai service `api` và `worker`.
+  - `apps/worker/main.py`: Tinh chỉnh pipeline của job `scheduled_strategy_scoring_job` chạy lúc 17:00 hàng ngày (Mon–Fri) gồm 4 bước liên hoàn (kiểm tra/nạp EOD nếu stale, tính 24 đặc trưng 7 nhóm, chấm điểm 3 chiến lược và gửi cảnh báo xếp hạng).
+  - `apps/dashboard/app.py`: Bổ sung job `daily_strategy_scoring` (Thứ 2–6 lúc 17:00) vào tab *Lịch trình APScheduler* và cập nhật hướng dẫn CLI chiến lược trong tab *Lệnh vận hành CLI* trên trang **Lịch sử Worker**.
+  - `tests/unit/test_worker_scheduler.py`: Bổ sung unit tests cho job chiến lược (35/35 passed).
+  - Kiểm chứng live container `dtck-worker` & `dtck-dashboard`: Job đăng ký thành công lúc 17:00 ICT, chạy thử nghiệm 2054 features, 414 scores, email 3/3 người nhận, hiển thị chuẩn xác trên dashboard.
+
+## 2026-10-04 — Tích hợp Chấm điểm 3 Chiến lược vào Email & Nâng cấp Khung thời gian VNINDEX
+
+- **Tích hợp Chấm điểm chiến lược vào Email Báo cáo Thị trường (`src/notifications/`)**:
+  - `report_generator.py`: Bổ sung tham số `strategy_rankings` vào `generate_market_overview_html`.
+  - Hiển thị 3 bảng độc lập cho 3 hồ sơ chiến lược (Ngắn hạn / Trung hạn / Dài hạn), mỗi bảng gồm Top 10 mã theo danh mục VN30 với 8 trường thông tin: Hạng, Mã, Điểm (§24), Xếp hạng (badge A–D phân cấp màu), Vùng mua (thấp – cao), Cắt lỗ, Mục tiêu, Độ tin cậy.
+  - Hộp giải thích chi tiết 6 thông tin cơ bản: Điểm, Xếp hạng A–D kèm điều kiện xu hướng ngắn hạn, Vùng mua ATR, Cắt lỗ phòng vệ, Mục tiêu tỷ lệ R/R ~ 1.5, Độ tin cậy dữ liệu.
+  - `service.py`: `NotificationService.build_current_overview_html` tự động truy vấn `strategy_service.rankings(profile, universe="vn30")[:10]` qua `StrategySource`.
+  - Nối router API (`/preview-html` và `/send-test`) và scheduler worker tự động gửi báo cáo 3 khung giờ (08:00, 12:30, 16:30).
+  - Bổ sung unit test `test_renders_strategy_rankings_and_explanations` trong `tests/unit/test_email_notifications.py` (10/10 test passed).
+- **Bộ chọn 9 Khung thời gian Biểu đồ Nến ngày VNINDEX (`apps/dashboard/`)**:
+  - Hỗ trợ lựa chọn: `Tất cả` / `3 năm` / `2 năm` / `1 năm` / `6 tháng` / `3 tháng` / `1 tháng` / `2 tuần` / `1 tuần` (mặc định: `2 năm`).
+  - MA20/MA50 tính toán trước trên toàn bộ dữ liệu gốc để không mất warmup ở khung ngắn; Plotly `rangebreaks` loại bỏ khoảng trống cuối tuần.
+  - Khắc phục `AttributeError: get_strategy_rankings`: Mount volume `./src:/app/src` và `./configs:/app/configs` cho service `dashboard` trong `docker-compose.yml`, thêm fallback module cho `STRATEGY_DISCLAIMER`.
+
+## 2026-09-30 — Backfill Dữ liệu Lịch sử (2020–2026) + Huấn luyện lại ML + Trang Lịch sử Worker cho Dashboard
+
+- **Backfill Dữ liệu Lịch sử từ năm 2020 (Đóng trọn vẹn yêu cầu chu kỳ vĩ mô)**:
+  - Sử dụng chuỗi nhà cung cấp `ssix_finipro` (SSI FastConnect) làm nguồn chính cùng cơ chế fallback sang `yahoo` để nạp dữ liệu từ **02/01/2020 đến 30/09/2026** cho toàn bộ 138 mã cổ phiếu thuộc danh mục mở rộng (VN30, VN100, HOSE, HNX, UPCOM).
+  - Tổng số bản ghi `prices` trong TimescaleDB tăng từ ~67.000 lên **218.736 bản ghi**.
+  - Nạp đầy đủ chỉ số `VNINDEX` và `VN30` từ 2020 vào bảng `index_prices`.
+  - Chạy lại tiến trình tính toán điểm nhân tố `compute-scores` trên toàn bộ vũ trụ dựa trên chuỗi giá mở rộng.
+  - Huấn luyện lại mô hình dự đoán xu hướng giá XGBoost (`train-model --source db`) trên tập đặc trưng lịch sử đầy đủ từ TimescaleDB, tự động đăng ký và lưu trữ artifact vào Model Registry.
+- **Thêm trang Dashboard mới: "Lịch sử Worker" (Trang thứ 9)**:
+  - Cập nhật `apps/dashboard/app.py`: bổ sung trang `"Lịch sử Worker"` vào `PAGE_NAMES` và gán biểu tượng vector `clock` trong `PAGE_ICONS`.
+  - Thiết kế 3 tab chức năng:
+    1. *Lịch trình APScheduler*: Bảng chi tiết 8 job nền (nạp tin tức 15m, nạp EOD 11:30 & 15:30, bù giá catch-up 15:50, tính điểm scoring 12:00 & 16:00, gửi email 08:00, 12:30, 16:30 và đồng bộ lịch 15m) cùng sơ đồ chuỗi `market_provider_chain`.
+    2. *Nhật ký gửi Email*: Bảng theo dõi kết quả dispatch email tự động lấy từ `client.get_email_logs()`.
+    3. *Lệnh vận hành CLI*: Hướng dẫn chi tiết các lệnh vận hành worker thủ công (`ingest`, `compute-scores`, `train-model`, `run-agent`).
+  - Cập nhật bộ kiểm thử `tests/unit/test_dashboard_app.py` bao quát 9/9 trang; kiểm thử headless AppTest thành công 100%.
 
 ## 2026-09-29 — Worker: mất giá đóng cửa 2026-09-29 + index_prices đóng băng (KI-014)
 

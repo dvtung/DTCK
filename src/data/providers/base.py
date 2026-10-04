@@ -12,7 +12,7 @@ from __future__ import annotations
 from abc import ABC
 from datetime import date, datetime
 
-from src.data.records import EODBar, IndexBar, NewsItem
+from src.data.records import EODBar, EventRow, FinancialRow, IndexBar, MacroPoint, NewsItem
 
 
 class DataProvider(ABC):  # noqa: B024 — interface defined by methods, not @abstractmethod
@@ -42,3 +42,17 @@ class DataProvider(ABC):  # noqa: B024 — interface defined by methods, not @ab
     def fetch_news(self, since: datetime) -> list[NewsItem]:
         """Fetch news items published after ``since``."""
         raise NotImplementedError(f"provider '{self.id}' does not implement news")
+
+    def fetch_financials(
+        self, symbols: list[str], *, period_types: tuple[str, ...]
+    ) -> list[FinancialRow]:
+        """Fetch financial-statement line items for ``symbols`` (§5.1)."""
+        raise NotImplementedError(f"provider '{self.id}' does not implement financials")
+
+    def fetch_events(self, symbols: list[str], *, since: date) -> list[EventRow]:
+        """Fetch corporate events on/after ``since`` (§7.1)."""
+        raise NotImplementedError(f"provider '{self.id}' does not implement events")
+
+    def fetch_macro(self, indicators: list[str], *, start: date, end: date) -> list[MacroPoint]:
+        """Fetch macro series observations in ``[start, end]`` (§8.1)."""
+        raise NotImplementedError(f"provider '{self.id}' does not implement macro")

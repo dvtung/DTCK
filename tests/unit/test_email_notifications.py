@@ -11,6 +11,7 @@ from typing import Any
 import pytest
 
 from apps.api.services.market_data import MarketService
+from apps.dashboard.components import format_price
 from src.notifications.report_generator import generate_market_overview_html
 from src.notifications.smtp_mailer import SmtpMailer
 
@@ -48,9 +49,12 @@ class TestReportGenerator:
             ],
             breadth={},
             regime={},
-            ranked=[],
+            ranked=[{"symbol": "FPT", "rank": 1, "price": 132000, "overall_score": 85.0}],
         )
         assert "VNINDEX" in html
+        assert "+12.00 điểm" in html
+        assert "Giá hiện tại" in html
+        assert format_price(132000) in html
 
     def test_empty_data_still_renders_honestly(self) -> None:
         """No data must produce placeholders, never invented numbers."""
@@ -59,6 +63,70 @@ class TestReportGenerator:
         )
         assert "Chưa có dữ liệu" in html
         assert "—" in html
+
+    def test_renders_strategy_rankings_and_explanations(self) -> None:
+        strat_rankings = {
+            "short": [
+                {
+                    "symbol": "FPT",
+                    "price": 131500,
+                    "overall_score": 85.5,
+                    "grade": "A",
+                    "buy_zone_low": 130000,
+                    "buy_zone_high": 133000,
+                    "stop_loss": 125000,
+                    "target_price": 142000,
+                    "confidence": 0.88,
+                }
+            ],
+            "mid": [
+                {
+                    "symbol": "HDB",
+                    "overall_score": 79.2,
+                    "grade": "B",
+                    "buy_zone_low": 28000,
+                    "buy_zone_high": 28500,
+                    "stop_loss": 27000,
+                    "target_price": 31000,
+                    "confidence": 0.75,
+                }
+            ],
+            "long": [
+                {
+                    "symbol": "VNM",
+                    "overall_score": 68.0,
+                    "grade": "C",
+                    "buy_zone_low": 65000,
+                    "buy_zone_high": 66500,
+                    "stop_loss": 62000,
+                    "target_price": 72000,
+                    "confidence": 0.90,
+                }
+            ],
+        }
+        html = generate_market_overview_html(
+            indices=[],
+            breadth={},
+            regime={},
+            ranked=[],
+            strategy_rankings=strat_rankings,
+        )
+        assert "Chấm Điểm & Gợi Ý 3 Chiến Lược" in html
+        assert "Chiến lược Ngắn hạn" in html
+        assert "Chiến lược Trung hạn" in html
+        assert "Chiến lược Dài hạn" in html
+        assert "FPT" in html
+        assert "HDB" in html
+        assert "VNM" in html
+        assert "85.5" in html
+        assert "Vùng mua (thấp – cao)" in html
+        assert "Cắt lỗ" in html
+        assert "Mục tiêu" in html
+        assert "Độ tin cậy" in html
+        assert "Giải thích các thông tin cơ bản" in html
+        assert "Hạng A" in html
+        assert "Stop Loss" in html
+        assert format_price(131500) in html
 
 
 class TestSmtpMailer:

@@ -51,7 +51,7 @@ curl -s http://localhost:8000/api/v1/stocks/FPT/ranking | head -c 600; echo
 Endpoint:
 
 - Tài liệu API: http://localhost:8000/docs
-- Dashboard: http://localhost:8501 (8 trang gồm "Tin tức & RAG" + "📧 Quản lý Email" T018)
+- Dashboard: http://localhost:8501 (9 trang gồm Tin tức & RAG, 📧 Quản lý Email, Lịch sử Worker)
 - Qdrant: http://localhost:6333/dashboard
 
 ## Lệnh thường dùng

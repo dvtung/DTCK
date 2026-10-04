@@ -48,7 +48,7 @@ providers:
   # the market fallback chain ahead of the currently unreachable candidates.
   - id: yahoo
     description: Yahoo Finance chart API — Vietnam listings via .VN suffix (unofficial)
-    roles: [market]
+    roles: [market, corporate_events]
     auth: none
     credential_env: ""
     free: true
@@ -110,6 +110,56 @@ providers:
           close: closePrice
           volume: nmVolume
           trading_value: nmValue
+
+  # --- Fundamental data (financial statements + corporate events, GĐ 2) ----
+  - id: cafef_financials
+    description: CafeF apiweb — quarterly/annual financial statements (real BCTC)
+    roles: [fundamental]
+    auth: none
+    credential_env: ""
+    free: true
+    licensed: false
+    enabled: true
+    priority: 90
+    # 2026-10-03: VERIFIED reachable from the dev host — all three endpoints
+    # answered 200 with real FPT data (payload snapshot:
+    # tests/fixtures/cafef_financials_sample.json). SSI's FastConnect Data API
+    # has NO financial endpoints (official function list), VNDirect times out
+    # from this host, so this is the primary source for the fundamental role.
+    # Caveat: CafeF returns NO filing timestamp → published_at stays NULL.
+    endpoints_status: VERIFIED_2026-10-03
+    endpoints:
+      fundamental:
+        client: cafef_financial
+        origin: "https://apiweb.cafef.vn"
+        statements:
+          BALANCE: { path: "api/v2/BCTC/GetReportCDKT", report_type: "ALL" }
+          INCOME: { path: "api/v1/BCTC/GetReportDetail", report_type: "KQKD" }
+          CASHFLOW: { path: "api/v1/BCTC/GetReportLCTT", report_type: "ALL" }
+
+  - id: vndirect_financials
+    description: VNDirect finfo — quarterly financial statements + corporate events
+    roles: [fundamental, corporate_events]
+    auth: none
+    credential_env: ""
+    free: true
+    licensed: false
+    enabled: true
+    priority: 80
+    # SSI's FastConnect *Data* API has NO financial endpoints (verified
+    # 2026-10-03 against the official function list: AccessToken, Securities,
+    # SecuritiesDetails, DailyOhlc, DailyIndex, IndexList, IndexComponents,
+    # IntradayOhlc, DailyStockPrice). SSI's statements live in the separate
+    # iExcel product, which has no REST API — so the fundamental role is served
+    # here. Reachability from the dev host is still UNVERIFIED (same DNS/timeout
+    # caveat as `vndirect`), hence the defensive mapping in
+    # src/data/providers/vndirect_financials.py: unknown keys are skipped and a
+    # missing publication date is stored NULL — never fabricated (KI-006).
+    endpoints_status: MAPPING_TO_VERIFY_2026-10-03
+    endpoints:
+      fundamental:
+        client: vndirect_finfo
+        url: "https://finfo-api.vndirect.com.vn/v4"
 
   - id: tcbs
     description: TCBS public API (unofficial)
@@ -198,8 +248,23 @@ providers:
     free: true
     licensed: true
     enabled: true
-    priority: 70
-
+    priority: 80
+    # 2026-10-03: IMF datamapper VERIFIED reachable from the dev host
+    # (`/external/datamapper/api/v1/{indicator}/VNM` → 200, real series).
+    # World Bank / GSO / SBV APIs are NOT reachable here (timeout / no DNS /
+    # HTML-only), so only the IMF half of this entry is wired.
+    endpoints_status: VERIFIED_2026-10-03
+    endpoints:
+      macro:
+        client: imf_datamapper
+        origin: "https://www.imf.org/external/datamapper/api/v1"
+        country: VNM
+        # Only completed years are stored — IMF WEO values for later years are
+        # projections and must never be persisted as observations (§31).
+        max_year_offset: 1
+        indicators:
+          GDP_GROWTH_PCT: { code: NGDP_RPCH, unit: percent }
+          CPI_INFLATION_PCT: { code: PCPIPCH, unit: percent }
   - id: tradingeconomics
     description: TradingEconomics aggregation (paid)
     roles: [macro]
@@ -263,15 +328,15 @@ providers:
 # collectors compute this from `providers` so the two must stay consistent).
 selection:
   market: ssix_finipro
-  fundamental: ssix_finipro
+  fundamental: cafef_financials
   valuation: computed          # Quant Engine computes; no external source of truth
-  macro: sbv
-  corporate_events: ssix_finipro
+  macro: imf_worldbank
+  corporate_events: yahoo
   news: cafef
 
 fallback_chains:
   market: [yahoo, vndirect, tcbs, dsc]
-  fundamental: [vndirect, vietstock]
-  macro: [imf_worldbank, gso, tradingeconomics]
-  corporate_events: [hose, cafef]
+  fundamental: [vndirect_financials]
+  macro: [gso, tradingeconomics]
+  corporate_events: [vndirect_financials, hose, cafef]
   news: [vnexpress, vietstock_news, newsdata]

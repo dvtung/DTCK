@@ -14,7 +14,7 @@
 </header>
 <div class="wrap">
 <h2 class="sec">Tổng quan lược đồ</h2>
-<p>Nguồn chân lý duy nhất: <code>src/common/models/</code> (14 file, 42 lớp — gồm <code>notifications.py</code> với 4 bảng, T018). Migration <code>0003_email_notifications</code> (head) tạo toàn bộ bảng và chuyển 12 bảng chuỗi thời gian thành hypertable TimescaleDB. Seed: 3 sở giao dịch, 10 ngành, 15 nhóm ngành, 138 mã (VN30/VN100/HNX/UPCOM).</p>
+<p>Nguồn chân lý duy nhất: <code>src/common/models/</code> (15 file, 44 lớp — gồm <code>notifications.py</code> với 4 bảng T018 và <code>strategy.py</code> với 2 bảng T019). Migration <code>0005_strategy_scoring</code> (head) tạo toàn bộ bảng và chuyển 12 bảng chuỗi thời gian thành hypertable TimescaleDB. Seed: 3 sở giao dịch, 10 ngành, 15 nhóm ngành, 138 mã (VN30/VN100/HNX/UPCOM).</p>
 <h2 class="sec">Các bảng theo nhóm nghiệp vụ</h2>
 <table>
 <tr><th>Nhóm nghiệp vụ (file models)</th><th>Các bảng</th></tr>
@@ -32,17 +32,18 @@
 <tr><td><code>governance.py</code></td><td><code>audit_logs</code>, <code>data_quality_scores</code> ★</td></tr>
 <tr><td><code>auth.py</code></td><td><code>users</code>, <code>api_keys</code></td></tr>
 <tr><td><code>notifications.py</code> (T018)</td><td><code>email_recipients</code>, <code>email_smtp_configs</code>, <code>email_schedule_configs</code>, <code>email_send_logs</code></td></tr>
+<tr><td><code>strategy.py</code> (T019)</td><td><code>strategy_scores</code>, <code>strategy_backtest_runs</code></td></tr>
 </table>
-<p>★ = hypertable TimescaleDB (tổng 12). Quy tắc thiết kế: <code>predictions</code> giữ nguyên bảng thường (quy tắc unique-index của Timescale); khóa chính của <code>signals</code> là composite <code>(id, trade_date)</code>; <code>valuation_daily</code> được <b>tính toán</b>, không bao giờ nạp từ ngoài.</p>
+<p>★ = hypertable TimescaleDB (tổng 12). Tổng cộng 44 bảng (15 file trong <code>src/common/models/</code>). Quy tắc thiết kế: <code>predictions</code> giữ nguyên bảng thường (quy tắc unique-index của Timescale); khóa chính của <code>signals</code> là composite <code>(id, trade_date)</code>; <code>valuation_daily</code> được <b>tính toán</b>, không bao giờ nạp từ ngoài.</p>
 <h2 class="sec">Báo cáo tài chính lưỡng thời (bitemporal)</h2>
 <p><code>financial_statements</code> mang <code>valid_from / valid_to</code> song song với <code>period_end</code>. Điều chỉnh hồi tố được xử lý bằng snapshot-diff: đóng dòng cũ, mở dòng mới — truy vấn as-of luôn an toàn, không nhìn trước tương lai.</p>
-<h2 class="sec">Dữ liệu thật đã nạp (2026-09-25)</h2>
-<div class="sig"><b>prices</b> — SSI FastConnect (nguồn chính): 138 mã HOSE/HNX/UPCOM, <b>66.886 dòng</b> (2024-09-27 → 2026-09-25); <b>index_prices</b> — <b>992 dòng</b> (VNINDEX + VN30, 496/chỉ số). <b>news + news_symbols</b> — 50 bài CaféF RSS thật (2026-09-24). <b>factor_scores</b> — <code>compute-scores</code> trên 137 mã thật. <b>email_send_logs</b> (T018) — ghi mọi lượt gửi báo cáo (SUCCESS/FAILED).</div>
+<h2 class="sec">Dữ liệu thật đã nạp (2026-09-30)</h2>
+<div class="sig"><b>prices</b> — SSI FastConnect &amp; Yahoo (nguồn chính): 138 mã HOSE/HNX/UPCOM, <b>218.736 dòng</b> (2020-01-02 → 2026-09-30); <b>index_prices</b> — <b>992 dòng</b> (VNINDEX + VN30, 496/chỉ số). <b>news + news_symbols</b> — 50 bài CaféF RSS thật (2026-09-24). <b>factor_scores</b> — <code>compute-scores</code> trên toàn bộ vũ trụ lịch sử. <b>strategy_scores</b> (T019) — chấm điểm chiến lược 3 hồ sơ. <b>email_send_logs</b> (T018) — ghi mọi lượt gửi báo cáo (SUCCESS/FAILED).</div>
 <h2 class="sec">Migration &amp; seed — cách chạy</h2>
-<pre># nâng lên head (tạo 42 bảng + 12 hypertable)
+<pre># nâng lên head (tạo 44 bảng + 12 hypertable)
 alembic upgrade head
 # kiểm tra / rollback
-alembic current        # -&gt; 0003_email_notifications (head)
+alembic current        # -&gt; 0005_strategy_scoring (head)
 alembic downgrade base &amp;&amp; alembic upgrade head
 # seed lặp lại an toàn
 python -m database.seeds.run_all   # 3 sở, các ngành, 138 mã (VN30/VN100/HNX/UPCOM)
@@ -51,6 +52,6 @@ python -m database.seeds.run_all   # 3 sở, các ngành, 138 mã (VN30/VN100/HN
 python -m apps.worker.cli ingest --dataset prices --source yahoo \
   --symbols FPT,VCB,HPG,ACB --start 2026-09-01 --end 2026-09-25</pre>
 </div>
-<div class="footer">Tài liệu DTCK · cập nhật 2026-09-28 · <a href="index.html">Trang chủ</a></div>
+<div class="footer">Tài liệu DTCK · cập nhật 2026-10-04 · <a href="index.html">Trang chủ</a></div>
 </body>
 </html>

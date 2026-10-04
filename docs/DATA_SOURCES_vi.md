@@ -44,8 +44,12 @@
 
 | Nguồn | Vai trò | Trạng thái 2026-09-27 |
 |---|---|---|
-| `ssix_finipro` (SSI FastConnect) | chính thị trường + cơ bản + sự kiện + tin | **kiểm chứng 2026-09-27** (consumer credential live): `Market/AccessToken` (JWT, cache + refresh khi 401), `Market/DailyOhlc` (68 dòng · quality 93.74), `Market/DailyIndex` (34 dòng) — KI-006/KI-007 đã đóng phần thị trường |
+| `ssix_finipro` (SSI FastConnect) | chính thị trường (+ tin) | **kiểm chứng 2026-09-27** (consumer credential live): `Market/AccessToken` (JWT, cache + refresh khi 401), `Market/DailyOhlc` (68 dòng · quality 93.74), `Market/DailyIndex` (34 dòng) — KI-006/KI-007 đã đóng phần thị trường. **KHÔNG có endpoint báo cáo tài chính** (xem mục 8.1) |
+| `cafef_financials` (CafeF apiweb) | **cơ bản** — BCTC quý/năm (CĐKT, KQKD, LCTT) | **kiểm chứng 2026-10-03**: cả 3 endpoint trả `200` với dữ liệu FPT thật (snapshot: `tests/fixtures/cafef_financials_sample.json`); nạp live VN30 → `financial_statements` có dữ liệu thật. Lưu ý: CafeF **không** trả ngày công bố ⇒ `published_at = NULL`; một số chỉ tiêu LCTT có giá trị rác (vượt `Numeric(24,4)`) → bị gắn cờ + bỏ |
+| `vndirect_financials` (VNDirect finfo) | cơ bản + sự kiện DN (dự phòng) | provider `VNDirectFinancialProvider` (mapping phòng thủ); **chưa kiểm chứng live** — `finfo-api.vndirect.com.vn` timeout từ host dev → `MAPPING_TO_VERIFY_2026-10-03` |
 | `yahoo` | dự phòng thị trường — EOD OHLCV mã `.VN` (anonymous) | **kiểm chứng 2026-09-25**: un-adjust tách qua `events=split`, `trading_value` ≈ close×volume, bỏ dòng volume 0 |
+| `yahoo` (corporate actions) | **sự kiện doanh nghiệp** — cổ tức tiền mặt + tách cổ phiếu | **kiểm chứng 2026-10-03** (`events=div,split` trên cùng endpoint chart): nạp live VN30 → 238 dòng (154 DIVIDEND + 84 SPLIT), 2020-02→2026-10. `announced_date` = NULL (Yahoo không công bố ngày thông báo) |
+| `imf_worldbank` (IMF datamapper) | **vĩ mô** — GDP growth + CPI inflation (năm) | **kiểm chứng 2026-10-03** (`/external/datamapper/api/v1/{code}/VNM` → 200): nạp live → 32 dòng (2010–2025). **Chỉ lưu năm đã kết thúc** — dự báo WEO không bao giờ được ghi. World Bank/GSO/SBV **không** reachable từ host dev (timeout/DNS/HTML) |
 | `vndirect`, `tcbs`, `dsc` | dự phòng thị trường/cơ bản (anonymous, không chính thức) | đã chọn làm dự phòng (vndirect/tcbs unreachable từ host 2026-09-25) |
 | `sbv`, `gso`, `imf_worldbank` | vĩ mô (công khai chính thức) | đã chọn |
 | `cafef`, `vnexpress`, `vietstock_news` | tin tức Việt (RSS) | CaféF **kiểm chứng 2026-09-25** (parser stdlib, đã nạp 50 bài thật); còn lại đã chọn |
@@ -60,9 +64,9 @@
 | Miền | Chính | Dự phòng | Ghi chú |
 |---|---|---|---|
 | Thị trường EOD | `ssix_finipro` | `yahoo` → `vndirect` → `tcbs` → `dsc` | `ssix_finipro` đã kiểm chứng 2026-09-27 (consumer credential); `yahoo` kiểm chứng 2026-09-25 (chart v8, anonymous) |
-| Cơ bản | `ssix_finipro` | `vndirect` → `vietstock` | endpoint cơ bản của SSI còn chờ kiểm chứng (KI-006 phần còn lại) |
-| Vĩ mô | `sbv` / `gso` | `imf_worldbank` (+ `tradingeconomics` nếu có phép) | nguồn công khai chính thức |
-| Sự kiện doanh nghiệp | `ssix_finipro` | `hose` → `cafef` | `hose`/`hnx` chờ đọc cấp phép |
+| Cơ bản | `cafef_financials` (CafeF apiweb) | `vndirect_financials` | **SSI không có endpoint BCTC** (danh sách hàm FastConnect Data xác nhận 2026-10-03; BCTC của SSI ở sản phẩm iExcel — không có REST API). CafeF `apiweb` **kiểm chứng 2026-10-03** (3 endpoint 200 + nạp live VN30); VNDirect finfo là dự phòng nhưng timeout từ host dev |
+| Vĩ mô | `imf_worldbank` (IMF datamapper) | `gso` → `tradingeconomics` | **IMF kiểm chứng 2026-10-03** cho `GDP_GROWTH_PCT` + `CPI_INFLATION_PCT`; GSO không có DNS, TradingEconomics cần trả phí. Lãi suất/tăng trưởng tín dụng chưa có nguồn reachable |
+| Sự kiện doanh nghiệp | `yahoo` (div/split) | `vndirect_financials` → `hose` → `cafef` | **Yahoo kiểm chứng 2026-10-03** (238 sự kiện VN30); `hose`/`hnx` chờ đọc cấp phép |
 | Tin tức | `cafef` | `vnexpress` → `vietstock` | CaféF RSS đã kiểm chứng 2026-09-25 (50 bài thật) |
 
 ---
@@ -128,7 +132,12 @@ Dự phòng **không lặng lẽ**: mỗi lần chuyển ghi vào `audit_logs` �
    `consumerID`/`consumerSecret` và trả JWT (provider cache theo tiến trình, tự
    xin lại khi gặp 401); `Market/DailyOhlc` + `Market/DailyIndex` đã kiểm chứng
    (68 + 34 dòng, `VERIFIED_2026-09-27`). Còn chờ: hạn mức tần suất chính thức
-   theo gói và các endpoint cơ bản/sự kiện (`Financial/*`, `CorporateEvents`).
+   theo gói. **Đã đóng câu hỏi endpoint cơ bản/sự kiện (2026-10-03):** danh
+   sách hàm FastConnect Data chỉ có 9 endpoint thị trường
+   (`AccessToken/Securities/SecuritiesDetails/DailyOhlc/DailyIndex/IndexList/
+   IndexComponents/IntradayOhlc/DailyStockPrice`) — **không có** BCTC. BCTC của
+   SSI nằm ở sản phẩm **iExcel** (`IE.BalanceSheet/IncomeStatement/CashFlow`)
+   không có REST API ⇒ vai trò `fundamental` chuyển sang `vndirect_financials`.
 2. URL endpoint & schema response chính xác cho `vndirect`, `tcbs`, `dsc`
    (API không tài liệu — phải snapshot-test). **Đã giải cho `yahoo` ngày
    2026-09-25** (chart v8 đã kiểm chứng + ghi trong
@@ -136,6 +145,12 @@ Dự phòng **không lặng lẽ**: mỗi lần chuyển ghi vào `audit_logs` �
    un-adjust qua `events=split`), không có trường turnover
    (`trading_value` = xấp xỉ close × volume), bỏ dòng placeholder volume 0,
    `meta.fullExchangeName` gán sai sàn ngoài HOSE.
+   **Mở cho BCTC (GĐ 2):** `vndirect_financials` viết mapping phòng thủ
+   (chấp nhận nhiều tên trường, bỏ dòng thiếu giá trị, `published_at` thiếu →
+   `NULL`) nhưng `finfo-api.vndirect.com.vn` **timeout từ host dev** nên payload
+   thật chưa snapshot được → `MAPPING_TO_VERIFY_2026-10-03`. Khi có mạng, chạy
+   `ingest --dataset financials --source vndirect_financials --symbols FPT`
+   và ghi fixture vào `tests/fixtures/vndirect_financials_sample.json`.
 3. Độ phủ từng mã của **khối ngoại / tự doanh** ở vendor dự phòng.
 4. Khả năng diễn đạt **`report_date` (ngày nộp)** và hình thù **diff điều chỉnh** của NCC Việt —
    kiểm chứng thiết kế snapshot-diff ở §4.2.

@@ -2,6 +2,134 @@
 
 > Thuật ngữ chuyên môn (tên bảng, biến môi trường, lệnh, đường dẫn) giữ nguyên tiếng Anh.
 
+## Task: T021 — Module "Chấm điểm & Gợi ý cổ phiếu đa chiến lược" (3 hồ sơ: ngắn/trung/dài hạn)
+
+**Trạng thái:** ĐANG TRIỂN KHAI — GĐ 1 HOÀN THÀNH (2026-10-03)
+**Nguồn yêu cầu:** `docs/cline_prompt_stock_scoring_module.md` (đã duyệt kế hoạch 6 giai đoạn).
+**Quyết định đã chốt (user, 2026-10-03):** financials dùng `ssix_finipro` trước, fail thì sang nguồn khác · adapter mới cho SSI được phép · chỉ email (không Telegram) · **bảng mới** hoàn toàn, không sửa `factor_scores` · tuần tự GĐ 1→6, VN30 + hồ sơ **trung hạn** trước.
+
+### Tiến độ GĐ:
+- [x] **GĐ 1 — Cấu hình + schema + khung module (2026-10-03)**
+  - `configs/strategy_weights.yaml` (`strategy_v1.0`: 3 profile × 7 nhóm, grade A≥80/B≥65/C≥50, `require_trend_confirmation: [short]`) + `configs/redflag_thresholds.yaml` (`redflag_v1.0`: thanh khoản ≥1 tỷ VND/20 phiên, lỗ ≥2 năm + OCF âm, D/E ≤2.0 override `banking/securities: null`, `realestate: 3.0`).
+  - `src/common/models/strategy.py` (mới): `StrategyScore` + `StrategyRecommendation` (PK `(stock_id, trade_date, strategy)`); `financial_statements.published_at TIMESTAMPTZ NULL` (chống look-ahead).
+  - Migration `0005_strategy_scoring.py`: create idempotent (pattern 0002, `inspector.has_table`), hypertable `strategy_scores` theo `trade_date` (1 month), `ADD COLUMN IF NOT EXISTS published_at`.
+  - Package `src/quant/strategy/`: `groups.py` (7 nhóm + `GROUP_COLUMNS`), `config.py` (nạp/validate YAML, tổng trọng số = 1.0), `scoring.py` (`score_profile`: chuẩn hoá lại, Σ contribution = 1, confidence theo coverage), `recommend.py` (grade A–D, `short` không confirm trend → capped C, disclaimer §3), `redflags.py` (evaluate theo YAML, input None → `unchecked`, không flag).
+  - Test `tests/unit/test_strategy_scoring.py` (30 test) + `test_models.py` thêm 2 bảng.
+- [x] **GĐ 2 (phần ETL) — Provider + pipeline financials/events (2026-10-03)**
+  - **Kết luận SSI (FACT, 2026-10-03):** danh sách hàm FastConnect Data (official docs) chỉ có 9 endpoint thị trường — **không có** báo cáo tài chính; BCTC của SSI nằm ở sản phẩm **iExcel** (`IE.BalanceSheet/IncomeStatement/CashFlow`) không có REST API. → Theo quyết định "SSI không được thì chọn nguồn khác", vai trò `fundamental` chuyển sang **`vndirect_financials`**.
+  - `src/data/records.py`: + `FinancialRow`, `EventRow`, `MacroPoint`.
+  - `src/data/providers/base.py`: + `fetch_financials` / `fetch_events` / `fetch_macro`.
+  - `src/data/providers/vndirect_financials.py` (mới): `VNDirectFinancialProvider` — mapping **phòng thủ** (nhiều tên trường, bỏ dòng thiếu giá trị, `published_at` thiếu → `None`/`NULL`, KHÔNG bịa).
+  - `src/data/providers/fixture.py`: + `build_financial_fixture_rows` / `build_event_fixture_rows` (offline; `published_at` = cuối quý + 45 ngày), cờ `include_financials`/`include_events`.
+  - ETL đầy đủ: `collect_financials`/`collect_events` → `validate_*` → `normalize_*` → `ingest_financials`/`ingest_events` (chunked, snapshot-diff lưỡng thời: đổi giá trị → đóng `valid_to` + chèn bản mới; chỉ lệch `published_at` → sửa tại chỗ; không đổi → no-op; events dedup app-level `(stock_id, event_type, event_date)`).
+  - Registry: `financial_provider_chain()` + `create_provider("vndirect_financials")`; `configs/sources.yaml` thêm provider `vndirect_financials` (`MAPPING_TO_VERIFY_2026-10-03`), `selection.fundamental/corporate_events` trỏ tới nó.
+  - CLI: `ingest --dataset {financials,events}` + `--period-types`; fixture provider tự bật financials/events theo dataset.
+  - Test mới: `tests/unit/test_vndirect_financials.py` (14) + `tests/integration/test_financial_ingestion.py` (2, ghi trong transaction rollback theo KI-013).
+  - Docs: `docs/DATA_SOURCES_vi.md` (bảng provider, miền, mục 8.1/8.2) + `helper/resources_vi.md` (3 lệnh CLI mới).
+- [x] **GĐ 2 (phần nguồn) — Tìm nguồn BCTC thật: CafeF `apiweb` VERIFIED + nạp VN30 (2026-10-03)**
+  - **`cafef_financials` (chính):** `CafefFinancialProvider` — 3 endpoint `apiweb.cafef.vn` (`GetReportCDKT` CĐKT · `GetReportDetail` KQKD · `GetReportLCTT` LCTT), tham số `symbol/pageIndex/pageSize/reportType/TypeTime=QUY|NAM`. **Kiểm chứng 2026-10-03**: cả 3 trả `200` với dữ liệu FPT thật; snapshot payload ghi vào `tests/fixtures/cafef_financials_sample.json` (162 KB).
+  - Payload: response `{isSuccess, value:{templace, data}}`; `data` **gom nhóm** (CĐKT/LCTT) hoặc **phẳng** (KQKD) → parser bóc cả hai; kỳ `"Q2-2026"` / `"2025"`, `quater=0` cho kỳ năm; **không có ngày công bố** ⇒ `published_at = NULL` (trung thực, không bịa).
+  - **Phát hiện dữ liệu thật:** một số chỉ tiêu LCTT trả giá trị rác (vd `-1.59e27` cho `HDKD_12`) vượt `Numeric(24,4)` → thêm `MAX_ABS_FINANCIAL_VALUE = 1e20` + `financial_key()` + `corrupt_financial_keys()`: bị **gắn cờ trong issues + bỏ khỏi bản ghi** (không bao giờ scale/round), cùng nhóm với guard OHLC.
+  - `configs/sources.yaml`: provider `cafef_financials` (`VERIFIED_2026-10-03`, `priority 90`), `selection.fundamental: cafef_financials`, fallback `vndirect_financials`.
+  - **Nạp live VN30 (fact):** `ingest --dataset financials --source cafef_financials --symbols <30 mã VN30> --period-types QUARTER YEAR` → `fetched=204065 written=190125 skipped=13940 issues=2803 quality=99.58`. CSDL: **201.402 dòng `financial_statements`, đủ 30 mã**, 113.157 quý + 88.245 năm, BALANCE 120.988 / CASHFLOW 50.894 / INCOME 29.520, khoảng `2005-12-31 → 2026-06-30`. Kiểm chứng: FPT doanh thu Q2-2026 = `13.788.503.461.199` VND (đúng số liệu thật). Chạy lại → `written=0` (idempotent).
+  - Test mới: `tests/unit/test_cafef_financials.py` (11).
+- [x] **GĐ 2 (phần còn lại) — Sự kiện doanh nghiệp + Vĩ mô thật (2026-10-03)**
+  - **Sự kiện doanh nghiệp ← Yahoo `events=div,split`** (cùng endpoint chart đã VERIFIED): thêm `YahooChartProvider.fetch_events` (`SUPPORTED_DATASETS = {prices, events}`), `EventRow` cho DIVIDEND (`cash_amount`) và SPLIT (`numerator/denominator/ratio`); `announced_date = NULL` (Yahoo không công bố). **Sửa lỗi tiềm ẩn:** `HttpJsonProvider.__init__` ghi instance `SUPPORTED_DATASETS` đè class attr của subclass → chuyển lên class-level. **Fix JSONB:** `normalize_events` chuyển `Decimal` trong `details` → `float` (JSONB không serialize Decimal).
+    - Nạp live VN30 `since 2020-01-01` → **fetched=238 written=238**; CSDL: 238 dòng (154 DIVIDEND + 84 SPLIT), 29 mã, 2020-02-04 → 2026-10-02.
+  - **Vĩ mô ← IMF datamapper** (`ImfMacroProvider`, id `imf_worldbank`): `GDP_GROWTH_PCT` (NGDP_RPCH) + `CPI_INFLATION_PCT` (PCPIPCH) cho VNM; **chỉ lưu năm đã kết thúc** (`max_year_offset=1`) — dự báo WEO không bao giờ được ghi.
+    - Nạp live `2010→2026` → **fetched=32 written=32 quality=100.00**; CSDL: 32 dòng, 2010-12-31 → 2025-12-31 (unit percent).
+  - ETL: `collect_macro`/`validate_macro`/`normalize_macro`/`ingest_macro` (upsert PK `(indicator_code, period_date)`); CLI `--dataset {events,macro}` + `--indicators`.
+  - `configs/sources.yaml`: `yahoo` thêm role `corporate_events`; `imf_worldbank` thêm `endpoints.macro` (`VERIFIED_2026-10-03`) + priority 80; `selection.corporate_events: yahoo`, `selection.macro: imf_worldbank`.
+  - Test mới: `tests/unit/test_events_macro.py` (9) + integration `test_macro_ingestion_roundtrip_and_upsert`.
+- [~] **`published_at` — QUYẾT ĐỊNH (giữ nguyên NULL):** cả CafeF (BCTC) và Yahoo (sự kiện) **không trả ngày công bố**, nên cột giữ `NULL` — không bịa. Chống look-ahead ở GĐ 3 sẽ dùng `COALESCE(published_at, report_date + lag)` với `lag` từ cấu hình (mốc pháp lý VN: 45 ngày quý / 90 ngày năm) — chọn mốc **muộn nhất** là hướng an toàn (không bao giờ thấy dữ liệu sớm hơn thực tế).
+- [x] **GĐ 3 — Feature Engine + chuẩn hoá ngành (2026-10-03)**
+  - `configs/strategy_features.yaml` (`features_v1.0`): `publication_lag_days {QUARTER: 45, YEAR: 90}` (mốc pháp lý VN), `price_lookback_days`, `history`.
+  - `src/quant/strategy/features.py`: `FeatureSnapshot`/`PeriodValues` + **24 feature thuần** có registry (`FEATURES`) với `group`, `direction` (±1), `exclude_industries`.
+    - technical: `price_vs_sma20/50/200`, `return_20d`, `return_63d`, `rs_vs_index_63d`, `macd_hist_pct`, `atr20_pct` (−1)
+    - moneyflow: `avg_value_20d`, `volume_ratio_20d`
+    - growth: `revenue_yoy`, `net_profit_yoy`, `revenue_cagr_3y`
+    - quality: `roe_ttm`, `roa_ttm`, `net_margin`, `cfo_to_net_profit_ttm`
+    - valuation: `pe_ttm` (−1), `pb` (−1), `dividend_yield_ttm`
+    - macro: `catalyst_event_ttm`
+    - governance: `debt_to_equity` (−1), `current_ratio`, `redflag_free` — **loại trừ ngân hàng/chứng khoán/bảo hiểm** cho bộ đòn bẩy/định giá chung.
+  - Mã VAS dùng (đã kiểm chứng từ payload thật): `10` doanh thu, `20` lãi gộp, `60` LNST, `70` EPS, `100/110/270/300/310/400` CĐKT, `HDKD_20` LCTT. `pb` suy ra số cổ phiếu = LNST TTM ÷ EPS TTM (diễn giải có ghi chú, không bịa).
+  - `src/quant/strategy/feature_engine.py`: `compute_snapshots` (đọc prices/index_prices/financial_statements/corporate_events + industry), **luật chống look-ahead** `_usable_from = published_at hoặc report_date + lag`, `compute_group_scores` (percentile theo vũ trụ, áp `direction`, thiếu dữ liệu → loại khỏi mẫu số + báo `missing`), `compute_and_store_features` (upsert bảng `features`, tên `grp:<nhóm>` cho điểm nhóm).
+  - CLI `compute-features --as-of --symbols`.
+  - **Kiểm chứng live (fact):** `compute-features` cho 30 mã VN30 → **written=761**; CSDL `features` 761 dòng/30 mã, đủ 7 nhóm; FPT: P/E 12.01, P/B 3.20, ROE 26.7%, doanh thu YoY −17.1%, price/SMA200 −20.7%; top growth VIC 90.6 / VHM 85.7 / VCB 82.6.
+  - Test mới: `tests/unit/test_strategy_features.py` (13) + integration `test_feature_engine_persists_and_is_idempotent`.
+  - **Hạn chế đã biết (ghi nhận cho GĐ 4):** `percentile_rank` (strictly-less-than) làm feature nhị phân/bằng điểm thoái hoá — `catalyst_event_ttm` bằng nhau ở mọi mã ⇒ `grp:macro` = 0 cho tất cả. Cần dùng mid-rank cho ties, hoặc thay catalyst bằng feature liên tục.
+- [x] **GĐ 4 — Red flag + chấm điểm 3 chiến lược + gợi ý + job scheduler (2026-10-03)**
+  - **Sửa lỗi GĐ 3 (mid-rank):** thay `percentile_rank` (strictly-less-than) bằng `_rank_percentile` mid-rank `(less + 0.5×equal)/n×100` → feature nhị phân/bằng điểm không còn thoái hoá về 0 (live: `grp:macro` từng = 0 mọi mã; nay 66.67/16.67 đúng thứ tự).
+  - `src/quant/strategy/recommend.py`: thêm `atr()` (close-to-close, ghi chú rõ là xấp xỉ), `price_levels()` (vùng mua = `[close−ATR, close+0.25·ATR]`, stop = `close−2·ATR`, target = `close+3·ATR`, R/R = 1.50), `trend_confirmed()` (`close > SMA20 > SMA50` — cổng cho grade A/B của `short`).
+  - `src/quant/strategy/job.py`: `compute_and_store_strategy_scores(engine, as_of, symbols)` — chụp dữ liệu as-of → tính features + 7 nhóm → `score_profile` × 3 hồ sơ → `build_recommendation` (gắn trend gate cho `short`) → upsert `strategy_scores` + `strategy_recommendations` (JSONB cast qua `cast(:x as jsonb)` + `json.dumps` — psycopg không adapt dict/list).
+  - **Scheduler:** job `daily_strategy_scoring` Mon–Fri **16:15 ICT** (sau scoring 16:00, cùng phiên đóng) — biến `scheduler_strategy_hour/minute` trong `apps/api/config.py`.
+  - CLI `strategy-scores`.
+  - **Kiểm chứng live (fact):** `strategy-scores` 30 mã VN30 as_of 2026-10-03 → **scored=90 skipped=0 written=90**; CSDL: `strategy_scores`=90, `strategy_recommendations`=90. Phân bố grade: mid A=1 B=2 C=9 D=18 · short A=1 B=1 C=11 D=17 · long B=2 C=13 D=15. FPT mid: score 47.2 → D, vùng mua 61.125–62.344, stop 60.150, target 65.025, R/R 1.50, confidence 0.6863. HDB đạt **A** (mid 81.2 / short 80.1). Lý do tiếng Việt có % đóng góp (vd "Nhóm 'technical' đóng góp 62% điểm (giá trị 92/100)").
+  - Test: `tests/unit/test_strategy_job.py` (13) + `test_worker_scheduler.py` (+1 job đăng ký + thứ tự sau 16:00) + integration `test_strategy_scoring_persists_and_is_idempotent`.
+- [x] **GĐ 5 — Backtest module điểm + báo cáo (2026-10-03)**
+  - `src/quant/strategy/backtest.py`: `load_backtest_data` (OHLCV thật từ `prices`/`index_prices`, lịch nến theo benchmark, **carry-forward ngày ngưng GD** với `volume=0` — quy ước, không ghi ngược vào DB; mã chưa có giá trước ngày đầu → **loại** thay vì bịa), `rebalance_dates`, `score_schedule` (mỗi ngày rebalance chấm điểm **as-of** — dùng đúng luật chống look-ahead của GĐ 3), `top_weights` (top-N trọng số đều, tie-break theo mã), `build_strategy` (trả weights đúng ngày rebalance, `{}` ngày khác → engine giữ vị thế), `_benchmark_metrics` (VNINDEX mua & giữ cùng cửa sổ), `run_strategy_backtest` → `BacktestReport` (metrics + benchmark).
+  - CLI `backtest-strategy --profile --top-n --rebalance-days --start --end` (in bảng strategy vs benchmark).
+  - **Kiểm chứng live (FACT, 2025-10-01→2026-09-30, VN30, top-5, 21 phiên):**
+    | Hồ sơ | Tổng LN | Sharpe | MaxDD | Thắng | PF | Vòng quay |
+    |---|---|---|---|---|---|---|
+    | short | −15.22% | −0.43 | −35.97% | 50.9% | 0.75 | 17.5× |
+    | mid | −17.09% | −0.66 | −24.48% | 43.5% | 0.64 | 13.5× |
+    | long | −14.44% | −0.56 | −32.73% | 42.5% | 0.63 | 9.8× |
+    | **VNINDEX** | **+6.22%** | **+0.40** | **−16.38%** | — | — | 0 |
+    → **cả 3 hồ sơ thua chỉ số** trong cửa sổ này.
+  - Báo cáo + đề xuất tinh chỉnh: **`docs/strategy_backtest_report_vi.md`** (6 đề xuất ưu tiên: cổng chế độ thị trường `VNINDEX > SMA50`, giảm vòng quay (rebalance 63 phiên + vùng đệm top-10), walk-forward tinh chỉnh trọng số, bổ sung dữ liệu governance/khối ngoại, mở rộng VN100, kiểm chứng đa cửa sổ). **Khuyến nghị KHÔNG bật tín hiệu thật ở trạng thái hiện tại** (§3 + ADR-007).
+  - Test: `tests/unit/test_strategy_backtest.py` (11) + integration `test_strategy_backtest_runs_and_reports_benchmark`.
+- [x] **GĐ 6 — API + dashboard + cảnh báo email + mở rộng VN100 (2026-10-04)**
+  - **API** — router mới `apps/api/routers/strategy.py` + `apps/api/services/strategy_service.py` (`DbStrategyService` đọc CSDL / `NullStrategyService` trả rỗng trung thực khi không có DB; dependency `StrategyDep` trong `dependencies.py`):
+    - `GET /api/v1/strategy/rankings?strategy=&universe=vn30|vn100&limit=&offset=` → envelope `{items,total,limit,offset}` — mỗi dòng có điểm 7 nhóm, grade, vùng mua/cắt lỗ/mục tiêu, R/R, confidence, lý do/rủi ro tiếng Việt, `data_flags`, `disclaimer` §3
+    - `GET /api/v1/strategy/{symbol}` → 3 hồ sơ của 1 mã
+    - `GET /api/v1/strategy/{symbol}/history?strategy=&limit=`
+    - unknown profile → **422**, unknown symbol → **404**
+  - **Dashboard** — trang thứ 10 **"Chấm điểm chiến lược"** (icon `bars`): chọn hồ sơ + vũ trụ, bảng xếp hạng, biểu đồ 30 mã tô màu theo grade, expander giải thích nhóm chỉ số/lý do/rủi ro + disclaimer. AppTest 10/10 trang; **kiểm chứng render với dữ liệu thật** (AppTest + API thật): không exception, 1 dataframe 30 dòng, cột đủ.
+  - **Cảnh báo đổi grade** — `src/quant/strategy/alerts.py`: `detect_grade_changes` (so 2 phiên chấm điểm gần nhất, im lặng khi <2 phiên), `build_change_email` (HTML thuần, escape ký tự, luôn kèm §3), `send_grade_change_alert` (dùng lại SMTP stack T018 — `NotificationService.get_mailer()` + `get_recipients()`, báo lỗi rõ nếu chưa cấu hình/空 danh sách). Hook vào `scheduled_strategy_scoring_job` (chỉ gửi khi **có thay đổi**) + CLI `notify-strategy-changes [--dry-run]`.
+  - **VN100** — `compute-features` + `strategy-scores` trên 100 mã: **features written=1599**, **strategy scores written=300** (100×3). Lọc `universe=vn100` trên API → total=100; `vn30` → 30; không lọc → 100.
+  - **Test**: `tests/unit/test_strategy_api.py` (9) + `test_strategy_alerts.py` (9) + `test_dashboard_app.py` (10 trang) + integration (2: detect delta + không cảnh báo giả).
+  - **Sửa lỗi trong lúc làm:** test detect dùng ngày `strategy_scores` chứ không phải ngày `prices` (chúng khác nhau: prices max 2026-10-02 vs scores 2026-10-03) → thêm helper `_latest_scored_date`.
+- [x] **Toàn bộ GĐ 1–6 của module "Chấm điểm & Gợi ý cổ phiếu đa chiến lược" hoàn tất (2026-10-04).** Xem `docs/strategy_backtest_report_vi.md` trước khi cân nhắc bật tín hiệu thật.
+- [x] **Bổ sung chọn khung thời gian VNINDEX & tích hợp Chấm điểm chiến lược vào Email (2026-10-04)**:
+  - Dashboard: Bộ chọn 9 khung thời gian cho biểu đồ nến ngày VNINDEX (`Tất cả`, `3 năm`, `2 năm`, `1 năm`, `6 tháng`, `3 tháng`, `1 tháng`, `2 tuần`, `1 tuần`) với `rangebreaks` cuối tuần.
+  - Sửa lỗi `AttributeError: get_strategy_rankings`: Thêm mount `./src:/app/src` và `./configs:/app/configs` vào `dashboard` trong `docker-compose.yml`, fallback `STRATEGY_DISCLAIMER`.
+  - Email báo cáo thị trường (`src/notifications/`): Tích hợp bảng Top 10 mã VN30 cho cả 3 hồ sơ (Ngắn hạn, Trung hạn, Dài hạn) với 8 cột (Hạng, Mã, Điểm, Xếp hạng A–D, Vùng mua thấp–cao, Cắt lỗ, Mục tiêu, Độ tin cậy) kèm hộp giải thích chi tiết 6 thông tin cơ bản. Nối tự động qua `NotificationService`, router API và scheduler worker. Unit test `test_renders_strategy_rankings_and_explanations` pass 100%.
+- [x] **Đổi Delta Chỉ số VN30/VNINDEX từ % sang Số điểm Tăng/Giảm (2026-10-04)**:
+  - Khắc phục lỗi hiển thị luôn là `0.0%` do nguồn SSI lưu `open = close`.
+  - `apps/api/schemas.py`: Bổ sung `change` và `change_pct` vào `IndexPriceOut`.
+  - `apps/api/services/db_market.py` & `market_data.py`: Dùng `lag(close)` tính mức tăng giảm điểm số so với phiên trước.
+  - `apps/dashboard/app.py`: Đổi metric delta VN30 sang số điểm tăng/giảm (`-14.58 điểm`), bổ sung cột `"+/- điểm"` trong bảng Chỉ số và delta VNINDEX dưới biểu đồ nến.
+
+### Kiểm chứng GĐ 1 (fact, 2026-10-03):
+- `ruff check .` → All checks passed (kèm sửa lỗi lint có sẵn của T020 trong `apps/dashboard/app.py` + `scripts/backfill_history.py`).
+- `mypy src apps` → **147 tệp** sạch.
+- `pytest tests/unit` → **616 passed, 3 skipped** (586 cũ + 30 mới).
+- `pytest tests/integration` → **30 passed, 1 failed pre-existing**: `test_news_reader_exposes_linked_symbols` — `news` đã 210 dòng > `DEFAULT_LIMIT=200`, fixture 2026-08-05 bị sort DESC loại khỏi top 200 (xác minh fail cả khi gỡ hết thay đổi GĐ 1; cần sửa ở task riêng).
+- Migration: `alembic upgrade head` → `0005_strategy_scoring (head)`; downgrade `0004` → upgrade lại OK.
+
+---
+
+## Task: T020 — Backfill Dữ liệu Lịch sử (2020–2026) + Huấn luyện lại ML + Trang Lịch sử Worker cho Dashboard
+## Task: T020 — Backfill Dữ liệu Lịch sử (2020–2026) + Huấn luyện lại ML + Trang Lịch sử Worker cho Dashboard
+
+**Trạng thái:** HOÀN THÀNH (2026-09-30)
+**Mục tiêu:** (1) Nạp dữ liệu lịch sử từ 2020-01-01 tới nay cho toàn bộ 138 mã cổ phiếu và chỉ số (VNINDEX, VN30); (2) Chạy lại tính điểm nhân tố quant; (3) Huấn luyện lại mô hình ML dự đoán xu hướng giá từ CSDL và lưu vào Model Registry; (4) Thêm trang "Lịch sử Worker" trên Dashboard Streamlit.
+
+### Sản phẩm:
+- [x] `scripts/backfill_history.py` — nạp EOD giá 138 mã qua chuỗi `ssix_finipro → yahoo`, nạp `index_prices`, tính toán lại điểm số quant `compute_and_store_scores`, và gọi pipeline huấn luyện lại mô hình `ModelTrainer(algorithm="xgboost")` kết nối CSDL TimescaleDB.
+- [x] CSDL: Tổng số bản ghi `prices` tăng vọt từ ~67.000 lên **218.736 bản ghi** (từ 02/01/2020 đến 30/09/2026).
+- [x] ML: Mô hình `price_direction_xgb@1.0.0` được fit trên tập dữ liệu lịch sử mở rộng từ CSDL thật, lưu artifact vào CSDL `model_registry`.
+- [x] `apps/dashboard/app.py`: Bổ sung trang thứ 9 **"Lịch sử Worker"** (3 tab: Lịch trình APScheduler 8 job, Nhật ký gửi email tự động, Lệnh vận hành CLI).
+- [x] `tests/unit/test_dashboard_app.py`: Cập nhật fixture danh sách trang (9 trang), chạy 10/10 test AppTest pass.
+
+### Kiểm chứng (fact, 2026-09-30):
+- `MARKET_DATA_SOURCE=memory pytest tests/unit` → **586 passed, 3 skipped**.
+- `pytest tests/integration` → **31 passed**.
+- Headless AppTest dashboard → **9/9 trang render hoàn hảo không exception**.
+
+---
+
 ## Task: MAINT-2026-09-29 — Sửa test xoá dữ liệu thật (KI-013) + Worker mất giá đóng cửa (KI-014)
 
 **Trạng thái:** HOÀN THÀNH (2026-09-29)

@@ -31,7 +31,6 @@ from apps.dashboard.components import (
     contribution_rows,
     evidence_rows,
     format_date,
-    format_percent,
     format_price,
     indicator_dict,
     metric_rows,
@@ -42,6 +41,14 @@ from apps.dashboard.components import (
     ranking_rows,
     signal_label,
 )
+
+try:
+    from src.quant.strategy.recommend import DISCLAIMER as STRATEGY_DISCLAIMER
+except ImportError:
+    STRATEGY_DISCLAIMER = (
+        "Hệ thống DTCK hỗ trợ nghiên cứu và ra quyết định đầu tư (§3). "
+        "Không cam kết lợi nhuận, không tự động giao dịch."
+    )
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -63,11 +70,13 @@ PAGE_NAMES = (
     "Tổng quan",
     "Bộ lọc cổ phiếu",
     "Xếp hạng",
+    "Chấm điểm chiến lược",
     "Chi tiết mã",
     "Backtest",
     "Tin tức & RAG",
     "Quản lý Email",
     "Sức khỏe hệ thống",
+    "Lịch sử Worker",
 )
 
 #: Page label → icon name in ``theme.ICON_PATHS`` (no emoji as icons).
@@ -75,11 +84,13 @@ PAGE_ICONS: dict[str, str] = {
     "Tổng quan": "grid",
     "Bộ lọc cổ phiếu": "filter",
     "Xếp hạng": "trophy",
+    "Chấm điểm chiến lược": "bars",
     "Chi tiết mã": "compass",
     "Backtest": "flask",
     "Tin tức & RAG": "news",
     "Quản lý Email": "mail",
     "Sức khỏe hệ thống": "pulse",
+    "Lịch sử Worker": "clock",
 }
 
 with st.sidebar:
@@ -238,12 +249,23 @@ def page_market_overview() -> None:
     with k1:
         if indices:
             ix = indices[0]
-            base = float(str(ix.get("open", 1))) or 1.0
+            code = str(ix.get("index_code", "VN30"))
             close = float(str(ix.get("close", 0)))
+            change = ix.get("change")
+            if change is not None:
+                delta_str = f"{float(change):+.2f} điểm"
+            else:
+                p_bars = c.get_index_prices(code)
+                if p_bars and len(p_bars) >= 2:
+                    diff = float(p_bars[-1].get("close", close)) - float(p_bars[-2].get("close", close))
+                    delta_str = f"{diff:+.2f} điểm"
+                else:
+                    base = float(str(ix.get("open", close))) or close
+                    delta_str = f"{close - base:+.2f} điểm"
             st.metric(
-                str(ix.get("index_code", "Chỉ số")),
+                code,
                 format_price(close),
-                format_percent((close - base) / base, signed=True),
+                delta_str,
             )
         else:
             st.metric("Chỉ số", "—")
@@ -271,27 +293,59 @@ def page_market_overview() -> None:
     st.divider()
 
     # --- VNINDEX candlestick + volume (T016) --------------------------------
-    st.subheader("VNINDEX — nến ngày 2 năm")
     ix_bars = c.get_index_prices("VNINDEX")
     if ix_bars:
         idx = pd.DataFrame(price_dataframe(ix_bars))
         idx["MA20"] = idx["close"].rolling(20).mean()
         idx["MA50"] = idx["close"].rolling(50).mean()
+
+        timeframe_options = [
+            "Tất cả",
+            "3 năm",
+            "2 năm",
+            "1 năm",
+            "6 tháng",
+            "3 tháng",
+            "1 tháng",
+            "2 tuần",
+            "1 tuần",
+        ]
+        timeframe_bars = {
+            "3 năm": 756,
+            "2 năm": 504,
+            "1 năm": 252,
+            "6 tháng": 126,
+            "3 tháng": 63,
+            "1 tháng": 22,
+            "2 tuần": 10,
+            "1 tuần": 5,
+        }
+        window = st.radio(
+            "Khoảng thời gian",
+            options=timeframe_options,
+            index=2,
+            horizontal=True,
+            key="vnindex_timeframe",
+        )
+        bars = timeframe_bars.get(window)
+        view = idx.tail(bars) if bars else idx
+
+        st.subheader(f"VNINDEX — nến ngày ({window})")
         fig = make_subplots(
             rows=2,
             cols=1,
             shared_xaxes=True,
             row_heights=[0.72, 0.28],
             vertical_spacing=0.04,
-            subplot_titles=("VNINDEX — nến ngày", "Khối lượng"),
+            subplot_titles=(f"VNINDEX — nến ngày ({window})", "Khối lượng"),
         )
         fig.add_trace(
             go.Candlestick(
-                x=idx["date"],
-                open=idx["open"],
-                high=idx["high"],
-                low=idx["low"],
-                close=idx["close"],
+                x=view["date"],
+                open=view["open"],
+                high=view["high"],
+                low=view["low"],
+                close=view["close"],
                 name="VNINDEX",
                 increasing_line_color=theme.COLORS["up"],
                 decreasing_line_color=theme.COLORS["down"],
@@ -301,8 +355,8 @@ def page_market_overview() -> None:
         )
         fig.add_trace(
             go.Scatter(
-                x=idx["date"],
-                y=idx["MA20"],
+                x=view["date"],
+                y=view["MA20"],
                 name="MA20",
                 line=dict(color=theme.CHART_MA20_COLOR, width=1.6),
             ),
@@ -311,8 +365,8 @@ def page_market_overview() -> None:
         )
         fig.add_trace(
             go.Scatter(
-                x=idx["date"],
-                y=idx["MA50"],
+                x=view["date"],
+                y=view["MA50"],
                 name="MA50",
                 line=dict(color=theme.CHART_MA50_COLOR, width=1.6),
             ),
@@ -321,19 +375,29 @@ def page_market_overview() -> None:
         )
         fig.add_trace(
             go.Bar(
-                x=idx["date"],
-                y=idx["volume"],
+                x=view["date"],
+                y=view["volume"],
                 name="KL",
                 marker_color=theme.CHART_VOLUME_COLOR,
             ),
             row=2,
             col=1,
         )
+        fig.update_xaxes(rangebreaks=[dict(bounds=["sat", "mon"])])
         fig.update_layout(**theme.chart_layout(520, xaxis_rangeslider_visible=False))
         st.plotly_chart(fig, width="stretch", theme=None, config=theme.PLOTLY_CONFIG)
         last_ix = idx.iloc[-1]
+        diff_vnindex = (
+            float(last_ix["close"]) - float(idx.iloc[-2]["close"])
+            if len(idx) >= 2
+            else None
+        )
         d_ix = st.columns(4)
-        d_ix[0].metric("VNINDEX", format_price(last_ix["close"]))
+        d_ix[0].metric(
+            "VNINDEX",
+            format_price(last_ix["close"]),
+            f"{diff_vnindex:+.2f} điểm" if diff_vnindex is not None else None,
+        )
         d_ix[1].metric("MA20", format_price(float(last_ix["MA20"])))
         d_ix[2].metric("MA50", format_price(float(last_ix["MA50"])))
         d_ix[3].metric("Ngày", format_date(last_ix["date"]))
@@ -475,15 +539,19 @@ def page_market_overview() -> None:
     with col_left:
         st.subheader("Chỉ số")
         if indices:
-            idx_rows = [
-                {
-                    "Mã": ix.get("index_code"),
-                    "Đóng cửa": format_price(ix.get("close")),
-                    "KL": f"{float(str(ix.get('volume', 0))):,.0f}",
-                    "Ngày": format_date(ix.get("trade_date")),
-                }
-                for ix in indices
-            ]
+            idx_rows = []
+            for ix in indices:
+                chg = ix.get("change")
+                chg_str = f"{float(chg):+.2f}" if chg is not None else "—"
+                idx_rows.append(
+                    {
+                        "Mã": ix.get("index_code"),
+                        "Đóng cửa": format_price(ix.get("close")),
+                        "+/- điểm": chg_str,
+                        "KL": f"{float(str(ix.get('volume', 0))):,.0f}",
+                        "Ngày": format_date(ix.get("trade_date")),
+                    }
+                )
             st.dataframe(pd.DataFrame(idx_rows), hide_index=True, width="stretch")
         else:
             st.info("Chưa có dữ liệu chỉ số.")
@@ -1200,6 +1268,145 @@ def page_health() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Page 9 — Worker History & Operations
+# ---------------------------------------------------------------------------
+def page_worker_history() -> None:
+    st.markdown(
+        theme.page_header(
+            "Lịch sử Worker & Tác vụ Định kỳ",
+            "Theo dõi lịch trình APScheduler, nhật ký gửi email và hướng dẫn vận hành CLI.",
+            icon=PAGE_ICONS["Lịch sử Worker"],
+            eyebrow="Vận hành",
+        ),
+        unsafe_allow_html=True,
+    )
+    c = client
+
+    tab_jobs, tab_logs, tab_cli = st.tabs(
+        ["Lịch trình APScheduler", "Nhật ký gửi Email", "Lệnh vận hành CLI"]
+    )
+
+    with tab_jobs:
+        st.subheader("Các tác vụ nền đang hoạt động (Worker Scheduler)")
+        st.caption("Thời gian chạy theo múi giờ Việt Nam (Asia/Ho_Chi_Minh), Thứ 2 đến Thứ 6.")
+
+        jobs_data = [
+            {
+                "Job ID": "news_ingestion",
+                "Tần suất": "Mỗi 15 phút",
+                "Mô tả": "Nạp tin tức thị trường (CaféF RSS) và gắn nhãn mã.",
+            },
+            {
+                "Job ID": "daily_eod_morning",
+                "Tần suất": "Thứ 2–6 lúc 11:30",
+                "Mô tả": "Nạp giá EOD và chỉ số kết phiên sáng (chuỗi ssix_finipro → yahoo).",
+            },
+            {
+                "Job ID": "daily_eod_afternoon",
+                "Tần suất": "Thứ 2–6 lúc 15:30",
+                "Mô tả": "Nạp giá EOD và chỉ số kết phiên chiều.",
+            },
+            {
+                "Job ID": "daily_eod_catchup",
+                "Tần suất": "Thứ 2–6 lúc 15:50",
+                "Mô tả": "Bù giá phiên chiều nếu dữ liệu bị trễ hoặc lỗi vendor (KI-014).",
+            },
+            {
+                "Job ID": "daily_scoring_morning",
+                "Tần suất": "Thứ 2–6 lúc 12:00",
+                "Mô tả": "Chấm điểm nhân tố và xếp hạng cổ phiếu phiên sáng.",
+            },
+            {
+                "Job ID": "daily_scoring_afternoon",
+                "Tần suất": "Thứ 2–6 lúc 16:00",
+                "Mô tả": "Chấm điểm nhân tố và xếp hạng cổ phiếu phiên chiều.",
+            },
+            {
+                "Job ID": "email_reports",
+                "Tần suất": "Thứ 2–6 lúc 08:00, 12:30, 16:30",
+                "Mô tả": "Gửi báo cáo tổng quan thị trường qua email (SMTP Gmail).",
+            },
+            {
+                "Job ID": "daily_strategy_scoring",
+                "Tần suất": "Thứ 2–6 lúc 17:00",
+                "Mô tả": (
+                    "Cập nhật dữ liệu EOD, tính 24 đặc trưng 7 nhóm, chấm điểm 3 chiến lược "
+                    "(Ngắn/Trung/Dài hạn) và gửi cảnh báo xếp hạng."
+                ),
+            },
+            {
+                "Job ID": "email_schedule_sync",
+                "Tần suất": "Mỗi 15 phút",
+                "Mô tả": "Đồng bộ lịch gửi email mới từ CSDL vào scheduler.",
+            },
+        ]
+        st.dataframe(pd.DataFrame(jobs_data), hide_index=True, width="stretch")
+
+        st.markdown("### Chuỗi nhà cung cấp dữ liệu thị trường (`market_provider_chain`)")
+        st.info(
+            "Thứ tự ưu tiên khi nạp dữ liệu: `ssix_finipro` (Chính) → `yahoo` (Dự phòng 1) "
+            "→ `vndirect` → `tcbs` → `dsc`."
+        )
+
+    with tab_logs:
+        st.subheader("Nhật ký gửi Email tự động")
+        logs = c.get_email_logs()
+        if logs:
+            ldf = pd.DataFrame(logs)
+            st.dataframe(
+                ldf,
+                column_config={
+                    "recipient_email": st.column_config.TextColumn("Người nhận"),
+                    "subject": st.column_config.TextColumn("Tiêu đề"),
+                    "status": st.column_config.TextColumn("Trạng thái"),
+                    "sent_at": st.column_config.TextColumn("Thời gian gửi"),
+                    "error_message": st.column_config.TextColumn("Chi tiết lỗi"),
+                },
+                hide_index=True,
+                width="stretch",
+            )
+        else:
+            st.info("Chưa có lịch sử gửi email nào trong CSDL.")
+
+    with tab_cli:
+        st.subheader("Hướng dẫn lệnh vận hành Worker CLI")
+        st.markdown(
+            "Thực hiện các tác vụ một lần (one-off) trực tiếp qua container worker "
+            "hoặc dòng lệnh cục bộ:"
+        )
+
+        st.markdown("**1. Nạp giá EOD lịch sử hoặc cập nhật phiên:**")
+        st.code(
+            "python -m apps.worker.cli ingest --dataset prices --source ssix_finipro "
+            "--start 2020-01-01 --end 2026-09-30 --symbols FPT,VCB,HPG",
+            language="bash",
+        )
+
+        st.markdown("**2. Chấm điểm nhân tố và xếp hạng:**")
+        st.code("python -m apps.worker.cli compute-scores", language="bash")
+
+        st.markdown("**3. Chấm điểm chiến lược & cảnh báo xếp hạng (GĐ 4/6):**")
+        st.code(
+            "# Bước 1: Tính 24 đặc trưng 7 nhóm\n"
+            "python -m apps.worker.cli compute-features\n\n"
+            "# Bước 2: Chấm điểm 3 chiến lược (ngắn/trung/dài hạn)\n"
+            "python -m apps.worker.cli strategy-scores\n\n"
+            "# Bước 3: Phát email cảnh báo thay đổi xếp hạng\n"
+            "python -m apps.worker.cli notify-strategy-changes",
+            language="bash",
+        )
+
+        st.markdown("**4. Huấn luyện mô hình ML (XGBoost từ CSDL):**")
+        st.code(
+            "python -m apps.worker.cli train-model --source db --algorithm xgboost",
+            language="bash",
+        )
+
+        st.markdown("**5. Chạy tác tử AI (AI Agent):**")
+        st.code("python -m apps.worker.cli run-agent --task analyze --symbol FPT", language="bash")
+
+
+# ---------------------------------------------------------------------------
 # Page 8 — Email Notification Management
 # ---------------------------------------------------------------------------
 #: Minute values offered by the schedule form (kept in sync with the cron jobs).
@@ -1486,12 +1693,146 @@ def page_email_notifications() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Page 4b — Strategy scoring (GĐ 6)
+# ---------------------------------------------------------------------------
+PROFILE_LABELS = {
+    "short": "Ngắn hạn / lướt sóng",
+    "mid": "Trung hạn",
+    "long": "Dài hạn",
+}
+
+
+def page_strategy_scores() -> None:
+    st.markdown(
+        theme.page_header(
+            "Chấm điểm 3 chiến lược",
+            "Điểm tổng hợp theo hồ sơ ngắn/trung/dài hạn, vùng mua – cắt lỗ – mục tiêu "
+            "và giải thích từng nhóm chỉ số (chỉ mang tính tham khảo, §3).",
+            icon=PAGE_ICONS["Chấm điểm chiến lược"],
+            eyebrow="Đầu tư có hệ thống",
+        ),
+        unsafe_allow_html=True,
+    )
+    c = client
+
+    ctl1, ctl2 = st.columns([1, 1])
+    with ctl1:
+        profile = st.radio(
+            "Hồ sơ chiến lược",
+            options=list(PROFILE_LABELS),
+            format_func=lambda p: f"{PROFILE_LABELS[p]} ({p})",
+            horizontal=True,
+            key="strat_profile",
+        )
+    with ctl2:
+        universe = st.selectbox(
+            "Vũ trụ",
+            options=["", "vn30", "vn100"],
+            format_func=lambda u: {"": "Tất cả", "vn30": "VN30", "vn100": "VN100"}[u],
+            key="strat_universe",
+        )
+
+    page = c.get_strategy_rankings(profile, universe or None, limit=200)
+    items = page.get("items") or []
+    if not items:
+        st.info(
+            "Chưa có điểm chiến lược cho phiên gần nhất — chạy "
+            "`python -m apps.worker.cli strategy-scores` trước."
+        )
+        return
+
+    as_of = items[0].get("trade_date")
+    st.caption(f"Phiên chấm điểm gần nhất: **{as_of}** · tổng **{page.get('total', 0)}** mã")
+
+    # Distribution of grades (the decision a user actually cares about).
+    grades = pd.Series([row.get("grade") or "—" for row in items])
+    counts = grades.value_counts().to_dict()
+    st.write({g: int(counts[g]) for g in ["A", "B", "C", "D", "—"] if g in counts})
+
+    scored = [r for r in items if r.get("overall_score") is not None]
+    if scored:
+        top = scored[:30]
+        fig = go.Figure(
+            go.Bar(
+                x=[r["symbol"] for r in top],
+                y=[float(r["overall_score"]) for r in top],
+                text=[f"{r.get('grade') or '—'}" for r in top],
+                textposition="outside",
+                marker_color=[theme.signal_hex("POSITIVE" if (r.get("grade") or "") in ("A", "B")
+                                               else "NEGATIVE" if (r.get("grade") or "") == "D"
+                                               else "NEUTRAL")
+                              for r in top],
+            )
+        )
+        fig.update_layout(
+            **theme.chart_layout(400, yaxis_title="Điểm tổng hợp", xaxis_tickangle=-45)
+        )
+        st.plotly_chart(fig, width="stretch", theme=None, config=theme.PLOTLY_CONFIG)
+        st.caption("30 mã điểm cao nhất — nhãn A–D trên cột; màu xanh = A/B, đỏ = D.")
+
+    table = [
+        {
+            "Mã": r["symbol"],
+            "Tên": (r.get("company_name") or "")[:40],
+            "Điểm": r.get("overall_score"),
+            "Xếp hạng": r.get("grade"),
+            "Vùng mua (thấp)": r.get("buy_zone_low"),
+            "Vùng mua (cao)": r.get("buy_zone_high"),
+            "Cắt lỗ": r.get("stop_loss"),
+            "Mục tiêu": r.get("target_price"),
+            "R/R": r.get("rr_ratio"),
+            "Độ tin cậy": r.get("confidence"),
+        }
+        for r in items
+    ]
+    st.dataframe(
+        pd.DataFrame(table),
+        column_config={
+            "Điểm": st.column_config.NumberColumn("Điểm", format="%.1f"),
+            "Độ tin cậy": st.column_config.NumberColumn("Độ tin cậy", format="%.0%"),
+            "R/R": st.column_config.NumberColumn("R/R", format="%.2f"),
+        },
+        hide_index=True,
+        width="stretch",
+    )
+
+    with st.expander("Giải thích nhóm chỉ số + lý do/rủi ro của một mã"):
+        symbol = st.text_input("Mã", value=str(items[0]["symbol"]), key="strat_symbol")
+        detail = c.get_strategy_symbol(symbol)
+        if not detail:
+            st.warning("Không có dữ liệu cho mã này.")
+            return
+        for profile_row in detail["profiles"]:
+            label = PROFILE_LABELS.get(profile_row["strategy"], profile_row["strategy"])
+            st.markdown(
+                f"**{label}** — điểm {profile_row.get('overall_score')} · "
+                f"xếp hạng {profile_row.get('grade')}"
+            )
+            st.write(
+                {g: (round(v, 1) if v is not None else None)
+                 for g, v in (profile_row.get("group_scores") or {}).items()}
+            )
+            reasons = profile_row.get("reasons") or []
+            risks = profile_row.get("risks") or []
+            if reasons:
+                st.markdown("**Lý do:**")
+                for reason in reasons:
+                    st.write(f"- {reason}")
+            if risks:
+                st.markdown("**Rủi ro:**")
+                for risk in risks:
+                    st.write(f"- {risk}")
+        st.caption(detail.get("disclaimer") or STRATEGY_DISCLAIMER)
+
+
+# ---------------------------------------------------------------------------
 # Navigation
 # ---------------------------------------------------------------------------
 PAGES: dict[str, Callable[[], None]] = {
     "Tổng quan": page_market_overview,
     "Bộ lọc cổ phiếu": page_screener,
     "Xếp hạng": page_rankings,
+    "Chấm điểm chiến lược": page_strategy_scores,
     "Chi tiết mã": lambda: page_stock_detail(
         st.text_input("Mã cổ phiếu", value="FPT", key="detail_symbol").strip().upper()
     ),
@@ -1499,6 +1840,7 @@ PAGES: dict[str, Callable[[], None]] = {
     "Tin tức & RAG": page_news_rag,
     "Quản lý Email": page_email_notifications,
     "Sức khỏe hệ thống": page_health,
+    "Lịch sử Worker": page_worker_history,
 }
 
 PAGES[page]()

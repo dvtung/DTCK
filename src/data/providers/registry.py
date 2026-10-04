@@ -15,10 +15,13 @@ from typing import Any
 import yaml  # type: ignore[import-untyped]
 
 from src.data.providers.base import DataProvider
+from src.data.providers.cafef_financials import CafefFinancialProvider
 from src.data.providers.fixture import FixtureProvider
 from src.data.providers.http_json import HttpJsonProvider
+from src.data.providers.imf_macro import ImfMacroProvider
 from src.data.providers.rss import DEFAULT_USER_AGENT, RssNewsProvider
 from src.data.providers.ssi import SSIFastConnectProvider
+from src.data.providers.vndirect_financials import VNDirectFinancialProvider
 from src.data.providers.yahoo_chart import YahooChartProvider
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -118,6 +121,28 @@ def market_provider_chain(
     return chain
 
 
+def financial_provider_chain(
+    primary: str | None = None,
+    path: Path | str | None = None,
+) -> list[str]:
+    """Fundamental-data chain to try in order: primary first, then fallbacks.
+
+    Mirrors :func:`market_provider_chain` for the ``fundamental`` role used by
+    the strategy-scoring ETL (GĐ 2). SSI's FastConnect Data API has no financial
+    endpoints (verified 2026-10-03), so the default chain is VNDirect's finfo
+    service; an operator can override with ``SCHEDULER_FUNDAMENTAL_SOURCE``.
+    """
+    selection = load_registry(path).get("selection", {}) or {}
+    configured = primary or str(selection.get("fundamental", ""))
+    chain: list[str] = []
+    if configured and configured != "computed":
+        chain.append(configured)
+    for provider_id in fallback_chain("fundamental", path):
+        if provider_id not in chain:
+            chain.append(provider_id)
+    return chain
+
+
 def _credential_value(spec: ProviderSpec) -> str | None:
     """Resolve the secret referenced by ``spec.credential_env`` (never logged)."""
     if not spec.credential_env:
@@ -167,6 +192,54 @@ def create_provider(
     )
     retries = int(max_retries if max_retries is not None else defaults.get("max_retries", 3))
     backoff = float(defaults.get("retry_backoff_seconds", 5))
+
+    # Financial statements + corporate events (GĐ 2): the ``fundamental`` role
+    # has its own client because the payload shape is nothing like EOD/OHLC.
+    # Macro series (GĐ 2) — its own client, because the payload is a year→value
+    # map rather than a list of rows.
+    macro_cfg: dict[str, Any] = spec.endpoints.get("macro") or {}
+    if str(macro_cfg.get("client", "")) == "imf_datamapper":
+        raw_indicators = macro_cfg.get("indicators")
+        return ImfMacroProvider(
+            provider_id=provider_id,
+            origin=str(macro_cfg.get("origin", "")) if macro_cfg.get("origin") else None,
+            country=str(macro_cfg.get("country", "VNM")),
+            indicators=(
+                {str(k): dict(v) for k, v in raw_indicators.items()}
+                if isinstance(raw_indicators, dict)
+                else None
+            ),
+            max_year_offset=int(macro_cfg.get("max_year_offset", 1)),
+            timeout_s=timeout,
+            transport=transport,
+        )
+
+    fin_cfg: dict[str, Any] = spec.endpoints.get("fundamental") or {}
+    if str(fin_cfg.get("client", "") if fin_cfg else "") == "cafef_financial":
+        statements = fin_cfg.get("statements")
+        endpoints = (
+            {str(k): dict(v) for k, v in statements.items()}
+            if isinstance(statements, dict)
+            else None
+        )
+        return CafefFinancialProvider(
+            provider_id=provider_id,
+            origin=str(fin_cfg.get("origin", "")) if fin_cfg.get("origin") else None,
+            endpoints=endpoints,
+            timeout_s=timeout,
+            transport=transport,
+        )
+
+    if (
+        str(fin_cfg.get("client", "") if fin_cfg else "") == "vndirect_finfo"
+        or provider_id in ("vndirect_financials",)
+    ):
+        return VNDirectFinancialProvider(
+            provider_id=provider_id,
+            base_url=str(fin_cfg.get("url", "")) if fin_cfg and fin_cfg.get("url") else None,
+            timeout_s=timeout,
+            transport=transport,
+        )
 
     news_cfg = spec.endpoints.get("news")
     if news_cfg and news_cfg.get("url"):
@@ -228,6 +301,7 @@ __all__ = [
     "enabled_by_role",
     "fallback_chain",
     "market_provider_chain",
+    "financial_provider_chain",
     "create_provider",
     "DataProvider",
 ]

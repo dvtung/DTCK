@@ -2,7 +2,7 @@
 
 > Thuật ngữ chuyên môn (tên bảng, biến môi trường, lệnh, đường dẫn) giữ nguyên tiếng Anh.
 
-**Cập nhật lần cuối:** 2026-09-28
+**Cập nhật lần cuối:** 2026-10-04
 
 ---
 
@@ -11,17 +11,17 @@
 ```text
 Đặc tả:         ████████████████████ 100%   (docs/SYSTEM_SPECIFICATION.md, v1.0)
 Kiến trúc:      ████████████████████ 100%   (docs/ARCHITECTURE.md đã soạn)
-CSDL:           ████████████████████ 100%   (lược đồ 42 bảng + migration 0003_email_notifications + hypertable + seed XONG)
-Pipeline dữ liệu:████████████████████ 100%   (T004+T005 XONG + chuỗi thật [ssix_finipro,yahoo,vndirect,tcbs,dsc]; CaféF RSS đã kiểm chứng; E2E 62/62 @94.88)
-Quant Engine:   ████████████████████ 100%   (T006+T007+T008 XONG + job compute-scores trên 137 mã thật)
-Backtesting:    ████████████████████ 100%   (T009 + chiều ghi CSDL + form Backtest trên dashboard)
-API:            ████████████████████ 100%   (T010 + T016 + T018: 13 tệp router, 48 đường dẫn / 53 thao tác; đường đọc TimescaleDB qua MARKET_DATA_SOURCE=db|auto; `/readyz` dò thật, `market_source=auto->db`)
-Dashboard:      ████████████████████ 100%   (T011 + T015c + T016 + T018: 8 trang gồm Tin tức & RAG, Quản lý Email, đăng nhập JWT; huy hiệu DỮ LIỆU THẬT; AppTest 8 trang)
+CSDL:           ████████████████████ 100%   (lược đồ 44 bảng + migration 0005_strategy_scoring + hypertable + seed XONG; 218.736 bars prices 2020-2026)
+Pipeline dữ liệu:████████████████████ 100%   (T004+T005 XONG + chuỗi thật [ssix_finipro,yahoo,vndirect,tcbs,dsc]; backfill 2020-2026 hoàn tất)
+Quant Engine:   ████████████████████ 100%   (T006+T007+T008+T019 XONG: compute-scores + chấm điểm 3 chiến lược 24 chỉ tiêu)
+Backtesting:    ████████████████████ 100%   (T009 + chiều ghi CSDL + form Backtest trên dashboard + backtest 3 chiến lược)
+API:            ████████████████████ 100%   (T010+T016+T018+T019: 14 tệp router, 52 đường dẫn / 57 thao tác; /readyz dò thật, market_source=auto->db)
+Dashboard:      ████████████████████ 100%   (T011+T015c+T016+T018+T020+T021: 10 trang gồm Chấm điểm chiến lược, nến VNINDEX 9 khung thời gian, delta điểm số, Tin tức & RAG, Quản lý Email, Lịch sử Worker)
 RAG:            ████████████████████ 100%   (T012 + 50 bài CaféF thật + mirror collection dtck_docs, qdrant: up)
 Tác tử AI:      ████████████████████ 100%   (T013 + T016 nối LLM local Ollama qwen3.5; agents: llm:qwen3.5)
-ML:             ████████████████████ 100%   (T014 + T015b + T016: registry lưu CSDL + huấn luyện thật 63.436 dòng `roc_auc=0.565`; model price_direction_xgb@1.0.0)
-Production:     ███████████████████░  95%   (scheduler 5 job + JWT/RBAC + /metrics + CI/CD + sao lưu/phục hồi + cảnh báo email tự động 08:00/15:30 → T015+T018)
-Thông báo email:████████████████████ 100%   (T018: 4 bảng, router /notifications 11 thao tác, 2 cron Mon–Fri 08:00/15:30 + kiểm thử end-to-end)
+ML:             ████████████████████ 100%   (T014 + T015b + T020: registry lưu CSDL + huấn luyện lại trên tập lịch sử 2020-2026; model price_direction_xgb@1.0.0)
+Production:     ████████████████████ 100%   (scheduler 9 job gồm chấm điểm chiến lược 17:00 + JWT/RBAC + /metrics + CI/CD + sao lưu/phục hồi)
+Thông báo email:████████████████████ 100%   (T018+T022: 4 bảng, email tự động 08:00/12:30/16:30 kèm Top 10 3 chiến lược, cột giá hiện tại, KPI điểm số VNINDEX)
 ```
 
 ---
@@ -32,42 +32,40 @@ Thông báo email:████████████████████ 1
 - **Bộ tài liệu** đầy đủ (13+ tệp, danh sách ở `project-context_vi.md` §7) — toàn bộ chuẩn hóa 100% tiếng Việt, đã loại bỏ các bản tiếng Anh trùng lặp (2026-09-26).
 - **Memory bank** 100% bằng tiếng Việt và là nguồn chân lý duy nhất.
 - `pyproject.toml`, `.env.example`, `.gitignore`, `README.md`, `docker-compose.yml`, Dockerfile — đã tạo.
-- **Model SQLAlchemy** (`src/common/models/`) triển khai mọi bảng trong `docs/DATABASE_SCHEMA_vi.md` — 42 bảng (gồm 4 bảng `notifications` của T018), nguồn chân lý duy nhất (`Base.metadata`).
-- **Migration Alembic** `database/migrations/versions/` → head `0003_email_notifications`; 12 bảng chuỗi thời gian là TimescaleDB hypertable (theo §17), có `upgrade`/`downgrade`. Đã kiểm chứng up → down → up với TimescaleDB Docker đang chạy.
+- **Model SQLAlchemy** (`src/common/models/`) triển khai mọi bảng trong `docs/DATABASE_SCHEMA_vi.md` — 44 bảng (gồm 4 bảng `notifications` T018 và 2 bảng `strategy` T019), nguồn chân lý duy nhất (`Base.metadata`).
+- **Migration Alembic** `database/migrations/versions/` → head `0005_strategy_scoring`; 12 bảng chuỗi thời gian là TimescaleDB hypertable (theo §17), có `upgrade`/`downgrade`.
 - **Seed** (`database/seeds/`) — exchanges (HOSE/HNX/UPCOM), 10 sector + 15 industry, universe mở rộng T016 (VN30 + VN100 + HNX/UPCOM, 138 mã). Idempotent; nối vào `database/seeds/run_all.py`.
 - **Pipeline dữ liệu** (`src/data/`) — collectors, validators, normalizers, pipelines, providers (base + fixture + HTTP-JSON + registry), chấm điểm chất lượng (§39). FixtureProvider cho phép kiểm thử pipeline hoàn toàn ngoại tuyến. Worker CLI (`apps/worker/cli.py`) đã nối lệnh ingest.
-- **Cột mốc dữ liệu thật (2026-09-24/25/27)** — **`SSIFastConnectProvider` là nguồn thị trường CHÍNH** (`priority 100`, `VERIFIED_2026-09-27`: `Market/AccessToken` đổi JWT, `Market/DailyOhlc` 68 dòng cho FPT,VCB,HPG,ACB · quality 93.74, `Market/DailyIndex` 34 dòng cho VNINDEX,VN30; chuỗi chạy tự động `ssix_finipro → yahoo → vndirect → tcbs → dsc` qua `market_provider_chain` + job EOD) + `YahooChartProvider` dự phòng (EOD VN, priority 85, `VERIFIED_2026-09-25`; un-adjust tách qua `events=split`; giá đóng chưa điều chỉnh) + `RssNewsProvider` cho CaféF (`VERIFIED_2026-09-25`; 50 bài thật đã nạp). CSDL hiện có 716 dòng `prices` (source `ssix_finipro`) + 34 dòng `index_prices`.
+- **Cột mốc dữ liệu thật (2026-09-24/25/27; cập nhật 2026-10-04)** — **`SSIFastConnectProvider` là nguồn thị trường CHÍNH** (`priority 100`) + `YahooChartProvider` dự phòng. **CSDL hiện có 218.736 dòng `prices`** (2020-01-02 → 2026-09-30, bao phủ 138 mã thuộc vũ trụ mở rộng) + 992 dòng `index_prices` (VNINDEX/VN30) + 50 bài CaféF thật + 201.402 dòng `financial_statements`.
 - **Đường đọc CSDL (W1, 2026-09-25)** — protocol `MarketSource` + `DbMarketService` (13 nhóm bảng thật, cache theo request) sau `MARKET_DATA_SOURCE=memory|db|auto` (`apps/api/dependencies.py`); router không đổi, `/readyz` trả `market_source` (`<chế độ>-><service>`). Compose api/worker mặc định `auto`; code + `.env.example` mặc định `memory` để unit test không cần CSDL.
-- **`/readyz` trung thực (2026-09-27)** — `apps/api/main.py` dò thật từng phụ thuộc (không hardcode): `database` (`connected`/`connected-no-prices`/`unreachable`, dùng `database_is_ready`), `qdrant` (`up`/`offline-index-ready`), `agents` (`llm:<model>` | `offline:<tasks>`) + khoá `market_source`; probe không bao giờ ném 5xx. Image api/worker cài extra `[qdrant]` nên collection `dtck_docs` được mirror thật (`qdrant: up`).
-- **Scheduler worker (Option 2, 2026-09-24; cập nhật 2026-09-29)** — APScheduler **8 job** (`run_scheduler`): news mỗi N phút (CaféF), **nạp EOD Thứ 2–6 11:30 + 15:30 ICT** (`SCHEDULER_EOD_SOURCE=ssix_finipro` → dự phòng `yahoo → vndirect → tcbs → dsc`; nguồn lỗi/0 dòng ⇒ tự chuyển) **kèm `index_prices` cho `SCHEDULER_EOD_INDICES=VNINDEX,VN30`** (`provider.supports`), **`daily_eod_catchup` 15:50** (chỉ nạp khi `prices`/`index_prices` cũ hơn phiên đã đóng — vá lỗi vendor lúc 15:30 trước chấm điểm 16:00, KI-014), scoring Thứ 2–6 12:00 + 16:00 ICT (cảnh báo `intraday snapshot` nếu giá phiên chưa được nạp), **báo cáo email Thứ 2–6 08:00 + 12:30 + 16:30 ICT** (T018) + `email_schedule_sync` mỗi 15'; fail-soft, `max_instances=1` + `coalesce`, `SCHEDULER_JOBS_ENABLED=false` để tắt. Tên `SCHEDULER_*` khớp giữa `Settings` ↔ `.env.example` ↔ `docker-compose.yml`.
-- **Nối dữ liệu thật cho dashboard (Option 1, 2026-09-24)** — client mở phong bì phân trang `{items}`, thêm `search_rag`/`get_rag_status`/`get_evidence`; trang "Tin tức & RAG" mới; helper `evidence_rows`/`rag_doc_rows`.
-- **Khung chất lượng dữ liệu** (`src/data/quality.py`) — chấm điểm 6 chiều (completeness, validity, consistency, uniqueness, freshness, accuracy) với trung bình có trọng số, chuẩn hoá lại và cổng ngưỡng (§39).
-- **Scoring engine** (`src/quant/scoring/engine.py`, T008) — `decompose_score()` đóng góp theo hệ số với trọng số chuẩn hoá lại, `score_universe()` → danh sách `StockRanking` đã xếp hạng, `build_signal_label()` (POSITIVE/NEUTRAL/NEGATIVE), `build_confidence()`; payload giải thích cho mọi xếp hạng.
-- **Engine backtesting** (`src/backtesting/`, T009) — `models.py`, `metrics.py` (total return, CAGR, volatility, Sharpe, Sortino, max drawdown, Calmar, win rate, profit factor, turnover, transaction-cost total), `engine.py` (`run_backtest`, `select_window`, logic rebalance/close-leg), `walkforward.py`. Tất định, tính chi phí, không look-ahead.
-- **REST API** (`apps/api/`, T010 + T016 + T018; **48 đường dẫn / 53 thao tác** trên `/api/v1/*`, kiểm chứng 2026-09-28 bằng `app.openapi()`: **13 tệp router** gồm `notifications`; không tính `/healthz`+`/readyz`+`/metrics`) — FastAPI với các nhóm router theo `docs/API_SPECIFICATION.md` (phân trang dùng chung + phong bì lỗi `not_found`; 24 schema Pydantic; `/healthz` + `/readyz` với `market_source=auto->db`; DI `MarketDep` chọn `MarketSource`).
-- **Dashboard Streamlit** (`apps/dashboard/`, T011 + T015c + T016 + T018) — `client.py` (HTTP-first, mở phong bì phân trang, RAG/bằng chứng + **email notifications** + **đăng nhập JWT**), `app.py` (**8 trang**: tổng quan + nến VNINDEX + Top 10 tăng/giảm, bộ lọc 3 sàn, xếp hạng 30 mã, chi tiết mã, backtests, Tin tức & RAG, **Quản lý Email**, sức khỏe; AppTest 8 trang).
-- Kiểm thử **(2026-09-29):** riêng `tests/unit` = **589 thu thập (586 passed, 3 skipped)** và `tests/integration` = **31 passed**; ruff + mypy (**140 tệp**) sạch. Test integration chạy qua fixture `isolated_session_factory` (transaction rollback) nên **không** sửa/xoá dữ liệu thật — xem KI-013; worker có freshness probe + catch-up — xem KI-014. Các cột mốc trước: 499 (T015c) · 510 (T016 + 2 bài AppTest) · 523 (T018 +2 bài hint SMTP) · 595 (KI-013) · **617 (KI-014)**.
-- **Hệ số cơ bản** (`src/market/fundamental/factors.py`) — tăng trưởng doanh thu/EPS, ROE, ROA, biên lợi nhuận, D/E, FCF (tỉ lệ 0–100); trả `None` khi mẫu số bằng 0 (không bịa số).
-- **Định giá** (`src/market/valuation/valuation.py`) — P/E, forward P/E, P/B, EV/EBITDA, EV/Sales, tỉ suất cổ tức, PEG, enterprise value + hạng percentile (ngành/lịch sử).
-- **Động lượng** (`src/market/momentum/momentum.py`) — lợi nhuận n ngày, đa khung, mở rộng khối lượng, động lượng tương đối so với benchmark.
-- **Rủi ro** (`src/market/risk/risk.py`) — độ biến động niên hoá cuộn (log return), beta, max drawdown trượt, thanh khoản, rủi ro gap, nhóm rủi ro nợ.
-- **Chấm điểm hệ số** (`src/quant/factors/scoring.py`) — trọng số nền §12 (fund 0.30/tech 0.20/mom 0.15/val 0.15/qual 0.10/risk 0.10), tổng hợp percentile-rank, điểm tổng chuẩn hoá lại, xếp hạng cổ phiếu.
-- **Chỉ báo kỹ thuật** (`src/market/technical/indicators.py`) — SMA, EMA, RSI (làm trơn Wilder), MACD (12/26/9), Bollinger Bands (20, 2σ), ATR (14), OBV, volume SMA, sức mạnh tương đối so với benchmark. Thuần Python, tất định, kiểm chứng với giá trị tính tay (40 test).
-- **RAG + engine bằng chứng** (`src/rag/` + `src/evidence/`, T012) — `HashEmbedding` (băm tất định, dim 128, model_name "hash-embed-v1"), `chunk_news_item` (chia cửa sổ trượt kèm metadata + mã + nguồn + published_at), `MemoryVectorStore` (cosine trong bộ nhớ; `upsert`/`query`) + `QdrantAdapter` tuỳ chọn (mirror best-effort khi import được `qdrant_client`), `Retriever` (hybrid: vector + trùng từ khoá + độ mới + tiên nghiệm độ tin cậy nguồn, lọc metadata symbol/doc_type/source), `rerank` (chấm lại kiểu RRF), singleton `RagService`, `src/evidence/engine.py` (`Evidence` §19 + `confidence_for` + `build_evidence` + `evidence_to_dict`). 3 endpoint API mới → tại T012 API có 26 đường dẫn / 27 thao tác; nay đã tăng lên **48 đường dẫn / 53 thao tác** (2026-09-28, kiểm chứng bằng `app.openapi()`). `readyz` báo trạng thái qdrant ("offline-index-ready" khi không có Qdrant). **2026-09-24/25:** 50 bài CaféF thật đã nạp vào chỉ mục (liên kết nhiều mã theo chunk); `/rag/search` + `/evidence` đã kiểm chứng trực tiếp.
-- **Tác tử AI + tầng suy luận LLM** (`src/agents/`, T013 + T016, 2026-09-26) — 4 tác tử (Research/Analysis/Monitoring/Portfolio) + `Orchestrator` (retry/timeout §45, audit §31, registry §41) + `ToolCatalog`; lõi tất định ngoại tuyến. T016 thêm `src/agents/llm/client.py` (ADR-005: `LLMClient` Protocol, `MockLLMClient`, `OllamaLLMClient` gọi Ollama `/api/generate` với `think=false`, `create_llm_client`): `LLM_PROVIDER=mock` ⇒ không tạo client (baseline tất định), `local` ⇒ Analysis Agent sinh `thesis` tiếng Việt từ dữ liệu tool (điểm/bằng chứng/catalysts/risks/confidence không đổi, lỗi ⟶ rơi về mẫu), nhãn audit `deterministic-quant-v1+<model>`, `GET /api/v1/agents` báo `llm_model`/`reasoning`. Cấu hình: `LLM_PROVIDER`/`LLM_MODEL`/`LLM_BASE_URL`/`LLM_TIMEOUT_SECONDS`/`LLM_THINK`.
-- Repo Git trên nhánh `vndocver`.
-
+- **`/readyz` trung thực (2026-09-27)** — `apps/api/main.py` dò thật từng phụ thuộc (không hardcode): `database` (`connected`/`connected-no-prices`/`unreachable`), `qdrant` (`up`/`offline-index-ready`), `agents` (`llm:<model>` | `offline:<tasks>`) + khoá `market_source`; probe không bao giờ ném 5xx. Image api/worker cài extra `[qdrant]` nên collection `dtck_docs` được mirror thật (`qdrant: up`).
+- **Scheduler worker (cập nhật 2026-10-04)** — APScheduler **9 job** (`run_scheduler`): news mỗi 15 phút, nạp EOD Thứ 2–6 11:30 + 15:30 ICT kèm `index_prices`, `daily_eod_catchup` 15:50, scoring Thứ 2–6 12:00 + 16:00 ICT, **`daily_strategy_scoring` Thứ 2–6 17:00 ICT** (T020), **báo cáo email Thứ 2–6 08:00 + 12:30 + 16:30 ICT** (T018/T022) + `email_schedule_sync` mỗi 15'; fail-soft, `max_instances=1` + `coalesce`.
+- **Nối dữ liệu thật cho dashboard (cập nhật 2026-10-04)** — 10 trang: Tổng quan (nến VNINDEX 9 khung thời gian + delta điểm số), Bộ lọc 3 sàn, Xếp hạng quant, **Chấm điểm chiến lược (T021)**, Chi tiết mã, Backtests, Tin tức & RAG, Quản lý Email, Sức khỏe hệ thống, Lịch sử Worker.
+- **Khung chất lượng dữ liệu** (`src/data/quality.py`) — chấm điểm 6 chiều với trung bình có trọng số, chuẩn hoá lại và cổng ngưỡng (§39).
+- **Scoring engine** (`src/quant/scoring/engine.py` & `src/quant/strategy/engine.py`, T008 + T019) — `decompose_score()` đóng góp theo hệ số với trọng số chuẩn hoá lại, `score_universe()`; Chấm điểm 3 chiến lược Ngắn/Trung/Dài hạn với 24 chỉ tiêu định lượng, cổng lọc xu hướng, Red Flag, vùng mua ATR, cắt lỗ và mục tiêu chốt lời.
+- **Engine backtesting** (`src/backtesting/` & `src/quant/strategy/backtest.py`, T009 + T019) — backtest cuốn chiếu, chi phí, kiểm soát thiên lệch; backtest chiến lược 3 hồ sơ.
+- **REST API** (`apps/api/`, **52 đường dẫn / 57 thao tác** trên `/api/v1/*`: **14 tệp router** gồm `notifications` và `strategy`) — FastAPI với các nhóm router theo đặc tả; 26 schema Pydantic; `/healthz` + `/readyz` với `market_source=auto->db`.
+- **Dashboard Streamlit** (`apps/dashboard/`, **10 trang**: AppTest 10 trang pass 100%).
+- Kiểm thử **(2026-10-04):** **640+ kiểm thử đạt** (unit + integration); ruff + mypy sạch.
 
 ---
 
 ## 3. Task vừa hoàn thành & Quy ước mới
 
-**ID:** `T018 — Module gửi email tự động (Gmail SMTP) + Trang quản trị dashboard (2026-09-28)`
+**ID:** `T022 — Cập nhật Nội dung Email Định kỳ & Lịch trình Worker 17:00 (2026-10-04)`
 **Trạng thái:** HOÀN THÀNH
 
 **Sản phẩm:**
-- `src/notifications/` — `report_generator.py` (HTML bản tin Tổng quan), `smtp_mailer.py` (stdlib, STARTTLS/SSL, map lỗi AUTH/disconnect/recipient sang tiếng Việt), `service.py` (recipients, SMTP, schedule, logs, dispatch).
-- `src/common/models/notifications.py` — 4 bảng (42 bảng tổng); migration `0003_email_notifications` (head).
+- **KPI VNINDEX trong email**: Thay đổi từ % sang số điểm tăng/giảm (`+X.XX điểm` / `-X.XX điểm`).
+- **Bảng Top 15 "Đánh giá & dự đoán VN30"**: Bổ sung cột "Giá hiện tại" (`format_price`), căn phải.
+- **Bảng Top 10 "Chấm điểm và gợi ý 3 chiến lược"**: Thêm cột "Giá hiện tại" (`_fmt_strat_price`) cho cả 3 hồ sơ Ngắn/Trung/Dài hạn, lấy giá đóng cửa từ `market_service.list_stocks()`.
+- **Lập lịch Worker 17:00**: Đăng ký job `daily_strategy_scoring` 17:00 Mon–Fri ICT trên APScheduler worker.
+- **Hiển thị Dashboard**: Bổ sung bộ chọn 9 khung thời gian nến VNINDEX và làm rõ mối liên hệ giữa Điểm tổng hợp và Xếp hạng Grade A/B/C/D.
+- Huấn luyện lại mô hình ML XGBoost từ CSDL (`train-model --source db`), lưu trữ artifact vào Model Registry.
+- Thêm trang thứ 9 trên Dashboard Streamlit: **"Lịch sử Worker"** (3 tab: Lịch trình APScheduler 8 job, Nhật ký gửi email tự động, Hướng dẫn CLI vận hành).
+- Cập nhật bộ test `tests/unit/test_dashboard_app.py` bao quát 9/9 trang, 10/10 test pass.
+
+**Các task trước đó:** `T018` (Module gửi email tự động + Quản lý Email, 2026-09-28) · `T016` (Universe VN100/đa sàn + nến VNINDEX + Top 10 + login JWT, 2026-09-27) · `T015c` · `T015b` · `T015a` · `T016-LLM-local` (Ollama, 2026-09-26) · `D5` (chuẩn hóa tiếng Việt, 2026-09-26) · `D4` · `D3` · `D2` (dữ liệu thật, 2026-09-24/25) · `D1` · `T001` · `T003` + `T002` · `T004+T005` · `T006` + `T007` · `T008+T009+T010` · `T011` · `T013` · `T014` · `MAINT-2026-09-17`.
 - Router `notifications` — 11 thao tác (`/recipients` CRUD, `/smtp`, `/schedule`, `/send-test`, `/preview-html`, `/logs`).
 - Worker: 2 cron Mon–Fri (08:00 sáng, 15:30 chiều) → scheduler **5 job**.
 - Dashboard trang **📧 Quản lý Email** (5 tab: gửi thử + preview, người nhận, SMTP Gmail, lịch gửi, logs).

@@ -41,6 +41,8 @@ class IndexPriceOut(BaseModel):
     low: float
     close: float
     volume: int
+    change: float | None = None
+    change_pct: float | None = None
 
 
 class RegimeOut(BaseModel):

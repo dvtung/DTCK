@@ -1,0 +1,20 @@
+# Feature-engine settings (GĐ 3) — mọi ngưỡng/ngày nằm trong cấu hình.
+#
+# published_at: CafeF/Yahoo không trả ngày công bố (xem GĐ 2) nên cột trong
+# financial_statements là NULL. Chống look-ahead vì thế dùng QUY TẮC AN TOÀN:
+# một kỳ chỉ được dùng từ ngày công bố nếu biết, nếu không thì từ
+# report_date + lag — tức là mốc MUỘN NHẤT có thể (không bao giờ thấy dữ liệu
+# sớm hơn thực tế có thể đã công bố).
+version: features_v1.0
+
+publication_lag_days:
+  QUARTER: 45   # thời hạn nộp BCTC quý (Luật Kế toán 2015, Thông tư 200)
+  YEAR: 90      # thời hạn nộp BCTC năm
+
+# Số phiên giá lấy cho snapshot kỹ thuật/thanh khoản.
+price_lookback_days: 300
+
+# Số chu kỳ tài chính giữ lại cho TTM/YoY/CAGR.
+history:
+  quarters_ttm: 4
+  years_cagr: 4

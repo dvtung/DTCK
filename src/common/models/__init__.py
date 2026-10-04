@@ -20,6 +20,7 @@ from src.common.models import (  # noqa: F401  (register tables on metadata)
     portfolio,
     quant,
     reference,
+    strategy,
 )
 
 # Public re-exports for application code.
@@ -50,6 +51,7 @@ from src.common.models.notifications import (
 from src.common.models.portfolio import Portfolio, PortfolioPosition, PortfolioSnapshot
 from src.common.models.quant import FactorScore, Feature, MarketRegime, Signal
 from src.common.models.reference import Exchange, Industry, Sector, Stock
+from src.common.models.strategy import StrategyRecommendation, StrategyScore
 
 __all__ = [
     "Base",
@@ -97,4 +99,6 @@ __all__ = [
     "EmailSmtpConfig",
     "EmailScheduleConfig",
     "EmailSendLog",
+    "StrategyScore",
+    "StrategyRecommendation",
 ]

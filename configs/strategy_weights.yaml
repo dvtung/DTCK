@@ -1,0 +1,50 @@
+# Trọng số nhóm điểm đa chiến lược (spec: Chấm điểm & Gợi ý cổ phiếu đa chiến lược)
+# IMPORTANT: khởi điểm chỉ là khởi tạo — phải được tinh chỉnh lại qua backtest (GĐ 5).
+# Mỗi profile phải tổng bằng 1.0 (được kiểm tra bởi test chống trôi).
+#
+# Các nhóm điểm (0-100 mỗi nhóm):
+#   technical   — Kỹ thuật / xu hướng / RS
+#   moneyflow   — Dòng tiền & thanh khoản
+#   growth      — Tăng trưởng
+#   quality     — Chất lượng doanh nghiệp
+#   valuation   — Định giá
+#   macro       — Vĩ mô / ngành / catalyst
+#   governance  — Quản trị & rủi ro
+
+version: strategy_v1.0
+
+profiles:
+  short:
+    technical: 0.40
+    moneyflow: 0.25
+    growth: 0.10
+    quality: 0.05
+    valuation: 0.05
+    macro: 0.15
+    governance: 0.00
+  mid:
+    technical: 0.20
+    moneyflow: 0.10
+    growth: 0.30
+    quality: 0.15
+    valuation: 0.15
+    macro: 0.10
+    governance: 0.00
+  long:
+    technical: 0.05
+    moneyflow: 0.05
+    growth: 0.20
+    quality: 0.30
+    valuation: 0.25
+    macro: 0.05
+    governance: 0.10
+
+# Xếp hạng A/B/C/D từ điểm tổng (D < C). Điểm None → không xếp hạng (trung thực).
+grades:
+  A: 80.0
+  B: 65.0
+  C: 50.0
+
+# Những profile yêu cầu xác nhận xu hướng tăng trước khi đạt xếp hạng A/B.
+require_trend_confirmation:
+  - short

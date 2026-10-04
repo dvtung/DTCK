@@ -74,6 +74,11 @@ class Settings(BaseSettings):
     # score 30 minutes later so ranking always reflects the freshest bars.
     scheduler_scoring_cron_hours: str = "12,16"
     scheduler_scoring_cron_minute: int = 0
+    # Strategy-profile scoring (GĐ 4): 3 profiles (short/mid/long) + A–D
+    # recommendations. Runs at 17:00 daily (Mon–Fri) after EOD market close and
+    # updates related data before scoring.
+    scheduler_strategy_hour: int = 17
+    scheduler_strategy_minute: int = 0
     scheduler_news_source: str = "cafef"
     # Daily EOD price ingestion (feeds the scoring jobs with same-session bars).
     # Primary source only — the job walks `fallback_chains.market` (Yahoo, …)

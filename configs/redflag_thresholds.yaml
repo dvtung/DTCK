@@ -1,0 +1,21 @@
+# Ngưỡng lọc loại trừ / cảnh báo (red flag) — tất cả đặt trong cấu hình.
+# Được dùng bởi src/quant/strategy/redflags.py; tinh chỉnh sau GĐ 4 (backtest GĐ 5).
+# Giá trị null = không áp dụng cho ngành đó (ví dụ ngân hàng không dùng D/E chung).
+
+version: redflag_v1.0
+
+liquidity:
+  # GTGD bình quân 20 phiên (VND) tối thiểu — dưới ngưỡng = low_liquidity.
+  min_avg_value_20d_vnd: 1000000000
+
+profitability:
+  # Liên tục lỗ ≥ N năm + lưu lượng kinh doanh âm = loss_negative_ocf.
+  min_consecutive_loss_years: 2
+
+leverage:
+  # Nợ/Vốn chủ (D/E) tối đa; override riêng cho từng ngành bên dưới.
+  max_debt_to_equity: 2.0
+  industry_overrides:
+    banking: null
+    securities: null
+    realestate: 3.0
